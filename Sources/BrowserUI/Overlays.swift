@@ -207,6 +207,8 @@ private extension SearchEngine {
         case .bing: "bing"
         case .brave: "brave"
         case .yandex: "yandex"
+        case .perplexity: "perplexity"
+        case .chatGPT: "chatgpt"
         }
     }
 
@@ -217,6 +219,8 @@ private extension SearchEngine {
         case .bing: "b"
         case .brave: "B"
         case .yandex: "Я"
+        case .perplexity: "P"
+        case .chatGPT: "C"
         }
     }
 
@@ -227,6 +231,8 @@ private extension SearchEngine {
         case .bing: Color(red: 0.00, green: 0.52, blue: 0.51)
         case .brave: Color(red: 0.95, green: 0.29, blue: 0.18)
         case .yandex: Color(red: 0.94, green: 0.16, blue: 0.15)
+        case .perplexity: Color(red: 0.13, green: 0.72, blue: 0.80)
+        case .chatGPT: Color(red: 0.10, green: 0.10, blue: 0.10)
         }
     }
 }
@@ -270,7 +276,7 @@ private enum SearchEngineIconCache {
 private extension SearchEngine {
     var needsIntrinsicSizeNormalization: Bool {
         switch self {
-        case .google, .bing, .duckDuckGo: true
+        case .google, .bing, .duckDuckGo, .perplexity, .chatGPT: true
         case .brave, .yandex: false
         }
     }

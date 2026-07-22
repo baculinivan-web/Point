@@ -42,10 +42,30 @@ struct OmniboxParserTests {
             }
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             #expect(components?.host == searchEngine.searchEndpoint.host)
-            #expect(components?.queryItems == [
-                URLQueryItem(name: searchEngine.queryParameter, value: "browser test")
-            ])
+            #expect(components?.queryItems?.first(where: {
+                $0.name == searchEngine.queryParameter
+            })?.value == "browser test")
+            for fixedItem in searchEngine.fixedQueryItems {
+                #expect(components?.queryItems?.contains(fixedItem) == true)
+            }
         }
+    }
+
+    @Test("ChatGPT starts a new chat with Search enabled")
+    func chatGPTSearch() {
+        let parser = OmniboxParser(searchEngine: .chatGPT)
+        guard case let .search(url) = parser.destination(for: "browser test") else {
+            Issue.record("Expected ChatGPT search destination")
+            return
+        }
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        #expect(components?.host == "chatgpt.com")
+        #expect(components?.queryItems?.contains(
+            URLQueryItem(name: "hints", value: "search")
+        ) == true)
+        #expect(components?.queryItems?.contains(
+            URLQueryItem(name: "q", value: "browser test")
+        ) == true)
     }
 
     @Test("Multiline pasted input is normalized as a search")

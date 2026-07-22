@@ -10,19 +10,23 @@ public enum OmniboxDestination: Equatable, Sendable {
 public struct OmniboxParser: Sendable {
     public let searchEndpoint: URL
     public let searchQueryParameter: String
+    public let fixedSearchQueryItems: [URLQueryItem]
 
     public init(
         searchEndpoint: URL = URL(string: "https://duckduckgo.com/")!,
-        searchQueryParameter: String = "q"
+        searchQueryParameter: String = "q",
+        fixedSearchQueryItems: [URLQueryItem] = []
     ) {
         self.searchEndpoint = searchEndpoint
         self.searchQueryParameter = searchQueryParameter
+        self.fixedSearchQueryItems = fixedSearchQueryItems
     }
 
     public init(searchEngine: SearchEngine) {
         self.init(
             searchEndpoint: searchEngine.searchEndpoint,
-            searchQueryParameter: searchEngine.queryParameter
+            searchQueryParameter: searchEngine.queryParameter,
+            fixedSearchQueryItems: searchEngine.fixedQueryItems
         )
     }
 
@@ -104,7 +108,7 @@ public struct OmniboxParser: Sendable {
             url: searchEndpoint,
             resolvingAgainstBaseURL: false
         )
-        components?.queryItems = [
+        components?.queryItems = fixedSearchQueryItems + [
             URLQueryItem(name: searchQueryParameter, value: query)
         ]
         guard let url = components?.url else {

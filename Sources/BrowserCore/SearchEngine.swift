@@ -6,6 +6,8 @@ public enum SearchEngine: String, CaseIterable, Codable, Identifiable, Sendable 
     case bing
     case brave
     case yandex
+    case perplexity
+    case chatGPT
 
     public var id: String { rawValue }
 
@@ -16,6 +18,8 @@ public enum SearchEngine: String, CaseIterable, Codable, Identifiable, Sendable 
         case .bing: "Bing"
         case .brave: "Brave Search"
         case .yandex: "Яндекс"
+        case .perplexity: "Perplexity"
+        case .chatGPT: "ChatGPT"
         }
     }
 
@@ -26,11 +30,19 @@ public enum SearchEngine: String, CaseIterable, Codable, Identifiable, Sendable 
         case .bing: URL(string: "https://www.bing.com/search")!
         case .brave: URL(string: "https://search.brave.com/search")!
         case .yandex: URL(string: "https://yandex.ru/search/")!
+        case .perplexity: URL(string: "https://www.perplexity.ai/search")!
+        case .chatGPT: URL(string: "https://chatgpt.com/")!
         }
     }
 
     public var queryParameter: String {
         self == .yandex ? "text" : "q"
+    }
+
+    public var fixedQueryItems: [URLQueryItem] {
+        self == .chatGPT
+            ? [URLQueryItem(name: "hints", value: "search")]
+            : []
     }
 
 }
