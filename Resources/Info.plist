@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>ru</string>
+    <key>CFBundleDisplayName</key>
+    <string>Browser</string>
+    <key>CFBundleExecutable</key>
+    <string>Browser</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.browser.mvp</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Browser</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>Web URL</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>http</string>
+                <string>https</string>
+            </array>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+    </array>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>16</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Browser использует камеру только по запросу открытого сайта.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Browser использует микрофон только по запросу открытого сайта.</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>
