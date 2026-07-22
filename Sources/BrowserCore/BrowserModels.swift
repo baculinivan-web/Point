@@ -140,6 +140,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
     public let id: TabID
     public var title: String
     public var url: URL?
+    public var faviconURL: URL?
     public var isPinned: Bool
     public var position: Int64
     public var navigationHistory: TabNavigationHistory?
@@ -148,6 +149,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         id: TabID,
         title: String,
         url: URL?,
+        faviconURL: URL? = nil,
         isPinned: Bool,
         position: Int64,
         navigationHistory: TabNavigationHistory? = nil
@@ -155,6 +157,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         self.id = id
         self.title = title
         self.url = url
+        self.faviconURL = faviconURL
         self.isPinned = isPinned
         self.position = position
         self.navigationHistory = navigationHistory

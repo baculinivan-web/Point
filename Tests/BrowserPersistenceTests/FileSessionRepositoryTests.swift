@@ -24,6 +24,7 @@ struct FileSessionRepositoryTests {
                     id: firstID,
                     title: "First",
                     url: URL(string: "https://example.com"),
+                    faviconURL: URL(string: "https://cdn.example.com/icon.png"),
                     isPinned: true,
                     position: 1024,
                     navigationHistory: TabNavigationHistory(

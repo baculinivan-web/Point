@@ -12,6 +12,7 @@ public final class BrowserTab: Identifiable {
     public let id: TabID
     public var title: String
     public var url: URL?
+    public var faviconURL: URL?
     public var isPinned: Bool
     public var position: Int64
     public var lifecycleState: TabLifecycleState
@@ -41,6 +42,7 @@ public final class BrowserTab: Identifiable {
         navigationHistory = restoredNavigationHistory
         title = restoredNavigationHistory.currentEntry?.title ?? snapshot.title
         url = restoredNavigationHistory.currentEntry?.url ?? snapshot.url
+        faviconURL = snapshot.faviconURL
         isPinned = snapshot.isPinned
         position = snapshot.position
         lifecycleState = .evicted
@@ -53,6 +55,7 @@ public final class BrowserTab: Identifiable {
             id: id,
             title: title,
             url: url,
+            faviconURL: faviconURL,
             isPinned: isPinned,
             position: position,
             navigationHistory: navigationHistory
@@ -231,6 +234,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     .filter { $0.url != nil }
                     .sorted { $0.position < $1.position }
                     .map(BrowserTab.init(snapshot:))
+                tabs.forEach(loadRestoredFavicon(for:))
                 guard !tabs.isEmpty else {
                     sidebarMode = snapshot.sidebarMode
                     isSidebarVisible = snapshot.sidebarMode == .pinned
@@ -473,8 +477,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     for tab in tabs {
                         tab.faviconTask?.cancel()
                         tab.favicon = nil
+                        tab.faviconURL = nil
                     }
                     browsingHistoryFavicons = [:]
+                    persist()
                 }
 
                 if !websiteDataTypes.isEmpty {
@@ -591,6 +597,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         snapshot.position = nextPosition
         let restored = BrowserTab(snapshot: snapshot)
         tabs.append(restored)
+        loadRestoredFavicon(for: restored)
         selectTab(restored.id)
         persist()
     }
@@ -853,8 +860,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         updateNavigationAvailability(for: tab, session: session)
         let currentCacheKey = tab.url.flatMap(FaviconCacheKey.make(for:))
         if previousCacheKey != currentCacheKey {
-            tab.faviconTask?.cancel()
-            tab.favicon = nil
+            tab.faviconURL = nil
+            loadRestoredFavicon(for: tab)
         }
         if tab.id == selectedTabID {
             omniboxText = session.url?.absoluteString ?? ""
@@ -1006,6 +1013,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             return
         }
         let expectedKey = FaviconCacheKey.make(for: pageURL)
+        if tab.faviconURL != iconURL {
+            tab.faviconURL = iconURL
+            persist()
+        }
         tab.faviconTask?.cancel()
         let repository = faviconRepository
         tab.faviconTask = Task { @MainActor [weak tab] in
@@ -1308,6 +1319,44 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 isLoadingBrowsingHistory = false
                 browsingHistoryError = "Не удалось загрузить историю: \(error.localizedDescription)"
             }
+        }
+    }
+
+    private func loadRestoredFavicon(for tab: BrowserTab) {
+        tab.faviconTask?.cancel()
+        tab.favicon = nil
+
+        guard let pageURL = tab.url,
+              let expectedKey = FaviconCacheKey.make(for: pageURL)
+        else { return }
+
+        let storedIconURL = tab.faviconURL.flatMap { iconURL in
+            ["http", "https"].contains(iconURL.scheme?.lowercased() ?? "")
+                ? iconURL
+                : nil
+        }
+        let fallbackIconURL = URL(
+            string: "/favicon.ico",
+            relativeTo: pageURL
+        )?.absoluteURL
+        let iconURL = storedIconURL ?? fallbackIconURL
+        let repository = faviconRepository
+        tab.faviconTask = Task { @MainActor [weak tab] in
+            var image = await repository.cachedImage(for: pageURL)
+            if image == nil,
+               let iconURL,
+               ["http", "https"].contains(iconURL.scheme?.lowercased() ?? "") {
+                image = await repository.image(for: iconURL, pageURL: pageURL)
+            }
+            guard let image,
+                  !Task.isCancelled,
+                  let tab,
+                  tab.url.flatMap(FaviconCacheKey.make(for:)) == expectedKey
+            else { return }
+            tab.favicon = NSImage(
+                cgImage: image,
+                size: NSSize(width: image.width, height: image.height)
+            )
         }
     }
 
