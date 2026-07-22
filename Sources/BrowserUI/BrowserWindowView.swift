@@ -9,6 +9,7 @@ public struct BrowserWindowView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
+    @State private var isFullScreen = false
 
     public init(model: BrowserWindowModel) {
         self.model = model
@@ -24,26 +25,23 @@ public struct BrowserWindowView: View {
                 edgeSensor
             }
 
-            if model.isSidebarVisible {
-                SidebarView(model: model)
-                    .frame(width: 280)
-                    .padding(.leading, 10)
-                    .padding(.vertical, 10)
-                    .ignoresSafeArea()
-                    .transition(
-                        reduceMotion
-                            ? .opacity
-                            : .move(edge: .leading).combined(with: .opacity)
-                    )
-                    .onContinuousHover { phase in
-                        switch phase {
-                        case .active:
-                            hideTask?.cancel()
-                        case .ended:
-                            scheduleHide()
-                        }
+            SidebarView(model: model, isFullScreen: isFullScreen)
+                .frame(width: 280)
+                .padding(.leading, 10)
+                .padding(.vertical, 10)
+                .ignoresSafeArea()
+                .offset(x: sidebarOffset)
+                .opacity(model.isSidebarVisible ? 1 : 0)
+                .allowsHitTesting(model.isSidebarVisible)
+                .accessibilityHidden(!model.isSidebarVisible)
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active:
+                        hideTask?.cancel()
+                    case .ended:
+                        scheduleHide()
                     }
-            }
+                }
 
             if let tab = model.activeTab, tab.isLoading {
                 LoadingBar(progress: tab.progress)
@@ -128,9 +126,17 @@ public struct BrowserWindowView: View {
 
         }
         .frame(minWidth: 760, minHeight: 520)
-        .background(WindowAccessor(showsTrafficLights: model.isSidebarVisible))
+        .background(
+            WindowAccessor(
+                showsTrafficLights: model.isSidebarVisible,
+                isFullScreen: $isFullScreen
+            )
+        )
         .focusedSceneValue(\.browserWindowModel, model)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: model.isSidebarVisible)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: model.isSidebarVisible
+        )
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isOmniboxPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: indicatorDownload?.id)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.mediaPermissionPrompt?.id)
@@ -151,20 +157,18 @@ public struct BrowserWindowView: View {
         }
     }
 
+    private var sidebarOffset: CGFloat {
+        guard !reduceMotion else { return 0 }
+        return model.isSidebarVisible ? 0 : -300
+    }
+
     private var edgeSensor: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .frame(width: 44)
+        EdgeHoverSensor {
+            hideTask?.cancel()
+            model.showAutoHideSidebar()
+        }
+            .frame(width: 36)
             .frame(maxHeight: .infinity)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active:
-                    hideTask?.cancel()
-                    model.showAutoHideSidebar()
-                case .ended:
-                    break
-                }
-            }
             .onTapGesture {
                 model.showAutoHideSidebar()
             }
@@ -176,6 +180,47 @@ public struct BrowserWindowView: View {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             model.hideAutoHideSidebar()
+        }
+    }
+}
+
+private struct EdgeHoverSensor: NSViewRepresentable {
+    let onMouseEntered: @MainActor () -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onMouseEntered = onMouseEntered
+        return view
+    }
+
+    func updateNSView(_ nsView: TrackingView, context: Context) {
+        nsView.onMouseEntered = onMouseEntered
+    }
+
+    @MainActor
+    final class TrackingView: NSView {
+        var onMouseEntered: (@MainActor () -> Void)?
+        private var edgeTrackingArea: NSTrackingArea?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+
+            if let edgeTrackingArea {
+                removeTrackingArea(edgeTrackingArea)
+            }
+
+            let area = NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            edgeTrackingArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            onMouseEntered?()
         }
     }
 }
@@ -390,9 +435,103 @@ private struct StartPage: View {
 
 private struct WindowAccessor: NSViewRepresentable {
     let showsTrafficLights: Bool
+    @Binding var isFullScreen: Bool
 
-    final class Coordinator {
+    @MainActor
+    final class Coordinator: NSObject {
         var originalButtonFrames: [ObjectIdentifier: NSRect] = [:]
+        weak var window: NSWindow?
+        var showsTrafficLights = true
+        var onFullScreenChange: (@MainActor (Bool) -> Void)?
+        var lastReportedFullScreen: Bool?
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        func configure(
+            _ window: NSWindow?,
+            showsTrafficLights: Bool,
+            onFullScreenChange: @escaping @MainActor (Bool) -> Void
+        ) {
+            guard let window else { return }
+            self.showsTrafficLights = showsTrafficLights
+            self.onFullScreenChange = onFullScreenChange
+
+            if self.window !== window {
+                if let currentWindow = self.window {
+                    NotificationCenter.default.removeObserver(
+                        self,
+                        name: NSWindow.didEnterFullScreenNotification,
+                        object: currentWindow
+                    )
+                    NotificationCenter.default.removeObserver(
+                        self,
+                        name: NSWindow.didExitFullScreenNotification,
+                        object: currentWindow
+                    )
+                }
+                self.window = window
+                lastReportedFullScreen = nil
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(fullScreenStateDidChange),
+                    name: NSWindow.didEnterFullScreenNotification,
+                    object: window
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(fullScreenStateDidChange),
+                    name: NSWindow.didExitFullScreenNotification,
+                    object: window
+                )
+            }
+
+            applyWindowConfiguration()
+            DispatchQueue.main.async { [weak self] in
+                self?.applyWindowConfiguration()
+            }
+        }
+
+        @objc private func fullScreenStateDidChange(_ notification: Notification) {
+            applyWindowConfiguration()
+        }
+
+        private func applyWindowConfiguration() {
+            guard let window else { return }
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.styleMask.insert(.fullSizeContentView)
+            window.minSize = NSSize(width: 760, height: 520)
+
+            let isFullScreen = window.styleMask.contains(.fullScreen)
+            if lastReportedFullScreen != isFullScreen {
+                lastReportedFullScreen = isFullScreen
+                onFullScreenChange?(isFullScreen)
+            }
+
+            for type in [
+                NSWindow.ButtonType.closeButton,
+                .miniaturizeButton,
+                .zoomButton
+            ] {
+                guard let button = window.standardWindowButton(type) else { continue }
+                let key = ObjectIdentifier(button)
+                let originalFrame = originalButtonFrames[key] ?? button.frame
+                originalButtonFrames[key] = originalFrame
+                if !isFullScreen {
+                    button.setFrameOrigin(
+                        NSPoint(
+                            x: originalFrame.origin.x + 14,
+                            y: originalFrame.origin.y - 12
+                        )
+                    )
+                }
+
+                // In full screen AppKit owns the traffic-light reveal on top-edge hover.
+                button.isHidden = isFullScreen ? false : !showsTrafficLights
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -402,40 +541,22 @@ private struct WindowAccessor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            configure(view.window, coordinator: context.coordinator)
+            context.coordinator.configure(
+                view.window,
+                showsTrafficLights: showsTrafficLights,
+                onFullScreenChange: { isFullScreen = $0 }
+            )
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
-            configure(nsView.window, coordinator: context.coordinator)
-        }
-    }
-
-    private func configure(_ window: NSWindow?, coordinator: Coordinator) {
-        guard let window else { return }
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-        window.minSize = NSSize(width: 760, height: 520)
-
-        for type in [
-            NSWindow.ButtonType.closeButton,
-            .miniaturizeButton,
-            .zoomButton
-        ] {
-            guard let button = window.standardWindowButton(type) else { continue }
-            let key = ObjectIdentifier(button)
-            let originalFrame = coordinator.originalButtonFrames[key] ?? button.frame
-            coordinator.originalButtonFrames[key] = originalFrame
-            button.setFrameOrigin(
-                NSPoint(
-                    x: originalFrame.origin.x + 8,
-                    y: originalFrame.origin.y - 8
-                )
+            context.coordinator.configure(
+                nsView.window,
+                showsTrafficLights: showsTrafficLights,
+                onFullScreenChange: { isFullScreen = $0 }
             )
-            button.isHidden = !showsTrafficLights
         }
     }
 }
