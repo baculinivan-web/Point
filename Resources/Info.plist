@@ -5,15 +5,19 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>ru</string>
     <key>CFBundleDisplayName</key>
-    <string>Browser</string>
+    <string>Point</string>
     <key>CFBundleExecutable</key>
     <string>Browser</string>
     <key>CFBundleIdentifier</key>
     <string>dev.browser.mvp</string>
+    <key>CFBundleIconFile</key>
+    <string>icon</string>
+    <key>CFBundleIconName</key>
+    <string>icon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Browser</string>
+    <string>Point</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleURLTypes</key>

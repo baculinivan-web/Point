@@ -51,7 +51,7 @@ make test
 make run
 ```
 
-`make run` собирает локально подписанный app bundle в `dist/Browser.app`. Проект также можно открыть в Xcode как Swift Package через `Package.swift`.
+`make run` собирает локально подписанный app bundle в `dist/Point.app`. Проект также можно открыть в Xcode как Swift Package через `Package.swift`.
 
 Для ручной проверки download и camera без внешних сайтов:
 

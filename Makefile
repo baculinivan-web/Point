@@ -10,7 +10,7 @@ app:
 	./scripts/build-app.sh
 
 run: app
-	open dist/Browser.app
+	open dist/Point.app
 
 clean:
 	swift package clean
