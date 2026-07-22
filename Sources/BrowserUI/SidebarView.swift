@@ -352,6 +352,10 @@ private struct NewTabRow: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
+
+                Text("⌘T")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 8)
             .frame(minHeight: 36)
@@ -369,7 +373,7 @@ private struct NewTabRow: View {
     }
 }
 
-private struct TabFavicon: View {
+struct TabFavicon: View {
     let tab: BrowserTab
     let size: CGFloat
 

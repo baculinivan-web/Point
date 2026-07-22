@@ -22,7 +22,8 @@ let package = Package(
         ),
         .target(
             name: "BrowserUI",
-            dependencies: ["BrowserCore", "BrowserEngine"]
+            dependencies: ["BrowserCore", "BrowserEngine"],
+            resources: [.process("Resources")]
         ),
         .executableTarget(
             name: "BrowserApp",

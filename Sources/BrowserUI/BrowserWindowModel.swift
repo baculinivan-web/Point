@@ -112,6 +112,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var sidebarMode: SidebarMode = .pinned
     public var isSidebarVisible = true
     public var isOmniboxPresented = false
+    public private(set) var isNewTabComposerPresented = false
     public var omniboxText = ""
     public var omniboxError: String?
     public var isFindPresented = false
@@ -131,6 +132,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var selectedBrowsingDataCategories = Set(BrowsingDataCategory.allCases)
     public private(set) var isClearingBrowsingData = false
     public var clearBrowsingDataStatus: String?
+    public private(set) var searchEngine: SearchEngine
     public let downloadManager: DownloadManager
     public let passkeyAccessManager: PasskeyAccessManager
     public let faviconRepository: FaviconRepository
@@ -138,7 +140,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
     private let browsingHistoryRepository: any BrowsingHistoryRepository
-    private let parser: OmniboxParser
+    private var parser: OmniboxParser
     private let lifecyclePolicy = TabLifecyclePolicy()
     private let physicalMemoryBytes = ProcessInfo.processInfo.physicalMemory
     @ObservationIgnored private let lifecycleLogger = Logger(
@@ -173,15 +175,20 @@ public final class BrowserWindowModel: WebEngineEventSink {
         repository: any SessionRepository,
         sitePermissionRepository: any SitePermissionRepository,
         browsingHistoryRepository: any BrowsingHistoryRepository,
-        parser: OmniboxParser = OmniboxParser(),
+        parser: OmniboxParser? = nil,
         downloadManager: DownloadManager? = nil,
         passkeyAccessManager: PasskeyAccessManager? = nil,
         faviconRepository: FaviconRepository? = nil
     ) {
+        let storedSearchEngine = UserDefaults.standard
+            .string(forKey: "DefaultSearchEngine")
+            .flatMap(SearchEngine.init(rawValue:))
+            ?? .duckDuckGo
         self.repository = repository
         self.sitePermissionRepository = sitePermissionRepository
         self.browsingHistoryRepository = browsingHistoryRepository
-        self.parser = parser
+        self.searchEngine = storedSearchEngine
+        self.parser = parser ?? OmniboxParser(searchEngine: storedSearchEngine)
         self.downloadManager = downloadManager ?? DownloadManager()
         self.passkeyAccessManager = passkeyAccessManager ?? PasskeyAccessManager()
         self.faviconRepository = faviconRepository ?? FaviconRepository()
@@ -189,6 +196,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public var activeTab: BrowserTab? {
         tabs.first { $0.id == selectedTabID }
+    }
+
+    public var isComposingNewTab: Bool {
+        isOmniboxPresented && isNewTabComposerPresented
     }
 
     public var pinnedTabs: [BrowserTab] {
@@ -215,10 +226,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
         startLifecycleMonitoring()
 
         do {
-            if let snapshot = try await repository.load(), !snapshot.tabs.isEmpty {
+            if let snapshot = try await repository.load() {
                 tabs = snapshot.tabs
+                    .filter { $0.url != nil }
                     .sorted { $0.position < $1.position }
                     .map(BrowserTab.init(snapshot:))
+                guard !tabs.isEmpty else {
+                    sidebarMode = snapshot.sidebarMode
+                    isSidebarVisible = snapshot.sidebarMode == .pinned
+                    newTab()
+                    markSessionReady()
+                    return
+                }
                 selectedTabID = snapshot.selectedTabID.flatMap { selected in
                     tabs.contains { $0.id == selected } ? selected : nil
                 } ?? tabs.first?.id
@@ -339,7 +358,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func presentBrowsingHistory() {
-        isOmniboxPresented = false
+        dismissOmnibox()
         isSitePermissionsPresented = false
         sitePermissionManagementTask?.cancel()
         sitePermissionManagementTask = nil
@@ -379,7 +398,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func presentClearBrowsingData() {
-        isOmniboxPresented = false
+        dismissOmnibox()
         dismissSitePermissions()
         dismissBrowsingHistory()
         clearBrowsingDataStatus = nil
@@ -527,23 +546,16 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func newTab(background: Bool = false) {
-        let id = TabID()
-        let newTab = BrowserTab(
-            snapshot: PersistedTab(
-                id: id,
-                title: "Новая вкладка",
-                url: nil,
-                isPinned: false,
-                position: nextPosition
-            )
-        )
-        tabs.append(newTab)
-        if !background {
-            selectTab(id)
-            presentOmnibox(clearText: true)
+        guard !background else { return }
+
+        if isComposingNewTab {
+            dismissOmnibox()
+        } else {
+            omniboxError = nil
+            omniboxText = ""
+            isNewTabComposerPresented = true
+            isOmniboxPresented = true
         }
-        reconcileLifecycle()
-        persist()
     }
 
     public func closeTab(_ id: TabID) {
@@ -557,7 +569,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         if tabs.isEmpty {
             selectedTabID = nil
+            dismissOmnibox()
             newTab()
+            reconcileLifecycle()
+            persist()
             return
         }
 
@@ -571,8 +586,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func reopenClosedTab() {
-        guard var snapshot = closedTabs.first else { return }
-        closedTabs.removeFirst()
+        guard let index = closedTabs.firstIndex(where: { $0.url != nil }) else { return }
+        var snapshot = closedTabs.remove(at: index)
         snapshot.position = nextPosition
         let restored = BrowserTab(snapshot: snapshot)
         tabs.append(restored)
@@ -623,6 +638,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func presentOmnibox(clearText: Bool = false) {
         omniboxError = nil
+        isNewTabComposerPresented = false
         if clearText {
             omniboxText = ""
         } else {
@@ -631,15 +647,49 @@ public final class BrowserWindowModel: WebEngineEventSink {
         isOmniboxPresented = true
     }
 
+    public func dismissOmnibox() {
+        isOmniboxPresented = false
+        isNewTabComposerPresented = false
+    }
+
+    public func selectSearchEngine(_ searchEngine: SearchEngine) {
+        guard self.searchEngine != searchEngine else { return }
+        self.searchEngine = searchEngine
+        parser = OmniboxParser(searchEngine: searchEngine)
+        UserDefaults.standard.set(
+            searchEngine.rawValue,
+            forKey: "DefaultSearchEngine"
+        )
+    }
+
     public func submitOmnibox() {
+        let destination = parser.destination(for: omniboxText)
+        if isNewTabComposerPresented {
+            switch destination {
+            case .empty:
+                dismissOmnibox()
+            case let .blocked(reason):
+                omniboxError = reason
+            case let .url(url), let .search(url):
+                selectTab(appendTab(url: url))
+                dismissOmnibox()
+            }
+            return
+        }
+
         guard let id = selectedTabID else { return }
-        navigate(tabID: id, to: parser.destination(for: omniboxText))
+        navigate(tabID: id, to: destination)
+    }
+
+    public func selectOpenTabFromOmnibox(_ id: TabID) {
+        dismissOmnibox()
+        selectTab(id)
     }
 
     public func navigate(tabID: TabID, to destination: OmniboxDestination) {
         switch destination {
         case .empty:
-            isOmniboxPresented = false
+            dismissOmnibox()
         case let .url(url), let .search(url):
             guard let tab = tab(tabID) else { return }
             let engine = ensureEngine(for: tab)
@@ -650,7 +700,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             engine.load(url)
             omniboxText = url.absoluteString
             omniboxError = nil
-            isOmniboxPresented = false
+            dismissOmnibox()
             reconcileLifecycle()
             persist()
         case let .blocked(reason):
@@ -659,7 +709,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func navigate(to url: URL) {
-        guard let id = selectedTabID else { return }
+        guard let id = selectedTabID else {
+            selectTab(appendTab(url: url))
+            dismissOmnibox()
+            return
+        }
         navigate(tabID: id, to: .url(url))
     }
 
@@ -1065,6 +1119,22 @@ public final class BrowserWindowModel: WebEngineEventSink {
         (tabs.map(\.position).max() ?? 0) + 1024
     }
 
+    private func appendTab(url: URL) -> TabID {
+        let id = TabID()
+        tabs.append(
+            BrowserTab(
+                snapshot: PersistedTab(
+                    id: id,
+                    title: "Новая вкладка",
+                    url: url,
+                    isPinned: false,
+                    position: nextPosition
+                )
+            )
+        )
+        return id
+    }
+
     private func tab(_ id: TabID) -> BrowserTab? {
         tabs.first { $0.id == id }
     }
@@ -1281,7 +1351,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func openExternalWebURL(_ url: URL) {
         if activeTab?.url != nil {
-            newTab()
+            selectTab(appendTab(url: url))
+            dismissOmnibox()
+            return
         }
         navigate(to: url)
     }

@@ -6,18 +6,53 @@ import SwiftUI
 struct OmniboxOverlay: View {
     @Bindable var model: BrowserWindowModel
     @FocusState private var isFocused: Bool
+    @State private var highlightedTabID: TabID?
+
+    private var visibleMatchingTabs: [BrowserTab] {
+        Array(model.matchingTabs.prefix(6))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                Menu {
+                    Section("Поисковая система по умолчанию") {
+                        ForEach(SearchEngine.allCases) { searchEngine in
+                            Button {
+                                model.selectSearchEngine(searchEngine)
+                            } label: {
+                                if model.searchEngine == searchEngine {
+                                    Label(searchEngine.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(searchEngine.displayName)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    SearchEngineIcon(searchEngine: model.searchEngine)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Поиск: \(model.searchEngine.displayName)")
+                .accessibilityLabel(
+                    "Поисковая система: \(model.searchEngine.displayName)"
+                )
                 TextField("Адрес или поисковый запрос", text: $model.omniboxText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .focused($isFocused)
-                    .onSubmit { model.submitOmnibox() }
-                    .onExitCommand { model.isOmniboxPresented = false }
+                    .onSubmit { activateHighlightedTabOrSubmit() }
+                    .onKeyPress(.downArrow) {
+                        moveHighlight(by: 1)
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        moveHighlight(by: -1)
+                        return .handled
+                    }
+                    .onExitCommand { model.dismissOmnibox() }
                 if !model.omniboxText.isEmpty {
                     Button {
                         model.omniboxText = ""
@@ -38,17 +73,15 @@ struct OmniboxOverlay: View {
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
-            } else if !model.matchingTabs.isEmpty {
+            } else if !visibleMatchingTabs.isEmpty {
                 Divider()
                 VStack(spacing: 2) {
-                    ForEach(model.matchingTabs.prefix(6)) { tab in
+                    ForEach(visibleMatchingTabs) { tab in
                         Button {
-                            model.selectTab(tab.id)
-                            model.isOmniboxPresented = false
+                            activate(tab)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "rectangle.on.rectangle")
-                                    .foregroundStyle(.secondary)
+                                TabFavicon(tab: tab, size: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(tab.displayTitle).lineLimit(1)
                                     if let url = tab.url {
@@ -66,8 +99,23 @@ struct OmniboxOverlay: View {
                             .contentShape(Rectangle())
                             .padding(.horizontal, 14)
                             .frame(height: 46)
+                            .background {
+                                if highlightedTabID == tab.id {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color.accentColor.opacity(0.14))
+                                        .padding(.horizontal, 6)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
+                        .onHover { isHovering in
+                            if isHovering {
+                                highlightedTabID = tab.id
+                            }
+                        }
+                        .accessibilityAddTraits(
+                            highlightedTabID == tab.id ? .isSelected : []
+                        )
                     }
                 }
                 .padding(.vertical, 6)
@@ -80,8 +128,151 @@ struct OmniboxOverlay: View {
             await Task.yield()
             isFocused = true
         }
+        .onChange(of: model.omniboxText) {
+            highlightedTabID = nil
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Адрес и поиск")
+    }
+
+    private func moveHighlight(by offset: Int) {
+        let tabs = visibleMatchingTabs
+        guard !tabs.isEmpty else {
+            highlightedTabID = nil
+            return
+        }
+
+        guard let highlightedTabID,
+              let index = tabs.firstIndex(where: { $0.id == highlightedTabID })
+        else {
+            self.highlightedTabID = offset > 0 ? tabs.first?.id : tabs.last?.id
+            return
+        }
+
+        let nextIndex = (index + offset + tabs.count) % tabs.count
+        self.highlightedTabID = tabs[nextIndex].id
+    }
+
+    private func activateHighlightedTabOrSubmit() {
+        guard let highlightedTabID,
+              let tab = visibleMatchingTabs.first(where: { $0.id == highlightedTabID })
+        else {
+            model.submitOmnibox()
+            return
+        }
+        activate(tab)
+    }
+
+    private func activate(_ tab: BrowserTab) {
+        model.selectOpenTabFromOmnibox(tab.id)
+    }
+}
+
+private struct SearchEngineIcon: View {
+    let searchEngine: SearchEngine
+
+    var body: some View {
+        Group {
+            if let image = searchEngine.iconImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(searchEngine.fallbackColor)
+                    Text(searchEngine.monogram)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width: 22, height: 22)
+        .clipped()
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+private extension SearchEngine {
+    @MainActor
+    var iconImage: NSImage? {
+        SearchEngineIconCache.images[self]
+    }
+
+    var iconResourceName: String {
+        switch self {
+        case .duckDuckGo: "duckduckgo"
+        case .google: "google"
+        case .bing: "bing"
+        case .brave: "brave"
+        case .yandex: "yandex"
+        }
+    }
+
+    var monogram: String {
+        switch self {
+        case .duckDuckGo: "D"
+        case .google: "G"
+        case .bing: "b"
+        case .brave: "B"
+        case .yandex: "Я"
+        }
+    }
+
+    var fallbackColor: Color {
+        switch self {
+        case .duckDuckGo: Color(red: 0.86, green: 0.30, blue: 0.16)
+        case .google: Color(red: 0.20, green: 0.50, blue: 0.92)
+        case .bing: Color(red: 0.00, green: 0.52, blue: 0.51)
+        case .brave: Color(red: 0.95, green: 0.29, blue: 0.18)
+        case .yandex: Color(red: 0.94, green: 0.16, blue: 0.15)
+        }
+    }
+}
+
+@MainActor
+private enum SearchEngineIconCache {
+    static let bundle: Bundle = {
+        if let resourcesURL = Bundle.main.resourceURL,
+           let bundle = Bundle(
+               url: resourcesURL.appending(path: "Browser_BrowserUI.bundle")
+           ) {
+            return bundle
+        }
+        return Bundle.module
+    }()
+
+    static let images: [SearchEngine: NSImage] = Dictionary(
+        uniqueKeysWithValues: SearchEngine.allCases.compactMap { searchEngine in
+            let url = bundle.url(
+                forResource: searchEngine.iconResourceName,
+                withExtension: "svg",
+                subdirectory: "SearchEngines"
+            ) ?? bundle.url(
+                forResource: searchEngine.iconResourceName,
+                withExtension: "svg"
+            )
+            guard let url, let image = NSImage(contentsOf: url) else { return nil }
+            if searchEngine.needsIntrinsicSizeNormalization {
+                let sourceSize = image.size
+                let scale = 22 / max(sourceSize.width, sourceSize.height)
+                image.size = NSSize(
+                    width: sourceSize.width * scale,
+                    height: sourceSize.height * scale
+                )
+            }
+            return (searchEngine, image)
+        }
+    )
+}
+
+private extension SearchEngine {
+    var needsIntrinsicSizeNormalization: Bool {
+        switch self {
+        case .google, .bing, .duckDuckGo: true
+        case .brave, .yandex: false
+        }
     }
 }
 

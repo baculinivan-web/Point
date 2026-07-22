@@ -74,10 +74,14 @@ public struct BrowserWindowView: View {
             if model.isOmniboxPresented {
                 Color.black.opacity(0.08)
                     .ignoresSafeArea()
-                    .onTapGesture { model.isOmniboxPresented = false }
+                    .onTapGesture { model.dismissOmnibox() }
                 OmniboxOverlay(model: model)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 72)
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: model.isComposingNewTab ? .center : .top
+                    )
+                    .padding(.top, model.isComposingNewTab ? 0 : 72)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
 
@@ -318,22 +322,19 @@ private struct WebSurface: View {
 
     var body: some View {
         Group {
-            if let tab = model.activeTab {
-                if let engine = tab.engine, tab.url != nil {
-                    WKWebViewHost(
-                        webView: engine.webView,
-                        onSwipeBack: { [weak model] in
-                            model?.handleNavigationSwipe(.back) ?? false
-                        },
-                        onSwipeForward: { [weak model] in
-                            model?.handleNavigationSwipe(.forward) ?? false
-                        }
-                    )
-                } else {
-                    StartPage(model: model)
-                }
+            if let tab = model.activeTab,
+               let engine = tab.engine {
+                WKWebViewHost(
+                    webView: engine.webView,
+                    onSwipeBack: { [weak model] in
+                        model?.handleNavigationSwipe(.back) ?? false
+                    },
+                    onSwipeForward: { [weak model] in
+                        model?.handleNavigationSwipe(.forward) ?? false
+                    }
+                )
             } else {
-                StartPage(model: model)
+                Color(nsColor: .textBackgroundColor)
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
@@ -357,79 +358,6 @@ private struct LoadingBar: View {
         }
         .frame(height: 1)
         .accessibilityHidden(true)
-    }
-}
-
-private struct StartPage: View {
-    let model: BrowserWindowModel
-
-    private let destinations: [(String, String, String)] = [
-        ("Apple", "apple.logo", "https://apple.com"),
-        ("GitHub", "chevron.left.forwardslash.chevron.right", "https://github.com"),
-        ("Wikipedia", "text.book.closed", "https://wikipedia.org")
-    ]
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    Color.accentColor.opacity(0.08)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 26) {
-                Image(systemName: "globe.americas.fill")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-
-                VStack(spacing: 7) {
-                    Text("Весь интернет — перед вами")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    Text("Браузер появляется только тогда, когда нужен")
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    model.presentOmnibox(clearText: true)
-                } label: {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                        Text("Введите адрес или запрос")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("⌘L")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(width: 440, height: 48)
-                }
-                .buttonStyle(.glass)
-
-                HStack(spacing: 12) {
-                    ForEach(destinations, id: \.0) { name, symbol, address in
-                        Button {
-                            guard let url = URL(string: address) else { return }
-                            model.navigate(to: url)
-                        } label: {
-                            VStack(spacing: 8) {
-                                Image(systemName: symbol)
-                                    .font(.title3)
-                                Text(name)
-                                    .font(.caption)
-                            }
-                            .frame(width: 86, height: 58)
-                        }
-                        .buttonStyle(.glass)
-                    }
-                }
-            }
-            .padding(40)
-        }
     }
 }
 

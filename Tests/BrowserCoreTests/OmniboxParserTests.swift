@@ -32,6 +32,22 @@ struct OmniboxParserTests {
         #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "native mac browser")
     }
 
+    @Test("Every supported search engine builds its own query URL")
+    func searchEngines() {
+        for searchEngine in SearchEngine.allCases {
+            let parser = OmniboxParser(searchEngine: searchEngine)
+            guard case let .search(url) = parser.destination(for: "browser test") else {
+                Issue.record("Expected search destination for \(searchEngine.displayName)")
+                continue
+            }
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            #expect(components?.host == searchEngine.searchEndpoint.host)
+            #expect(components?.queryItems == [
+                URLQueryItem(name: searchEngine.queryParameter, value: "browser test")
+            ])
+        }
+    }
+
     @Test("Multiline pasted input is normalized as a search")
     func multilineSearch() {
         guard case let .search(url) = parser.destination(for: "https://example.com\njavascript:alert(1)") else {
