@@ -34,11 +34,8 @@ public struct OmniboxParser: Sendable {
         let input = normalize(rawInput)
         guard !input.isEmpty else { return .empty }
 
-        if !input.contains("://"), !input.contains(" "), looksLikeHost(input),
-           let components = URLComponents(string: "https://\(input)"),
-           components.user == nil,
-           components.password == nil,
-           let url = components.url {
+        if !input.contains("://"), !input.contains(" "),
+           let url = urlWithoutScheme(for: input) {
             return .url(url)
         }
 
@@ -60,6 +57,19 @@ public struct OmniboxParser: Sendable {
         }
 
         return searchURL(for: input)
+    }
+
+    private func urlWithoutScheme(for input: String) -> URL? {
+        guard let components = URLComponents(string: "https://\(input)"),
+              components.user == nil,
+              components.password == nil,
+              let host = components.host,
+              looksLikeHost(host)
+        else {
+            return nil
+        }
+
+        return components.url
     }
 
     private func normalize(_ input: String) -> String {

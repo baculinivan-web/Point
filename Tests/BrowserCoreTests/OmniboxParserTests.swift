@@ -16,6 +16,18 @@ struct OmniboxParserTests {
         #expect(parser.destination(for: "example.com") == .url(URL(string: "https://example.com")!))
     }
 
+    @Test("Domain address with path and query stays a URL")
+    func domainAddress() {
+        #expect(
+            parser.destination(for: "example.com/path?query=value#section")
+                == .url(URL(string: "https://example.com/path?query=value#section")!)
+        )
+        #expect(
+            parser.destination(for: "example.com:8080/path")
+                == .url(URL(string: "https://example.com:8080/path")!)
+        )
+    }
+
     @Test("Local development hosts are URLs")
     func localHosts() {
         #expect(parser.destination(for: "localhost:8080") == .url(URL(string: "https://localhost:8080")!))
