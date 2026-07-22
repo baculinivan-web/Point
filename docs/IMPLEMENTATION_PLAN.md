@@ -413,7 +413,7 @@ configuration.preferences = preferences
 - не включать `limitsNavigationsToAppBoundDomains`, потому что это general-purpose browser;
 - JavaScript включён по умолчанию, иначе значительная часть веба не работает;
 - `isInspectable = true` только в Debug или во включаемой developer setting;
-- не устанавливать custom user agent без необходимости; `applicationNameForUserAgent` допустим для идентификации продукта;
+- использовать desktop Safari-совместимый suffix в `applicationNameForUserAgent`: голый WKWebView UA не содержит `Version/... Safari/...`, из-за чего сайты с UA-sniffing могут отдавать устаревший интерфейс;
 - не добавлять глобальные user scripts в обычные страницы в v1;
 - внутренний start page работает через собственный scheme handler и строгий CSP.
 

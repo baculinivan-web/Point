@@ -224,8 +224,17 @@ public final class WebEngineSession: NSObject {
         preferences.javaScriptCanOpenWindowsAutomatically = true
         preferences.isElementFullscreenEnabled = true
         configuration.preferences = preferences
-        configuration.applicationNameForUserAgent = "Browser/0.1"
+
+        let webpagePreferences = WKWebpagePreferences()
+        webpagePreferences.preferredContentMode = .desktop
+        configuration.defaultWebpagePreferences = webpagePreferences
+        configuration.applicationNameForUserAgent = desktopSafariUserAgentSuffix
         return configuration
+    }
+
+    private static var desktopSafariUserAgentSuffix: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "Version/\(version.majorVersion).\(version.minorVersion) Safari/605.1.15"
     }
 
     private func observeState() {
