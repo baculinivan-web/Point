@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — Fullscreen Media Stability
+
+- Preserved WebKit's fullscreen view hierarchy during SwiftUI host updates.
+- Deferred web view reattachment until fullscreen transitions finish to prevent gray video frames and lost controls.
+- Updated the bundle version to `0.1.3` (`25`).
+
 ## 0.1.2 — Sidebar and Clipboard Polish
 
 - Added reliable page-address copying to the system clipboard with `⇧⌘C` and a confirmation toast.

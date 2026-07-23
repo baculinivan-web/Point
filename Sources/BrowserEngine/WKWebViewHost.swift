@@ -5,6 +5,8 @@ import WebKit
 
 public final class WebContainerView: NSView {
     private weak var attachedWebView: WKWebView?
+    private weak var pendingWebView: WKWebView?
+    private var fullscreenObservation: NSKeyValueObservation?
     private let interactionShield = WebInteractionShieldView()
     private var interactionShieldWidthConstraint: NSLayoutConstraint?
     private var swipeMonitor: Any?
@@ -25,6 +27,25 @@ public final class WebContainerView: NSView {
     public func attach(_ webView: WKWebView) {
         guard attachedWebView !== webView else { return }
 
+        // WebKit owns the WKWebView hierarchy while an element is fullscreen:
+        // it replaces the view with a placeholder, moves it to another window,
+        // then restores it on exit. Reparenting either the outgoing or incoming
+        // web view during that transition can detach the fullscreen video layer
+        // and leave subsequent presentations rendering only their background.
+        if let attachedWebView,
+           attachedWebView.fullscreenState != .notInFullscreen {
+            deferAttachment(of: webView, until: attachedWebView)
+            return
+        }
+        guard webView.fullscreenState == .notInFullscreen else {
+            deferAttachment(of: webView, until: webView)
+            return
+        }
+
+        fullscreenObservation?.invalidate()
+        fullscreenObservation = nil
+        pendingWebView = nil
+
         attachedWebView?.removeFromSuperview()
         attachedWebView = webView
         webView.removeFromSuperview()
@@ -37,6 +58,35 @@ public final class WebContainerView: NSView {
             webView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
         installInteractionShield(above: webView)
+    }
+
+    @MainActor
+    private func deferAttachment(
+        of webView: WKWebView,
+        until fullscreenWebView: WKWebView
+    ) {
+        pendingWebView = webView
+        fullscreenObservation?.invalidate()
+        fullscreenObservation = fullscreenWebView.observe(
+            \.fullscreenState,
+            options: [.new]
+        ) { [weak self, weak webView] observedWebView, _ in
+            MainActor.assumeIsolated {
+                guard observedWebView.fullscreenState == .notInFullscreen,
+                      let self,
+                      let webView,
+                      self.pendingWebView === webView
+                else { return }
+
+                // Let WebKit finish returning the view to its placeholder
+                // before moving it into a newly-created SwiftUI host.
+                Task { @MainActor [weak self, weak webView] in
+                    await Task.yield()
+                    guard let self, let webView else { return }
+                    self.attach(webView)
+                }
+            }
+        }
     }
 
     @MainActor
