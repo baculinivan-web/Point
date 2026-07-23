@@ -91,6 +91,12 @@ public struct BrowserCommands: Commands {
             }
             .keyboardShortcut("f")
 
+            Button(BrowserLocalization.string("copy_page_address")) {
+                model?.copyActivePageURL()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(model?.activeTab?.url == nil)
+
             Button(BrowserLocalization.string("downloads")) {
                 model?.toggleDownloads()
             }

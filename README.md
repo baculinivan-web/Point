@@ -26,6 +26,6 @@ Private windows keep their local browsing data separate and disappear when the w
 
 ## Status
 
-Point 0.1.1 is a public beta. The core browsing experience, sidebar-first tab management, session restoration, private windows, downloads, browsing history, site permissions, and macOS integration are available. Some advanced web compatibility and performance checks are still being validated on real hardware.
+Point 0.1.2 is a public beta. The core browsing experience, sidebar-first tab management, session restoration, private windows, downloads, browsing history, site permissions, and macOS integration are available. Some advanced web compatibility and performance checks are still being validated on real hardware.
 
 See the [technical documentation](docs/TECHNICAL_DOCUMENTATION.md) for implementation details, build instructions, testing, release requirements, and known limitations. The [product vision](docs/PRODUCT_VISION.md) explains the principles behind the experience.

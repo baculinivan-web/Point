@@ -19,6 +19,11 @@ public struct BrowserWindowView: View {
         ZStack(alignment: .leading) {
             WebSurface(model: model)
                 .padding(.leading, model.sidebarMode == .pinned ? 300 : 0)
+                .clipShape(
+                    LeadingRoundedRectangle(
+                        radius: model.sidebarMode == .pinned ? 18 : 0
+                    )
+                )
                 .ignoresSafeArea()
 
             if model.sidebarMode == .autoHide {
@@ -26,9 +31,9 @@ public struct BrowserWindowView: View {
             }
 
             SidebarView(model: model, isFullScreen: isFullScreen)
-                .frame(width: 280)
-                .padding(.leading, 10)
-                .padding(.vertical, 10)
+                .frame(width: model.sidebarMode == .pinned ? 300 : 280)
+                .padding(.leading, model.sidebarMode == .pinned ? 0 : 10)
+                .padding(.vertical, model.sidebarMode == .pinned ? 0 : 10)
                 .ignoresSafeArea()
                 .offset(x: sidebarOffset)
                 .opacity(model.isSidebarVisible ? 1 : 0)
@@ -59,6 +64,15 @@ public struct BrowserWindowView: View {
                 .padding(.top, 14)
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
                 .zIndex(4)
+            }
+
+            if let message = model.toastMessage {
+                CopyToast(message: message)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, isFullScreen ? 24 : 14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .allowsHitTesting(false)
+                    .zIndex(20)
             }
 
             if let prompt = model.mediaPermissionPrompt {
@@ -148,6 +162,7 @@ public struct BrowserWindowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isSitePermissionsPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isBrowsingHistoryPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isClearBrowsingDataPresented)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.toastMessage)
         .onChange(of: scenePhase) { _, phase in
             model.setApplicationActive(phase == .active)
         }
@@ -186,6 +201,48 @@ public struct BrowserWindowView: View {
             guard !Task.isCancelled else { return }
             model.hideAutoHideSidebar()
         }
+    }
+}
+
+private struct LeadingRoundedRectangle: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let cornerRadius = min(radius, rect.width / 2, rect.height / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + cornerRadius, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: rect.maxY - cornerRadius),
+            control: CGPoint(x: rect.minX, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cornerRadius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY),
+            control: CGPoint(x: rect.minX, y: rect.minY)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct CopyToast: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "checkmark.circle.fill")
+            .font(.callout.weight(.semibold))
+            .padding(.horizontal, 14)
+            .frame(height: 38)
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 14, y: 5)
+            .accessibilityAddTraits(.isStaticText)
     }
 }
 

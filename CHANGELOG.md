@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — Sidebar and Clipboard Polish
+
+- Added reliable page-address copying to the system clipboard with `⇧⌘C` and a confirmation toast.
+- Refined the pinned sidebar into a full-height side region with rounded page-leading corners.
+- Preserved the floating glass treatment for the auto-hide sidebar mode.
+- Updated the bundle version to `0.1.2` (`24`).
+
 ## 0.1.1 — Public Beta
 
 - Added isolated private windows (`⌘⇧N`) without persistent browsing data.

@@ -86,6 +86,12 @@
 	<string>Сеансы входа и предпочтения сайтов</string>
 	<key>cookies_relogin_info</key>
 	<string>Cookies и данные сайтов потребуют повторного входа</string>
+	<key>copy_failed</key>
+	<string>Не удалось скопировать адрес</string>
+	<key>copy_page_address</key>
+	<string>Скопировать адрес страницы</string>
+	<key>address_copied</key>
+	<string>Адрес скопирован</string>
 	<key>credentials_blocked</key>
 	<string>Адреса с логином или паролем заблокированы</string>
 	<key>default_browser_change_failed</key>

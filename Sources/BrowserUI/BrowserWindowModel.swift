@@ -211,6 +211,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var selectedBrowsingDataCategories = Set(BrowsingDataCategory.allCases)
     public private(set) var isClearingBrowsingData = false
     public var clearBrowsingDataStatus: String?
+    public private(set) var toastMessage: String?
     public private(set) var showsMemoryUsage: Bool
     @ObservationIgnored public let memoryStatus = BrowserMemoryStatus()
     public private(set) var searchEngine: SearchEngine
@@ -239,6 +240,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private var didRestore = false
     @ObservationIgnored private var isSessionReady = false
     @ObservationIgnored private var pendingExternalURLs: [URL] = []
+    @ObservationIgnored private var toastDismissTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleTimerTask: Task<Void, Never>?
     @ObservationIgnored private var memoryUsageTask: Task<Void, Never>?
@@ -371,6 +373,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
             return
         }
         openExternalWebURL(url)
+    }
+
+    public func copyActivePageURL() {
+        guard let url = activeTab?.url else { return }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.setString(url.absoluteString, forType: .string) else {
+            showToast(BrowserLocalization.string("copy_failed"))
+            return
+        }
+        showToast(BrowserLocalization.string("address_copied"))
     }
 
     public func makeDefaultBrowser() {
@@ -1836,6 +1850,16 @@ public final class BrowserWindowModel: WebEngineEventSink {
             return
         }
         navigate(to: url)
+    }
+
+    private func showToast(_ message: String) {
+        toastDismissTask?.cancel()
+        toastMessage = message
+        toastDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.toastMessage = nil
+        }
     }
 
     private func showDefaultBrowserResult(error: (any Error)?) {

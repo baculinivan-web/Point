@@ -1,6 +1,6 @@
 # Point — Technical Documentation
 
-This document is the technical reference for Point 0.1.1. It covers the implemented product surface, architecture, persistence, lifecycle policy, security boundaries, testing, and release process. For product principles and user experience, see [PRODUCT_VISION.md](./PRODUCT_VISION.md).
+This document is the technical reference for Point 0.1.2. It covers the implemented product surface, architecture, persistence, lifecycle policy, security boundaries, testing, and release process. For product principles and user experience, see [PRODUCT_VISION.md](./PRODUCT_VISION.md).
 
 ## 1. Platform and stack
 

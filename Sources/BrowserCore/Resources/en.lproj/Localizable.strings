@@ -86,6 +86,12 @@
 	<string>Sign-in sessions and site preferences</string>
 	<key>cookies_relogin_info</key>
 	<string>Cookies and site data will require signing in again</string>
+	<key>copy_failed</key>
+	<string>Could not copy address</string>
+	<key>copy_page_address</key>
+	<string>Copy Page Address</string>
+	<key>address_copied</key>
+	<string>Address copied</string>
 	<key>credentials_blocked</key>
 	<string>URLs with a username or password are blocked</string>
 	<key>default_browser_change_failed</key>

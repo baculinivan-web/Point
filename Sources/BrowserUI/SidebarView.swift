@@ -8,6 +8,7 @@ struct SidebarView: View {
     let model: BrowserWindowModel
     let isFullScreen: Bool
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var reorderState = SidebarReorderState()
 
     private var pinnedColumns: [GridItem] {
@@ -19,6 +20,24 @@ struct SidebarView: View {
     }
 
     var body: some View {
+        Group {
+            if model.sidebarMode == .pinned {
+                sidebarBase
+                    .background { pinnedSidebarBackground }
+                    .contentShape(Rectangle())
+            } else {
+                sidebarBase
+                    .browserGlassSurface(cornerRadius: 20)
+                    .shadow(color: .black.opacity(0.16), radius: 24, x: 6, y: 8)
+                    .contentShape(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    )
+            }
+        }
+        .simultaneousGesture(sidebarReorderGesture)
+    }
+
+    private var sidebarBase: some View {
         sidebarContent
             .coordinateSpace(name: SidebarCoordinateSpace.name)
             .onPreferenceChange(SidebarItemLayoutPreferenceKey.self) { layouts in
@@ -30,10 +49,15 @@ struct SidebarView: View {
             .overlay(alignment: .topLeading) {
                 sidebarDragOverlay
             }
-            .browserGlassSurface(cornerRadius: 20)
-            .shadow(color: .black.opacity(0.16), radius: 24, x: 6, y: 8)
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .simultaneousGesture(sidebarReorderGesture)
+    }
+
+    @ViewBuilder
+    private var pinnedSidebarBackground: some View {
+        if reduceTransparency {
+            Color(nsColor: .windowBackgroundColor)
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
     }
 
     private var sidebarContent: some View {
@@ -227,6 +251,16 @@ struct SidebarView: View {
             .help(model.activeTab?.isLoading == true
                 ? BrowserLocalization.string("stop")
                 : BrowserLocalization.string("reload"))
+
+            Button {
+                model.copyActivePageURL()
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(model.activeTab?.url == nil)
+            .help(BrowserLocalization.string("copy_page_address"))
+            .accessibilityLabel(BrowserLocalization.string("copy_page_address"))
 
             Spacer()
 
