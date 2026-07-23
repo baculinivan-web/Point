@@ -69,33 +69,37 @@ struct SidebarView: View {
                 .padding(.horizontal, 12)
                 .accessibilityLabel("Адрес и поиск")
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        if !model.pinnedTabs.isEmpty {
-                            LazyVGrid(columns: pinnedColumns, spacing: 8) {
-                                ForEach(model.pinnedTabs) { tab in
-                                    PinnedTabCard(
-                                        model: model,
-                                        tab: tab,
-                                        reorderState: reorderState
-                                    )
-                                }
+                VStack(spacing: 0) {
+                    if !model.pinnedTabs.isEmpty {
+                        LazyVGrid(columns: pinnedColumns, spacing: 8) {
+                            ForEach(model.pinnedTabs) { tab in
+                                PinnedTabCard(
+                                    model: model,
+                                    tab: tab,
+                                    reorderState: reorderState
+                                )
                             }
-                            .padding(.horizontal, 4)
-                            .padding(.bottom, 5)
                         }
-
-                        FolderTree(
-                            model: model,
-                            reorderState: reorderState,
-                            parentID: nil,
-                            depth: 0
-                        )
-
-                        NewTabRow(model: model, reorderState: reorderState)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
+                        .padding(.bottom, 5)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 10)
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            FolderTree(
+                                model: model,
+                                reorderState: reorderState,
+                                parentID: nil,
+                                depth: 0
+                            )
+
+                            NewTabRow(model: model, reorderState: reorderState)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                    }
+                    .frame(maxHeight: .infinity)
                 }
                 .background {
                     GeometryReader { proxy in
