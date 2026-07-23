@@ -19,6 +19,7 @@
 - `target=_blank`/`window.open` в новой вкладке с WebKit configuration;
 - новая, закрытие и восстановление последней закрытой вкладки;
 - закрепление и drag-and-drop сортировка вкладок;
+- сохраняемые папки вкладок с неограниченной вложенностью, SF Symbols-значками, переименованием, Shift-выделением диапазона, групповым переносом и рекурсивным удалением;
 - три состояния sidebar: pinned с зарезервированным viewport, hidden и временный Liquid Glass overlay без изменения viewport;
 - поиск по странице;
 - file input и JavaScript alert/confirm/text prompt;

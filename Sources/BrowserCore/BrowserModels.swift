@@ -10,6 +10,16 @@ public struct TabID: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+public struct TabFolderID: Hashable, Codable, Sendable, Identifiable {
+    public let rawValue: UUID
+
+    public var id: UUID { rawValue }
+
+    public init(_ rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
 public enum SidebarMode: String, Codable, Sendable, CaseIterable {
     case pinned
     case autoHide
@@ -142,6 +152,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
     public var url: URL?
     public var faviconURL: URL?
     public var isPinned: Bool
+    public var folderID: TabFolderID?
     public var position: Int64
     public var navigationHistory: TabNavigationHistory?
 
@@ -151,6 +162,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         url: URL?,
         faviconURL: URL? = nil,
         isPinned: Bool,
+        folderID: TabFolderID? = nil,
         position: Int64,
         navigationHistory: TabNavigationHistory? = nil
     ) {
@@ -159,8 +171,34 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         self.url = url
         self.faviconURL = faviconURL
         self.isPinned = isPinned
+        self.folderID = folderID
         self.position = position
         self.navigationHistory = navigationHistory
+    }
+}
+
+public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
+    public let id: TabFolderID
+    public var name: String
+    public var symbolName: String?
+    public var parentID: TabFolderID?
+    public var position: Int64
+    public var isExpanded: Bool
+
+    public init(
+        id: TabFolderID = TabFolderID(),
+        name: String,
+        symbolName: String? = "folder.fill",
+        parentID: TabFolderID? = nil,
+        position: Int64,
+        isExpanded: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.symbolName = symbolName
+        self.parentID = parentID
+        self.position = position
+        self.isExpanded = isExpanded
     }
 }
 
@@ -168,15 +206,44 @@ public struct BrowserSessionSnapshot: Codable, Equatable, Sendable {
     public var selectedTabID: TabID?
     public var sidebarMode: SidebarMode
     public var tabs: [PersistedTab]
+    public var folders: [PersistedTabFolder]
 
     public init(
         selectedTabID: TabID?,
         sidebarMode: SidebarMode,
-        tabs: [PersistedTab]
+        tabs: [PersistedTab],
+        folders: [PersistedTabFolder] = []
     ) {
         self.selectedTabID = selectedTabID
         self.sidebarMode = sidebarMode
         self.tabs = tabs
+        self.folders = folders
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case selectedTabID
+        case sidebarMode
+        case tabs
+        case folders
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        selectedTabID = try container.decodeIfPresent(TabID.self, forKey: .selectedTabID)
+        sidebarMode = try container.decode(SidebarMode.self, forKey: .sidebarMode)
+        tabs = try container.decode([PersistedTab].self, forKey: .tabs)
+        folders = try container.decodeIfPresent(
+            [PersistedTabFolder].self,
+            forKey: .folders
+        ) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(selectedTabID, forKey: .selectedTabID)
+        try container.encode(sidebarMode, forKey: .sidebarMode)
+        try container.encode(tabs, forKey: .tabs)
+        try container.encode(folders, forKey: .folders)
     }
 }
 

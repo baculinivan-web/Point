@@ -9,11 +9,12 @@ import WebKit
 @MainActor
 @Observable
 public final class BrowserTab: Identifiable {
-    public let id: TabID
+    public nonisolated let id: TabID
     public var title: String
     public var url: URL?
     public var faviconURL: URL?
     public var isPinned: Bool
+    public var folderID: TabFolderID?
     public var position: Int64
     public var lifecycleState: TabLifecycleState
     public var progress: Double = 0
@@ -44,6 +45,7 @@ public final class BrowserTab: Identifiable {
         url = restoredNavigationHistory.currentEntry?.url ?? snapshot.url
         faviconURL = snapshot.faviconURL
         isPinned = snapshot.isPinned
+        folderID = snapshot.folderID
         position = snapshot.position
         lifecycleState = .evicted
         canGoBack = navigationHistory.backIndex != nil
@@ -57,6 +59,7 @@ public final class BrowserTab: Identifiable {
             url: url,
             faviconURL: faviconURL,
             isPinned: isPinned,
+            folderID: folderID,
             position: position,
             navigationHistory: navigationHistory
         )
@@ -68,6 +71,55 @@ public final class BrowserTab: Identifiable {
     }
 
     public var domain: String? { url?.host }
+}
+
+@MainActor
+@Observable
+public final class TabFolder: Identifiable {
+    public nonisolated let id: TabFolderID
+    public var name: String
+    public var symbolName: String
+    public var parentID: TabFolderID?
+    public var position: Int64
+    public var isExpanded: Bool
+
+    public init(snapshot: PersistedTabFolder) {
+        id = snapshot.id
+        name = snapshot.name
+        symbolName = snapshot.symbolName ?? "folder.fill"
+        parentID = snapshot.parentID
+        position = snapshot.position
+        isExpanded = snapshot.isExpanded
+    }
+
+    public var snapshot: PersistedTabFolder {
+        PersistedTabFolder(
+            id: id,
+            name: name,
+            symbolName: symbolName,
+            parentID: parentID,
+            position: position,
+            isExpanded: isExpanded
+        )
+    }
+}
+
+enum SidebarTreeItem: Identifiable {
+    enum ItemID: Hashable {
+        case tab(TabID)
+        case folder(TabFolderID)
+    }
+
+    case tab(BrowserTab)
+    case folder(TabFolder)
+
+    var id: ItemID {
+        switch self {
+        case let .tab(tab): .tab(tab.id)
+        case let .folder(folder): .folder(folder.id)
+        }
+    }
+
 }
 
 public struct MediaPermissionPrompt: Identifiable, Equatable, Sendable {
@@ -111,7 +163,12 @@ private struct PendingMediaPermissionRequest {
 @Observable
 public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var tabs: [BrowserTab] = []
+    public private(set) var folders: [TabFolder] = []
     public var selectedTabID: TabID?
+    public private(set) var selectedTabIDs: Set<TabID> = []
+    public private(set) var draggingTabIDs: Set<TabID> = []
+    public private(set) var draggingFolderID: TabFolderID?
+    public var renamingFolderID: TabFolderID?
     public var sidebarMode: SidebarMode = .pinned
     public var isSidebarVisible = true
     public var isOmniboxPresented = false
@@ -155,6 +212,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         category: "lifecycle"
     )
     private var closedTabs: [PersistedTab] = []
+    private var selectionAnchorID: TabID?
     private var didRestore = false
     @ObservationIgnored private var isSessionReady = false
     @ObservationIgnored private var pendingExternalURLs: [URL] = []
@@ -213,6 +271,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tabs.filter { !$0.isPinned }.sorted { $0.position < $1.position }
     }
 
+    public var selectedTabCount: Int { selectedTabIDs.count }
+
     public var matchingTabs: [BrowserTab] {
         let query = omniboxText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return [] }
@@ -230,10 +290,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         do {
             if let snapshot = try await repository.load() {
+                folders = snapshot.folders.map(TabFolder.init(snapshot:))
                 tabs = snapshot.tabs
                     .filter { $0.url != nil }
                     .sorted { $0.position < $1.position }
                     .map(BrowserTab.init(snapshot:))
+                sanitizeFolderTree()
                 tabs.forEach(loadRestoredFavicon(for:))
                 guard !tabs.isEmpty else {
                     sidebarMode = snapshot.sidebarMode
@@ -245,6 +307,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 selectedTabID = snapshot.selectedTabID.flatMap { selected in
                     tabs.contains { $0.id == selected } ? selected : nil
                 } ?? tabs.first?.id
+                selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
+                selectionAnchorID = selectedTabID
                 sidebarMode = snapshot.sidebarMode
                 isSidebarVisible = snapshot.sidebarMode == .pinned
                 activateSelectedTabIfNeeded()
@@ -566,12 +630,17 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func closeTab(_ id: TabID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let removedFolderID = tabs[index].folderID
         let wasSelected = selectedTabID == id
         closedTabs.insert(tabs[index].snapshot, at: 0)
         closedTabs = Array(closedTabs.prefix(50))
         cancelMediaPermissionRequests(for: id)
         dispose(tab: tabs[index])
         tabs.remove(at: index)
+        selectedTabIDs.remove(id)
+        if selectionAnchorID == id {
+            selectionAnchorID = nil
+        }
 
         if tabs.isEmpty {
             selectedTabID = nil
@@ -586,7 +655,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             let nextIndex = min(index, tabs.count - 1)
             selectTab(tabs[nextIndex].id)
         }
-        normalizePositions()
+        normalizeSiblingPositions(in: removedFolderID)
         reconcileLifecycle()
         persist()
     }
@@ -594,7 +663,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func reopenClosedTab() {
         guard let index = closedTabs.firstIndex(where: { $0.url != nil }) else { return }
         var snapshot = closedTabs.remove(at: index)
-        snapshot.position = nextPosition
+        snapshot.folderID = nil
+        snapshot.position = nextPosition(in: nil)
         let restored = BrowserTab(snapshot: snapshot)
         tabs.append(restored)
         loadRestoredFavicon(for: restored)
@@ -602,8 +672,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
         persist()
     }
 
-    public func selectTab(_ id: TabID) {
+    public func selectTab(_ id: TabID, extendingSelection: Bool = false) {
         guard tab(id) != nil else { return }
+        if extendingSelection,
+           let anchor = selectionAnchorID,
+           let anchorIndex = tabSelectionOrder.firstIndex(where: { $0.id == anchor }),
+           let targetIndex = tabSelectionOrder.firstIndex(where: { $0.id == id }) {
+            let bounds = min(anchorIndex, targetIndex)...max(anchorIndex, targetIndex)
+            selectedTabIDs = Set(bounds.map { tabSelectionOrder[$0].id })
+        } else {
+            selectedTabIDs = [id]
+            selectionAnchorID = id
+        }
         let now = Date()
         if let activeTab, activeTab.id != id, activeTab.lifecycleState != .crashed {
             activeTab.lifecycleState = .liveBackground
@@ -625,22 +705,208 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func moveTab(_ id: TabID, before targetID: TabID?) {
-        guard let sourceIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
-        let moving = tabs.remove(at: sourceIndex)
-        if let targetID, let destination = tabs.firstIndex(where: { $0.id == targetID }) {
-            tabs.insert(moving, at: destination)
-        } else {
-            tabs.append(moving)
-        }
-        normalizePositions()
-        persist()
+        moveTabs([id], before: targetID)
     }
 
     public func setPinned(_ isPinned: Bool, for id: TabID) {
         guard let tab = tab(id) else { return }
         tab.isPinned = isPinned
-        normalizePositions()
+        if isPinned {
+            tab.folderID = nil
+            tab.position = nextPinnedPosition
+        } else {
+            tab.position = nextPosition(in: nil)
+        }
         persist()
+    }
+
+    @discardableResult
+    public func createFolder(
+        inside parentID: TabFolderID? = nil,
+        containing tabIDs: Set<TabID> = []
+    ) -> TabFolderID {
+        let validParentID = parentID.flatMap(folder) == nil ? nil : parentID
+        if let validParentID {
+            folder(validParentID)?.isExpanded = true
+        }
+        let id = TabFolderID()
+        let newFolder = TabFolder(
+            snapshot: PersistedTabFolder(
+                id: id,
+                name: "Новая папка",
+                parentID: validParentID,
+                position: nextPosition(in: validParentID)
+            )
+        )
+        folders.append(newFolder)
+        if !tabIDs.isEmpty {
+            moveTabs(tabIDs, to: id)
+        } else {
+            persist()
+        }
+        renamingFolderID = id
+        return id
+    }
+
+    @discardableResult
+    public func createFolderFromSelection(inside parentID: TabFolderID? = nil) -> TabFolderID {
+        createFolder(inside: parentID, containing: selectedTabIDs)
+    }
+
+    public func renameFolder(_ id: TabFolderID, to proposedName: String) {
+        guard let folder = folder(id) else { return }
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            folder.name = name
+            persist()
+        }
+        renamingFolderID = nil
+    }
+
+    public func toggleFolder(_ id: TabFolderID) {
+        guard let folder = folder(id) else { return }
+        folder.isExpanded.toggle()
+        persist()
+    }
+
+    public func setFolderSymbol(_ symbolName: String, for id: TabFolderID) {
+        guard let folder = folder(id), !symbolName.isEmpty else { return }
+        folder.symbolName = symbolName
+        persist()
+    }
+
+    public func moveSelectedTabs(to folderID: TabFolderID?) {
+        moveTabs(selectedTabIDs, to: folderID)
+    }
+
+    public func moveTab(_ id: TabID, to folderID: TabFolderID?) {
+        let ids = selectedTabIDs.contains(id) ? selectedTabIDs : [id]
+        moveTabs(ids, to: folderID)
+    }
+
+    public func moveFolder(_ id: TabFolderID, inside parentID: TabFolderID?) {
+        guard let moving = folder(id), id != parentID else { return }
+        if let parentID, isFolder(parentID, descendantOf: id) { return }
+        moving.parentID = parentID
+        moving.position = nextPosition(in: parentID, excludingFolderID: id)
+        persist()
+    }
+
+    public func deleteFolder(_ id: TabFolderID) {
+        guard let removed = folder(id) else { return }
+        let parentID = removed.parentID
+        for tab in tabs where tab.folderID == id {
+            tab.folderID = parentID
+            tab.position = nextPosition(in: parentID)
+        }
+        for child in folders where child.parentID == id {
+            child.parentID = parentID
+            child.position = nextPosition(in: parentID, excludingFolderID: child.id)
+        }
+        folders.removeAll { $0.id == id }
+        if renamingFolderID == id { renamingFolderID = nil }
+        persist()
+    }
+
+    public func deleteFolderWithContents(_ id: TabFolderID) {
+        guard folder(id) != nil else { return }
+        let folderIDs = folderSubtreeIDs(rootedAt: id)
+        let removedTabs = tabs.filter { tab in
+            tab.folderID.map(folderIDs.contains) == true
+        }
+        guard !removedTabs.isEmpty else {
+            folders.removeAll { folderIDs.contains($0.id) }
+            if renamingFolderID.map(folderIDs.contains) == true {
+                renamingFolderID = nil
+            }
+            persist()
+            return
+        }
+
+        let removedTabIDs = Set(removedTabs.map(\.id))
+        let selectedIndex = selectedTabID.flatMap { selected in
+            tabs.firstIndex { $0.id == selected }
+        }
+        for tab in removedTabs {
+            closedTabs.insert(tab.snapshot, at: 0)
+            cancelMediaPermissionRequests(for: tab.id)
+            dispose(tab: tab)
+        }
+        closedTabs = Array(closedTabs.prefix(50))
+        tabs.removeAll { removedTabIDs.contains($0.id) }
+        selectedTabIDs.subtract(removedTabIDs)
+        if selectionAnchorID.map(removedTabIDs.contains) == true {
+            selectionAnchorID = nil
+        }
+        folders.removeAll { folderIDs.contains($0.id) }
+        if renamingFolderID.map(folderIDs.contains) == true {
+            renamingFolderID = nil
+        }
+
+        if selectedTabID.map(removedTabIDs.contains) == true {
+            if tabs.isEmpty {
+                selectedTabID = nil
+                selectedTabIDs = []
+                dismissOmnibox()
+                newTab()
+            } else {
+                let index = min(selectedIndex ?? 0, tabs.count - 1)
+                selectTab(tabs[index].id)
+            }
+        }
+        normalizeAllSiblingPositions()
+        reconcileLifecycle()
+        persist()
+    }
+
+    func sidebarItems(in parentID: TabFolderID?) -> [SidebarTreeItem] {
+        let childFolders = folders
+            .filter { $0.parentID == parentID }
+            .map(SidebarTreeItem.folder)
+        let childTabs = tabs
+            .filter { !$0.isPinned && $0.folderID == parentID }
+            .map(SidebarTreeItem.tab)
+        return (childFolders + childTabs).sorted {
+            let lhsPosition = sidebarPosition(of: $0)
+            let rhsPosition = sidebarPosition(of: $1)
+            if lhsPosition == rhsPosition {
+                return String(describing: $0.id) < String(describing: $1.id)
+            }
+            return lhsPosition < rhsPosition
+        }
+    }
+
+    private func sidebarPosition(of item: SidebarTreeItem) -> Int64 {
+        switch item {
+        case let .tab(tab): tab.position
+        case let .folder(folder): folder.position
+        }
+    }
+
+    func folders(in parentID: TabFolderID?) -> [TabFolder] {
+        folders.filter { $0.parentID == parentID }.sorted { $0.position < $1.position }
+    }
+
+    func folderPath(_ id: TabFolderID) -> String {
+        var parts: [String] = []
+        var current = folder(id)
+        var visited: Set<TabFolderID> = []
+        while let value = current, visited.insert(value.id).inserted {
+            parts.insert(value.name, at: 0)
+            current = value.parentID.flatMap(folder)
+        }
+        return parts.joined(separator: " / ")
+    }
+
+    func tabCount(in folderID: TabFolderID) -> Int {
+        tabs.filter { tab in
+            guard !tab.isPinned, let tabFolderID = tab.folderID else { return false }
+            return tabFolderID == folderID || isFolder(tabFolderID, descendantOf: folderID)
+        }.count
+    }
+
+    func canMoveFolder(_ id: TabFolderID, inside parentID: TabFolderID) -> Bool {
+        id != parentID && !isFolder(parentID, descendantOf: id)
     }
 
     public func presentOmnibox(clearText: Bool = false) {
@@ -1044,7 +1310,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 title: "Новая вкладка",
                 url: request?.url,
                 isPinned: false,
-                position: nextPosition
+                position: nextPosition(in: nil)
             )
         )
         let engine = WebEngineSession(
@@ -1126,8 +1392,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         presentNextMediaPermissionIfPossible()
     }
 
-    private var nextPosition: Int64 {
-        (tabs.map(\.position).max() ?? 0) + 1024
+    private var nextPinnedPosition: Int64 {
+        (tabs.filter(\.isPinned).map(\.position).max() ?? 0) + 1024
     }
 
     private func appendTab(url: URL) -> TabID {
@@ -1139,7 +1405,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     title: "Новая вкладка",
                     url: url,
                     isPinned: false,
-                    position: nextPosition
+                    position: nextPosition(in: nil)
                 )
             )
         )
@@ -1668,9 +1934,260 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
     }
 
-    private func normalizePositions() {
-        for (index, tab) in tabs.enumerated() {
+    private var tabSelectionOrder: [BrowserTab] {
+        var result = pinnedTabs
+
+        func appendItems(in parentID: TabFolderID?) {
+            for item in sidebarItems(in: parentID) {
+                switch item {
+                case let .tab(tab):
+                    result.append(tab)
+                case let .folder(folder):
+                    if folder.isExpanded {
+                        appendItems(in: folder.id)
+                    }
+                }
+            }
+        }
+
+        appendItems(in: nil)
+        return result
+    }
+
+    private func folder(_ id: TabFolderID) -> TabFolder? {
+        folders.first { $0.id == id }
+    }
+
+    private func isFolder(_ candidateID: TabFolderID, descendantOf ancestorID: TabFolderID) -> Bool {
+        var currentID: TabFolderID? = candidateID
+        var visited: Set<TabFolderID> = []
+        while let id = currentID, visited.insert(id).inserted {
+            if id == ancestorID { return true }
+            currentID = folder(id)?.parentID
+        }
+        return false
+    }
+
+    private func folderSubtreeIDs(rootedAt rootID: TabFolderID) -> Set<TabFolderID> {
+        var result: Set<TabFolderID> = [rootID]
+        var pending = [rootID]
+        while let parentID = pending.popLast() {
+            let children = folders
+                .filter { $0.parentID == parentID && !result.contains($0.id) }
+                .map(\.id)
+            result.formUnion(children)
+            pending.append(contentsOf: children)
+        }
+        return result
+    }
+
+    private func nextPosition(
+        in parentID: TabFolderID?,
+        excludingFolderID: TabFolderID? = nil
+    ) -> Int64 {
+        let tabPositions = tabs
+            .filter { !$0.isPinned && $0.folderID == parentID }
+            .map(\.position)
+        let folderPositions = folders
+            .filter { $0.parentID == parentID && $0.id != excludingFolderID }
+            .map(\.position)
+        return (tabPositions + folderPositions).max().map { $0 + 1024 } ?? 1024
+    }
+
+    func moveTabs(
+        _ ids: Set<TabID>,
+        to proposedFolderID: TabFolderID?,
+        persistChange: Bool = true
+    ) {
+        guard !ids.isEmpty else { return }
+        let destinationID = proposedFolderID.flatMap(folder) == nil ? nil : proposedFolderID
+        if let destinationID {
+            folder(destinationID)?.isExpanded = true
+        }
+        let orderedTabs = orderedTabs(in: ids)
+        var position = nextPosition(in: destinationID)
+        for tab in orderedTabs {
+            tab.isPinned = false
+            tab.folderID = destinationID
+            tab.position = position
+            position += 1024
+        }
+        if persistChange { persist() }
+    }
+
+    func moveTabs(_ ids: Set<TabID>, before targetID: TabID?) {
+        guard let targetID else {
+            moveTabs(ids, to: nil)
+            return
+        }
+        moveTabs(ids, relativeTo: targetID, insertAfter: false)
+    }
+
+    func moveTabs(
+        _ ids: Set<TabID>,
+        relativeTo targetID: TabID,
+        insertAfter: Bool,
+        persistChange: Bool = true
+    ) {
+        guard !ids.isEmpty,
+              let target = tab(targetID),
+              !ids.contains(targetID)
+        else { return }
+        let movingTabs = orderedTabs(in: ids)
+        guard !movingTabs.isEmpty else { return }
+
+        for tab in movingTabs {
+            tab.isPinned = target.isPinned
+            tab.folderID = target.isPinned ? nil : target.folderID
+        }
+
+        if target.isPinned {
+            var siblings = pinnedTabs.filter { !ids.contains($0.id) }
+            var index = siblings.firstIndex { $0.id == targetID } ?? siblings.endIndex
+            if insertAfter, index < siblings.endIndex { index += 1 }
+            siblings.insert(contentsOf: movingTabs, at: index)
+            for (index, tab) in siblings.enumerated() {
+                tab.position = Int64(index + 1) * 1024
+            }
+        } else {
+            var items = sidebarItems(in: target.folderID).filter { item in
+                if case let .tab(tab) = item { return !ids.contains(tab.id) }
+                return true
+            }
+            var insertionIndex = items.firstIndex { item in
+                if case let .tab(tab) = item { return tab.id == targetID }
+                return false
+            } ?? items.endIndex
+            if insertAfter, insertionIndex < items.endIndex { insertionIndex += 1 }
+            items.insert(contentsOf: movingTabs.map(SidebarTreeItem.tab), at: insertionIndex)
+            assignPositions(to: items)
+        }
+        if persistChange { persist() }
+    }
+
+    func moveTabs(
+        _ ids: Set<TabID>,
+        relativeTo folderID: TabFolderID,
+        insertAfter: Bool,
+        persistChange: Bool = true
+    ) {
+        guard !ids.isEmpty, let targetFolder = folder(folderID) else { return }
+        let movingTabs = orderedTabs(in: ids)
+        guard !movingTabs.isEmpty else { return }
+        for tab in movingTabs {
+            tab.isPinned = false
+            tab.folderID = targetFolder.parentID
+        }
+
+        var items = sidebarItems(in: targetFolder.parentID).filter { item in
+            if case let .tab(tab) = item { return !ids.contains(tab.id) }
+            return true
+        }
+        var insertionIndex = items.firstIndex { item in
+            if case let .folder(folder) = item { return folder.id == folderID }
+            return false
+        } ?? items.endIndex
+        if insertAfter, insertionIndex < items.endIndex { insertionIndex += 1 }
+        items.insert(contentsOf: movingTabs.map(SidebarTreeItem.tab), at: insertionIndex)
+        assignPositions(to: items)
+        if persistChange { persist() }
+    }
+
+    @discardableResult
+    func moveFolder(
+        _ id: TabFolderID,
+        relativeTo targetID: TabFolderID,
+        insertAfter: Bool,
+        persistChange: Bool = true
+    ) -> Bool {
+        guard let moving = folder(id),
+              let target = folder(targetID),
+              id != targetID
+        else { return false }
+        let parentID = target.parentID
+        if parentID == id || parentID.map({ isFolder($0, descendantOf: id) }) == true {
+            return false
+        }
+        moving.parentID = parentID
+        var items = sidebarItems(in: parentID).filter { item in
+            if case let .folder(folder) = item { return folder.id != id }
+            return true
+        }
+        var insertionIndex = items.firstIndex { item in
+            if case let .folder(folder) = item { return folder.id == targetID }
+            return false
+        } ?? items.endIndex
+        if insertAfter, insertionIndex < items.endIndex { insertionIndex += 1 }
+        items.insert(.folder(moving), at: insertionIndex)
+        assignPositions(to: items)
+        if persistChange { persist() }
+        return true
+    }
+
+    func beginDraggingTabs(_ ids: Set<TabID>) {
+        draggingTabIDs = ids
+        draggingFolderID = nil
+    }
+
+    func beginDraggingFolder(_ id: TabFolderID) {
+        draggingTabIDs = []
+        draggingFolderID = id
+    }
+
+    func finishDragReordering() {
+        draggingTabIDs = []
+        draggingFolderID = nil
+        persist()
+    }
+
+    private func orderedTabs(in ids: Set<TabID>) -> [BrowserTab] {
+        let visibleTabs = tabSelectionOrder.filter { ids.contains($0.id) }
+        let visibleIDs = Set(visibleTabs.map(\.id))
+        let hiddenTabs = tabs
+            .filter { ids.contains($0.id) && !visibleIDs.contains($0.id) }
+            .sorted { $0.position < $1.position }
+        return visibleTabs + hiddenTabs
+    }
+
+    private func normalizeSiblingPositions(in parentID: TabFolderID?) {
+        assignPositions(to: sidebarItems(in: parentID))
+    }
+
+    private func normalizeAllSiblingPositions() {
+        for (index, tab) in pinnedTabs.enumerated() {
             tab.position = Int64(index + 1) * 1024
+        }
+        normalizeSiblingPositions(in: nil)
+        for folder in folders {
+            normalizeSiblingPositions(in: folder.id)
+        }
+    }
+
+    private func assignPositions(to items: [SidebarTreeItem]) {
+        for (index, item) in items.enumerated() {
+            let position = Int64(index + 1) * 1024
+            switch item {
+            case let .tab(tab): tab.position = position
+            case let .folder(folder): folder.position = position
+            }
+        }
+    }
+
+    private func sanitizeFolderTree() {
+        let validIDs = Set(folders.map(\.id))
+        for folder in folders where folder.parentID.map({ !validIDs.contains($0) }) == true {
+            folder.parentID = nil
+        }
+        for value in folders {
+            if let parentID = value.parentID,
+               isFolder(parentID, descendantOf: value.id) {
+                value.parentID = nil
+            }
+        }
+        for tab in tabs {
+            if tab.isPinned || tab.folderID.map({ !validIDs.contains($0) }) == true {
+                tab.folderID = nil
+            }
         }
     }
 
@@ -1678,7 +2195,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: selectedTabID,
             sidebarMode: sidebarMode,
-            tabs: tabs.map(\.snapshot)
+            tabs: tabs.map(\.snapshot),
+            folders: folders.map(\.snapshot)
         )
         let repository = repository
         let previousSave = persistenceTask

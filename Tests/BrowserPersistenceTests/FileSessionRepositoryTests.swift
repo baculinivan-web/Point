@@ -16,6 +16,8 @@ struct FileSessionRepositoryTests {
         )
         let firstID = TabID()
         let secondID = TabID()
+        let workFolderID = TabFolderID()
+        let researchFolderID = TabFolderID()
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: secondID,
             sidebarMode: .autoHide,
@@ -46,7 +48,23 @@ struct FileSessionRepositoryTests {
                     title: "Second",
                     url: URL(string: "https://example.org"),
                     isPinned: false,
+                    folderID: researchFolderID,
                     position: 2048
+                )
+            ],
+            folders: [
+                PersistedTabFolder(
+                    id: workFolderID,
+                    name: "Работа",
+                    symbolName: "briefcase.fill",
+                    position: 1024
+                ),
+                PersistedTabFolder(
+                    id: researchFolderID,
+                    name: "Исследование",
+                    parentID: workFolderID,
+                    position: 1024,
+                    isExpanded: false
                 )
             ]
         )
@@ -63,6 +81,36 @@ struct FileSessionRepositoryTests {
             .appending(path: "BrowserMissing-\(UUID().uuidString).json")
         let repository = FileSessionRepository(fileURL: fileURL)
         #expect(try await repository.load() == nil)
+    }
+
+    @Test("Sessions from before tab folders decode with an empty tree")
+    func legacySessionWithoutFolders() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserLegacy-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fileURL = directory.appending(path: "session.json")
+        let tabID = UUID()
+        let json = """
+        {
+          "selectedTabID" : { "rawValue" : "\(tabID.uuidString)" },
+          "sidebarMode" : "pinned",
+          "tabs" : [
+            {
+              "id" : { "rawValue" : "\(tabID.uuidString)" },
+              "title" : "Legacy",
+              "url" : "https://example.com",
+              "isPinned" : false,
+              "position" : 1024
+            }
+          ]
+        }
+        """
+        try Data(json.utf8).write(to: fileURL)
+
+        let restored = try await FileSessionRepository(fileURL: fileURL).load()
+        #expect(restored?.folders == [])
+        #expect(restored?.tabs.first?.folderID == nil)
     }
 }
 
