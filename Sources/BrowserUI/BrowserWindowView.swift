@@ -368,7 +368,7 @@ private struct LoadingBar: View {
                     )
             }
         }
-        .frame(height: 1)
+        .frame(height: 3)
         .accessibilityHidden(true)
     }
 }
