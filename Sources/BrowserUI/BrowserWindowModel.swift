@@ -251,7 +251,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.searchEngine = storedSearchEngine
         self.parser = parser ?? OmniboxParser(searchEngine: storedSearchEngine)
         self.downloadManager = downloadManager ?? DownloadManager()
-        self.passkeyAccessManager = passkeyAccessManager ?? PasskeyAccessManager()
+        self.passkeyAccessManager = passkeyAccessManager ?? .shared
         self.faviconRepository = faviconRepository ?? FaviconRepository()
     }
 
@@ -285,6 +285,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func restoreSession() async {
         guard !didRestore else { return }
         didRestore = true
+        _ = await passkeyAccessManager.prepareForWebBrowsing()
         await downloadManager.restoreHistory()
         startLifecycleMonitoring()
 
@@ -358,7 +359,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func requestPasskeyAccess() {
+        let previousState = passkeyAccessManager.refreshState()
         passkeyAccessManager.requestAccess { [weak self] state in
+            if previousState != .authorized, state == .authorized {
+                self?.activeTab?.engine?.reload()
+            }
             self?.showPasskeyAccessResult(state)
         }
     }
@@ -1466,6 +1471,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func setApplicationActive(_ isActive: Bool) {
         guard applicationIsActive != isActive else { return }
         applicationIsActive = isActive
+        if isActive {
+            passkeyAccessManager.refreshState()
+        }
         reconcileLifecycle()
     }
 
@@ -1704,8 +1712,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let alert = NSAlert()
         switch state {
         case .authorized:
-            alert.messageText = "Ключи входа доступны"
-            alert.informativeText = "WebKit сможет использовать passkeys из Keychain и совместимых менеджеров на сайтах с WebAuthn."
+            if passkeyAccessManager.isDeviceConfiguredForPasskeys {
+                alert.messageText = "Ключи входа доступны"
+                alert.informativeText = "WebKit может создавать и использовать passkeys из Keychain и совместимых менеджеров на сайтах с WebAuthn."
+            } else {
+                alert.messageText = "Ключи входа разрешены"
+                alert.informativeText = "Доступ разрешён, но macOS сообщает, что на этом устройстве ещё не настроен провайдер passkeys. Проверьте приложение «Пароли» и настройки автозаполнения."
+                alert.alertStyle = .warning
+            }
         case .denied:
             alert.messageText = "Доступ к ключам входа запрещён"
             alert.informativeText = "Разрешение можно изменить в настройках конфиденциальности macOS."

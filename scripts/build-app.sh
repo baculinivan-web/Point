@@ -10,6 +10,15 @@ MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 APP_ICON="${PROJECT_DIR}/icon.icon"
 APP_ICON_INFO="${PROJECT_DIR}/.build/BrowserAppIcon-Info.plist"
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
+
+if [[ -z "${CODESIGN_IDENTITY}" ]]; then
+    CODESIGN_IDENTITY="$(
+        security find-identity -v -p codesigning 2>/dev/null \
+            | awk '/"Apple Development:|"Developer ID Application:/{ print $2; exit }'
+    )"
+fi
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 
 cd "${PROJECT_DIR}"
 swift build -c "${CONFIGURATION}"
@@ -32,8 +41,8 @@ xcrun actool \
 
 codesign \
     --force \
-    --sign - \
+    --sign "${CODESIGN_IDENTITY}" \
     --entitlements "Resources/Browser.entitlements" \
     "${APP_DIR}"
 
-print "Built ${APP_DIR}"
+print "Built ${APP_DIR} (signed with ${CODESIGN_IDENTITY})"

@@ -28,7 +28,7 @@
 - управление сохранёнными site permissions через пункт «Разрешения сайтов…» в меню приложения: список allow/deny, отзыв отдельного решения и очистка всех; отзыв active allow прекращает текущий WebKit capture этого origin;
 - HTTP Basic/Digest authentication с нативным credential prompt без сохранения пароля;
 - подтверждение перед открытием `mailto`, `tel` и `facetime`; неизвестные внешние схемы блокируются;
-- passkeys из Keychain/совместимых credential providers через системный WebKit WebAuthn flow и явное разрешение в меню приложения;
+- passkeys из Keychain/совместимых credential providers через системный WebKit WebAuthn flow; браузер запрашивает доступ до создания первой страницы, а повторная проверка доступна в меню приложения;
 - favicon discovery после завершения навигации, origin-keyed memory/disk cache и deterministic fallback-иконка;
 - общая локальная история посещений: запись после main-frame commit, обновление title после finish, объединение быстрых дублей, лимит 5000 записей и окно «История» по `⌘Y`;
 - строки истории переиспользуют origin-keyed favicon cache только в cache-only режиме и не создают сетевые запросы при открытии списка;
