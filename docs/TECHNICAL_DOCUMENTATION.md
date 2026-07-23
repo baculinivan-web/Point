@@ -65,18 +65,18 @@ Tabs move through these lifecycle states:
 
 `crashed` is a recovery state for a terminated Web Content process.
 
-`active` is the selected tab and is attached to the SwiftUI hierarchy. `liveBackground` retains a live web view without being visible. `suspended` keeps the runtime but pauses media. `evicted` keeps metadata and, where available, opaque in-process `WKWebView.interactionState`; it releases the web view. `restoring` creates a new web view and restores interaction state or falls back to the last committed URL.
+`active` is the selected tab and is attached to the SwiftUI hierarchy. `liveBackground` retains a live web view without being visible. `suspended` keeps the runtime but pauses media. `evicted` keeps metadata and, where available, opaque in-process `WKWebView.interactionState`; it releases the web view. `restoring` creates a new web view, shows a neutral loading placeholder, and restores interaction state or falls back to the last committed URL.
 
-The policy uses an LRU order and adaptive resident budgets:
+The policy uses an LRU order and a configurable browser-process memory budget. The default is 50% of installed physical memory:
 
-| Physical memory | Normal resident budget |
+| Physical memory | Browser memory budget |
 |---|---:|
-| 8 GB | 2 tabs |
-| 16 GB | 4 tabs |
-| 24–32 GB | 7 tabs |
-| More than 32 GB | 10 tabs |
+| 8 GB | 4 GB |
+| 16 GB | 8 GB |
+| 32 GB | 16 GB |
+| 64 GB | 32 GB |
 
-Memory pressure, thermal state, and app activity can reduce the budget. Reconciliation is event-driven rather than constant polling. It runs after tab selection, creation, or closure; app, thermal, and memory transitions; and an idle timer no more often than once every 30 seconds.
+The memory setting accepts 25–90% in 5% increments and applies to all windows through `UserDefaults`; a running window reads the new value on its next sample. The app samples its resource-coalition physical footprint every three seconds. macOS assigns the Point UI process and its launchd-hosted WebKit XPC services to the same resource coalition, so this aggregate includes Web Content, Networking, and GPU memory without guessing their parent PIDs. Point applies a conservative floor of 192 MB per resident web view only if coalition accounting is unavailable or lower; the sidebar marks that fallback with `≈`. The same effective value drives the lifecycle budget. When it exceeds the budget, Point evicts one eligible LRU tab and waits for the next sample before considering another. Public WebKit APIs do not expose exact per-tab process memory. Reconciliation also runs after tab selection, creation, or closure and after app, thermal, and memory-pressure transitions.
 
 Eviction protections include the active tab, playing media, camera or microphone capture, element fullscreen, and unfinished native dialog or file flows. Media suspension and resume are paired. Playback protection is conservative: any WebKit `.playing` state is treated as protected because there is no reliable public audible-only API.
 

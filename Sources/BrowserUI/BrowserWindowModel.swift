@@ -23,6 +23,7 @@ public final class BrowserTab: Identifiable {
     public var canGoForward = false
     public var engine: WebEngineSession?
     public var favicon: NSImage?
+    public var isShowingRestorationPlaceholder = false
     var navigationHistory: TabNavigationHistory
 
     @ObservationIgnored var interactionState: Any?
@@ -162,6 +163,22 @@ private struct PendingMediaPermissionRequest {
 
 @MainActor
 @Observable
+public final class BrowserMemoryStatus {
+    public fileprivate(set) var bytes: UInt64 = 0
+    public fileprivate(set) var isEstimated = false
+
+    fileprivate func update(bytes: UInt64, isEstimated: Bool) {
+        if self.bytes != bytes {
+            self.bytes = bytes
+        }
+        if self.isEstimated != isEstimated {
+            self.isEstimated = isEstimated
+        }
+    }
+}
+
+@MainActor
+@Observable
 public final class BrowserWindowModel: WebEngineEventSink {
     public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
@@ -194,6 +211,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var selectedBrowsingDataCategories = Set(BrowsingDataCategory.allCases)
     public private(set) var isClearingBrowsingData = false
     public var clearBrowsingDataStatus: String?
+    public private(set) var showsMemoryUsage: Bool
+    @ObservationIgnored public let memoryStatus = BrowserMemoryStatus()
     public private(set) var searchEngine: SearchEngine
     public let downloadManager: DownloadManager
     public let passkeyAccessManager: PasskeyAccessManager
@@ -222,6 +241,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     @ObservationIgnored private var pendingExternalURLs: [URL] = []
     private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleTimerTask: Task<Void, Never>?
+    @ObservationIgnored private var memoryUsageTask: Task<Void, Never>?
+    @ObservationIgnored private var currentBrowserMemoryBytes: UInt64 = 0
     @ObservationIgnored private var pressureRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var pressureReconcileTask: Task<Void, Never>?
     @ObservationIgnored private var memoryPressureMonitor: MemoryPressureMonitor?
@@ -257,12 +278,16 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.isPrivate = isPrivate
         self.websiteDataStore = websiteDataStore
             ?? (isPrivate ? .nonPersistent() : .default())
+        self.showsMemoryUsage = UserDefaults.standard.bool(
+            forKey: "ShowsBrowserMemoryUsage"
+        )
         self.searchEngine = storedSearchEngine
         self.parser = parser ?? OmniboxParser(searchEngine: storedSearchEngine)
         self.downloadManager = downloadManager ?? DownloadManager()
         self.passkeyAccessManager = passkeyAccessManager ?? .shared
         self.faviconRepository = faviconRepository
             ?? FaviconRepository(persistsToDisk: !isPrivate)
+        Self.removeLegacyTabSnapshotCache()
     }
 
     public var activeTab: BrowserTab? {
@@ -1135,6 +1160,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
         persist()
     }
 
+    public func toggleMemoryUsageDisplay() {
+        showsMemoryUsage.toggle()
+        UserDefaults.standard.set(
+            showsMemoryUsage,
+            forKey: "ShowsBrowserMemoryUsage"
+        )
+    }
+
     public func showAutoHideSidebar() {
         guard sidebarMode == .autoHide else { return }
         isSidebarVisible = true
@@ -1153,6 +1186,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tab.title = session.title
         tab.progress = session.estimatedProgress
         tab.isLoading = session.isLoading
+        if tab.isShowingRestorationPlaceholder,
+           !session.isLoading,
+           session.url != nil {
+            tab.isShowingRestorationPlaceholder = false
+        }
         if session.url == tab.navigationHistory.currentEntry?.url {
             tab.navigationHistory.updateCurrentTitle(session.title)
         }
@@ -1166,6 +1204,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func webEngineDidCommit(_ session: WebEngineSession) {
         guard let tab = tab(session.tabID), let committedURL = session.url else { return }
+        tab.isShowingRestorationPlaceholder = false
         let previousCacheKey = tab.url.flatMap(FaviconCacheKey.make(for:))
         tab.url = committedURL
         tab.title = session.title
@@ -1225,7 +1264,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidFinish(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID),
+        guard let tab = tab(session.tabID) else { return }
+        tab.isShowingRestorationPlaceholder = false
+        guard
               let finishedURL = session.url,
               ["http", "https"].contains(finishedURL.scheme?.lowercased() ?? ""),
               let recordTask = tab.browsingHistoryRecordTask
@@ -1248,6 +1289,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func webEngineDidFailNavigation(_ session: WebEngineSession) {
         guard let tab = tab(session.tabID) else { return }
+        tab.isShowingRestorationPlaceholder = false
         tab.pendingNavigationHistoryIndex = nil
         updateNavigationAvailability(for: tab, session: session)
     }
@@ -1516,6 +1558,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         if let engine = tab.engine { return engine }
         let interval = lifecycleSignposter.beginInterval("Tab restore")
         defer { lifecycleSignposter.endInterval("Tab restore", interval) }
+        tab.isShowingRestorationPlaceholder = tab.lifecycleState == .evicted
+            && tab.hasLoadedInitialURL
         tab.lifecycleState = .restoring
         let engine = WebEngineSession(
             tabID: tab.id,
@@ -1537,7 +1581,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         engine.setMediaPlaybackSuspended(false)
         tab.lifecycleState = .active
         tab.lastInteractionAt = Date()
-        tab.evictionGraceUntil = tab.lastInteractionAt.addingTimeInterval(30)
+        tab.evictionGraceUntil = tab.lastInteractionAt.addingTimeInterval(120)
         if !tab.hasLoadedInitialURL, let url = tab.url {
             tab.hasLoadedInitialURL = true
             engine.load(url)
@@ -1565,6 +1609,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         clearBrowsingDataTask = nil
         lifecycleTimerTask?.cancel()
         lifecycleTimerTask = nil
+        memoryUsageTask?.cancel()
+        memoryUsageTask = nil
         pressureRecoveryTask?.cancel()
         pressureRecoveryTask = nil
         pressureReconcileTask?.cancel()
@@ -1587,6 +1633,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
         memoryPressureMonitor = monitor
         monitor.start()
+        startMemoryMonitoringIfNeeded()
 
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification,
@@ -1605,6 +1652,31 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 self?.refreshBackgroundMediaState { [weak self] in
                     self?.reconcileLifecycle(mediaStateIsFresh: true)
                 }
+            }
+        }
+    }
+
+    private func startMemoryMonitoringIfNeeded() {
+        guard memoryUsageTask == nil else { return }
+        memoryUsageTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                let measuredBytes = await Task.detached(priority: .utility) {
+                    BrowserMemoryReader.currentBrowserResidentBytes()
+                }.value
+                guard !Task.isCancelled, let self else { return }
+                // WebKit content processes are sandboxed XPC services and are
+                // not always visible through libproc. Keep the meter and the
+                // lifecycle budget conservative when that happens.
+                let residentTabCount = tabs.lazy.filter { $0.engine != nil }.count
+                let estimatedBytes = UInt64(residentTabCount) * 192 * 1_048_576
+                let bytes = max(measuredBytes, estimatedBytes)
+                currentBrowserMemoryBytes = bytes
+                memoryStatus.update(
+                    bytes: bytes,
+                    isEstimated: estimatedBytes > measuredBytes
+                )
+                reconcileLifecycle(browserMemoryBytes: bytes)
+                try? await Task.sleep(for: .seconds(3))
             }
         }
     }
@@ -1922,6 +1994,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private func reconcileLifecycle(
         now: Date = Date(),
         pressure: MemoryPressureLevel? = nil,
+        browserMemoryBytes: UInt64? = nil,
         mediaStateIsFresh: Bool = false
     ) {
         let effectivePressure = pressure ?? currentPressure
@@ -1938,6 +2011,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             selectedTabID: selectedTabID,
             now: now,
             physicalMemoryBytes: physicalMemoryBytes,
+            memoryLimitFraction: BrowserMemoryLimitSettings.currentFraction(),
+            browserMemoryBytes: browserMemoryBytes ?? currentBrowserMemoryBytes,
             pressure: effectivePressure,
             thermalState: currentThermalState,
             applicationIsActive: applicationIsActive
@@ -1951,6 +2026,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             refreshMediaState(for: evictionIDs) { [weak self] in
                 self?.reconcileLifecycle(
                     pressure: effectivePressure,
+                    browserMemoryBytes: browserMemoryBytes,
                     mediaStateIsFresh: true
                 )
             }
@@ -1987,7 +2063,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func evict(tabID: TabID) {
         guard let tab = tab(tabID), tab.id != selectedTabID else { return }
-        guard protectionReasons(for: tab, now: Date()).isEmpty else { return }
+        guard canEvict(tab) else { return }
+        finalizeEviction(tab)
+    }
+
+    private func finalizeEviction(_ tab: BrowserTab) {
+        guard tab.id != selectedTabID,
+              canEvict(tab)
+        else { return }
         let interval = lifecycleSignposter.beginInterval("Tab eviction")
         defer { lifecycleSignposter.endInterval("Tab eviction", interval) }
 
@@ -2007,6 +2090,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tab.progress = 0
         updateNavigationAvailability(for: tab)
         lifecycleLogger.debug("Evicted a background tab")
+    }
+
+    private func canEvict(_ tab: BrowserTab) -> Bool {
+        var reasons = protectionReasons(for: tab, now: Date())
+        reasons.remove(.gracePeriod)
+        return reasons.isEmpty
     }
 
     private func dispose(tab: BrowserTab) {
@@ -2311,6 +2400,19 @@ public final class BrowserWindowModel: WebEngineEventSink {
             if tab.isPinned || tab.folderID.map({ !validIDs.contains($0) }) == true {
                 tab.folderID = nil
             }
+        }
+    }
+
+    private static func removeLegacyTabSnapshotCache() {
+        guard let cachesURL = FileManager.default.urls(
+            for: .cachesDirectory,
+            in: .userDomainMask
+        ).first else { return }
+        let snapshotDirectory = cachesURL
+            .appending(path: "Point", directoryHint: .isDirectory)
+            .appending(path: "TabSnapshots", directoryHint: .isDirectory)
+        Task.detached(priority: .utility) {
+            try? FileManager.default.removeItem(at: snapshotDirectory)
         }
     }
 

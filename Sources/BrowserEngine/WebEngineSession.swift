@@ -82,7 +82,6 @@ public final class WebEngineSession: NSObject {
     ) {
         self.tabID = tabID
         self.downloadManager = downloadManager
-
         let configuration = suppliedConfiguration
             ?? Self.makeConfiguration(websiteDataStore: websiteDataStore)
         webView = WKWebView(frame: .zero, configuration: configuration)

@@ -1,5 +1,25 @@
 import Foundation
 
+public enum BrowserMemoryLimitSettings {
+    public static let defaultsKey = "BrowserMemoryLimitFraction"
+    public static let defaultFraction = 0.5
+    public static let allowedRange = 0.25...0.9
+
+    public static func normalizedFraction(_ value: Double) -> Double {
+        guard value.isFinite else { return defaultFraction }
+        return min(max(value, allowedRange.lowerBound), allowedRange.upperBound)
+    }
+
+    public static func currentFraction(
+        userDefaults: UserDefaults = .standard
+    ) -> Double {
+        guard userDefaults.object(forKey: defaultsKey) != nil else {
+            return defaultFraction
+        }
+        return normalizedFraction(userDefaults.double(forKey: defaultsKey))
+    }
+}
+
 public enum MemoryPressureLevel: Sendable {
     case normal
     case warning
@@ -56,41 +76,16 @@ public enum TabLifecycleAction: Equatable, Sendable {
 public struct TabLifecyclePolicy: Sendable {
     public var backgroundIdleTimeout: TimeInterval
 
-    public init(backgroundIdleTimeout: TimeInterval = 120) {
+    public init(backgroundIdleTimeout: TimeInterval = 600) {
         self.backgroundIdleTimeout = backgroundIdleTimeout
     }
 
-    public func residentBudget(
+    public func memoryBudget(
         physicalMemoryBytes: UInt64,
-        pressure: MemoryPressureLevel = .normal,
-        thermalState: LifecycleThermalState = .nominal,
-        applicationIsActive: Bool = true
-    ) -> Int {
-        let gibibyte = UInt64(1_073_741_824)
-        let base: Int
-        switch physicalMemoryBytes {
-        case ...(8 * gibibyte):
-            base = 2
-        case ...(16 * gibibyte):
-            base = 4
-        case ...(32 * gibibyte):
-            base = 7
-        default:
-            base = 10
-        }
-
-        if pressure == .critical { return 1 }
-
-        var budget = base
-        if pressure == .warning || !applicationIsActive {
-            budget = max(1, budget / 2)
-        }
-        if thermalState == .serious {
-            budget = max(1, budget / 2)
-        } else if thermalState == .critical {
-            budget = 1
-        }
-        return budget
+        limitFraction: Double = BrowserMemoryLimitSettings.defaultFraction
+    ) -> UInt64 {
+        let fraction = BrowserMemoryLimitSettings.normalizedFraction(limitFraction)
+        return UInt64(Double(physicalMemoryBytes) * fraction)
     }
 
     public func actions(
@@ -98,6 +93,8 @@ public struct TabLifecyclePolicy: Sendable {
         selectedTabID: TabID?,
         now: Date,
         physicalMemoryBytes: UInt64,
+        memoryLimitFraction: Double = BrowserMemoryLimitSettings.defaultFraction,
+        browserMemoryBytes: UInt64,
         pressure: MemoryPressureLevel,
         thermalState: LifecycleThermalState,
         applicationIsActive: Bool
@@ -117,33 +114,52 @@ public struct TabLifecyclePolicy: Sendable {
                 false
             }
         }
+        let budget = memoryBudget(
+            physicalMemoryBytes: physicalMemoryBytes,
+            limitFraction: memoryLimitFraction
+        )
         let candidates = resident
-            .filter { $0.id != selectedTabID && $0.protection.isEmpty }
+            .filter { tab in
+                guard tab.id != selectedTabID else { return false }
+                var protection = tab.protection
+                if pressure != .normal || browserMemoryBytes > budget {
+                    protection.remove(.gracePeriod)
+                }
+                return protection.isEmpty
+            }
             .sorted { lhs, rhs in
                 if lhs.lastInteractionAt == rhs.lastInteractionAt {
                     return lhs.id.rawValue.uuidString < rhs.id.rawValue.uuidString
                 }
                 return lhs.lastInteractionAt < rhs.lastInteractionAt
             }
-
-        let budget = residentBudget(
-            physicalMemoryBytes: physicalMemoryBytes,
-            pressure: pressure,
-            thermalState: thermalState,
-            applicationIsActive: applicationIsActive
-        )
         let evictionCount: Int
         if pressure == .critical {
             evictionCount = candidates.count
+        } else if browserMemoryBytes > budget {
+            // Evict one LRU tab per measurement. WebKit releases content
+            // processes asynchronously, so a later sample decides whether
+            // another tab must be evicted.
+            evictionCount = min(1, candidates.count)
         } else {
-            evictionCount = min(candidates.count, max(0, resident.count - budget))
+            evictionCount = 0
         }
         let evictedIDs = Set(candidates.prefix(evictionCount).map(\.id))
+        let shouldSuspendForThermalState: Bool
+        switch thermalState {
+        case .serious, .critical:
+            shouldSuspendForThermalState = true
+        case .nominal, .fair:
+            shouldSuspendForThermalState = false
+        }
 
         for candidate in candidates where !evictedIDs.contains(candidate.id) {
             let isIdle = now.timeIntervalSince(candidate.lastInteractionAt) >= backgroundIdleTimeout
             if candidate.state == .liveBackground,
-               pressure == .warning || !applicationIsActive || isIdle {
+               pressure == .warning
+                    || !applicationIsActive
+                    || shouldSuspendForThermalState
+                    || isIdle {
                 actions.append(.suspend(candidate.id))
             }
         }

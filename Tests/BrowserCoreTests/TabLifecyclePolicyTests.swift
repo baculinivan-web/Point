@@ -7,26 +7,32 @@ struct TabLifecyclePolicyTests {
     private let gibibyte = UInt64(1_073_741_824)
     private let now = Date(timeIntervalSince1970: 10_000)
 
-    @Test("Resident budget adapts to memory, pressure, activity, and heat")
+    @Test("Default memory budget is half of installed physical memory")
     func adaptiveBudget() {
         let policy = TabLifecyclePolicy()
 
-        #expect(policy.residentBudget(physicalMemoryBytes: 8 * gibibyte) == 2)
-        #expect(policy.residentBudget(physicalMemoryBytes: 16 * gibibyte) == 4)
-        #expect(policy.residentBudget(physicalMemoryBytes: 24 * gibibyte) == 7)
-        #expect(policy.residentBudget(physicalMemoryBytes: 64 * gibibyte) == 10)
-        #expect(policy.residentBudget(
+        #expect(policy.memoryBudget(physicalMemoryBytes: 8 * gibibyte) == 4 * gibibyte)
+        #expect(policy.memoryBudget(physicalMemoryBytes: 16 * gibibyte) == 8 * gibibyte)
+        #expect(policy.memoryBudget(physicalMemoryBytes: 32 * gibibyte) == 16 * gibibyte)
+        #expect(policy.memoryBudget(physicalMemoryBytes: 64 * gibibyte) == 32 * gibibyte)
+    }
+
+    @Test("Custom memory fraction is applied and constrained")
+    func customBudget() {
+        let policy = TabLifecyclePolicy()
+
+        #expect(policy.memoryBudget(
             physicalMemoryBytes: 16 * gibibyte,
-            pressure: .warning
-        ) == 2)
-        #expect(policy.residentBudget(
+            limitFraction: 0.75
+        ) == 12 * gibibyte)
+        #expect(policy.memoryBudget(
             physicalMemoryBytes: 16 * gibibyte,
-            applicationIsActive: false
-        ) == 2)
-        #expect(policy.residentBudget(
-            physicalMemoryBytes: 32 * gibibyte,
-            thermalState: .critical
-        ) == 1)
+            limitFraction: 0.1
+        ) == 4 * gibibyte)
+        #expect(policy.memoryBudget(
+            physicalMemoryBytes: 16 * gibibyte,
+            limitFraction: 1
+        ) == UInt64(Double(16 * gibibyte) * 0.9))
     }
 
     @Test("LRU eviction preserves active and media-protected tabs")
@@ -36,11 +42,15 @@ struct TabLifecyclePolicyTests {
         let media = TabID()
         let oldest = TabID()
         let recent = TabID()
+        let newer = TabID()
+        let newest = TabID()
         let tabs = [
             snapshot(active, .active, age: 0, protection: .active),
             snapshot(media, .liveBackground, age: 90, protection: .audibleMedia),
             snapshot(oldest, .liveBackground, age: 80),
-            snapshot(recent, .liveBackground, age: 10)
+            snapshot(recent, .liveBackground, age: 10),
+            snapshot(newer, .liveBackground, age: 8),
+            snapshot(newest, .liveBackground, age: 5)
         ]
 
         let actions = policy.actions(
@@ -48,15 +58,16 @@ struct TabLifecyclePolicyTests {
             selectedTabID: active,
             now: now,
             physicalMemoryBytes: 8 * gibibyte,
+            browserMemoryBytes: 5 * gibibyte,
             pressure: .normal,
             thermalState: .nominal,
             applicationIsActive: true
         )
 
-        #expect(actions == [.evict(oldest), .evict(recent)])
+        #expect(actions == [.evict(oldest)])
     }
 
-    @Test("Warning suspends survivors and evicts beyond half budget")
+    @Test("Warning suspends survivors and evicts one LRU tab over budget")
     func warningActions() {
         let policy = TabLifecyclePolicy(backgroundIdleTimeout: 1_000)
         let active = TabID()
@@ -72,7 +83,8 @@ struct TabLifecyclePolicyTests {
             ],
             selectedTabID: active,
             now: now,
-            physicalMemoryBytes: 32 * gibibyte,
+            physicalMemoryBytes: 8 * gibibyte,
+            browserMemoryBytes: 5 * gibibyte,
             pressure: .warning,
             thermalState: .nominal,
             applicationIsActive: true
@@ -83,6 +95,30 @@ struct TabLifecyclePolicyTests {
             .suspend(recent),
             .evict(oldest)
         ])
+    }
+
+    @Test("Default idle timeout keeps a background tab live for five minutes")
+    func generousIdleTimeout() {
+        let policy = TabLifecyclePolicy()
+        let active = TabID()
+        let background = TabID()
+        let tabs = [
+            snapshot(active, .active, age: 0, protection: .active),
+            snapshot(background, .liveBackground, age: 5 * 60)
+        ]
+
+        let actions = policy.actions(
+            for: tabs,
+            selectedTabID: active,
+            now: now,
+            physicalMemoryBytes: 16 * gibibyte,
+            browserMemoryBytes: 3 * gibibyte,
+            pressure: .normal,
+            thermalState: .nominal,
+            applicationIsActive: true
+        )
+
+        #expect(actions.isEmpty)
     }
 
     @Test("Critical pressure evicts every unprotected background tab")
@@ -104,6 +140,7 @@ struct TabLifecyclePolicyTests {
             selectedTabID: active,
             now: now,
             physicalMemoryBytes: 64 * gibibyte,
+            browserMemoryBytes: 1 * gibibyte,
             pressure: .critical,
             thermalState: .nominal,
             applicationIsActive: true
@@ -125,6 +162,7 @@ struct TabLifecyclePolicyTests {
             selectedTabID: active,
             now: now,
             physicalMemoryBytes: 16 * gibibyte,
+            browserMemoryBytes: 1 * gibibyte,
             pressure: .normal,
             thermalState: .nominal,
             applicationIsActive: false
@@ -142,6 +180,7 @@ struct TabLifecyclePolicyTests {
             selectedTabID: selected,
             now: now,
             physicalMemoryBytes: 8 * gibibyte,
+            browserMemoryBytes: 1 * gibibyte,
             pressure: .normal,
             thermalState: .nominal,
             applicationIsActive: true

@@ -34,6 +34,10 @@
 	<string>The server requests a username and password.</string>
 	<key>back</key>
 	<string>Back</string>
+	<key>browser_memory_usage</key>
+	<string>Browser memory usage</string>
+	<key>browser_memory_usage_estimated_help</key>
+	<string>Estimated browser memory usage. macOS may hide isolated WebKit processes.</string>
 	<key>browsing_history</key>
 	<string>Browsing History</string>
 	<key>cache_detail</key>
@@ -187,6 +191,12 @@
 	<string>Local Storage, IndexedDB, and WebSQL</string>
 	<key>make_default_browser</key>
 	<string>Make Default Browser</string>
+	<key>memory_limit</key>
+	<string>Memory limit</string>
+	<key>memory_limit_detail</key>
+	<string>Point starts unloading the least recently used tabs when browser memory reaches %@.</string>
+	<key>memory_management</key>
+	<string>Memory Management</string>
 	<key>microphone</key>
 	<string>Microphone</string>
 	<key>move_folder</key>
@@ -277,6 +287,10 @@
 	<string>Reload</string>
 	<key>reload_bypass_cache</key>
 	<string>Reload Without Cache</string>
+	<key>restoring_unloaded_tab</key>
+	<string>Restoring tab</string>
+	<key>restoring_unloaded_tab_detail</key>
+	<string>It was unloaded to save memory and is already loading again.</string>
 	<key>remove_from_list</key>
 	<string>Remove from List</string>
 	<key>remove_saved_decision</key>
@@ -323,6 +337,8 @@
 	<string>Show All History…</string>
 	<key>show_in_finder</key>
 	<string>Show in Finder</string>
+	<key>show_memory_usage</key>
+	<string>Show Memory Usage</string>
 	<key>sign_in</key>
 	<string>Sign In</string>
 	<key>sign_in_to_host</key>
@@ -341,6 +357,10 @@
 	<string>Study</string>
 	<key>tabs</key>
 	<string>Tabs</string>
+	<key>tab_unloaded</key>
+	<string>unloaded from memory</string>
+	<key>tab_unloaded_help</key>
+	<string>This tab was unloaded to reduce memory usage. It will be restored when opened.</string>
 	<key>team</key>
 	<string>Team</string>
 	<key>toggle_sidebar</key>

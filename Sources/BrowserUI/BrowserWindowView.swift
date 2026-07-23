@@ -328,7 +328,7 @@ private struct WebSurface: View {
     let model: BrowserWindowModel
 
     var body: some View {
-        Group {
+        ZStack {
             if let tab = model.activeTab,
                let engine = tab.engine {
                 WKWebViewHost(
@@ -341,6 +341,11 @@ private struct WebSurface: View {
                         model?.handleNavigationSwipe(.forward) ?? false
                     }
                 )
+
+                if tab.isShowingRestorationPlaceholder {
+                    RestoringTabPlaceholder()
+                        .transition(.opacity)
+                }
             } else {
                 Color(nsColor: .textBackgroundColor)
             }
@@ -350,6 +355,33 @@ private struct WebSurface: View {
 
     private var blockedWebInteractionWidth: CGFloat {
         model.sidebarMode == .autoHide && model.isSidebarVisible ? 300 : 0
+    }
+}
+
+private struct RestoringTabPlaceholder: View {
+    var body: some View {
+        ZStack {
+            Color(nsColor: .textBackgroundColor)
+
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+
+                Text(BrowserLocalization.string("restoring_unloaded_tab"))
+                    .font(.headline)
+
+                Text(BrowserLocalization.string("restoring_unloaded_tab_detail"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 340)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .browserGlassSurface(cornerRadius: 18)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 

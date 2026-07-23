@@ -100,6 +100,17 @@ public struct BrowserCommands: Commands {
                 model?.toggleSidebarMode()
             }
             .keyboardShortcut("s", modifiers: [.command])
+
+            Divider()
+
+            Toggle(
+                BrowserLocalization.string("show_memory_usage"),
+                isOn: Binding(
+                    get: { model?.showsMemoryUsage ?? false },
+                    set: { _ in model?.toggleMemoryUsageDisplay() }
+                )
+            )
+            .disabled(model == nil)
         }
 
         CommandMenu(BrowserLocalization.string("history")) {

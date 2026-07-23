@@ -25,7 +25,7 @@ struct SidebarView: View {
                 reorderState.updateLayouts(layouts, model: model)
             }
             .onPreferenceChange(SidebarListBoundsPreferenceKey.self) { bounds in
-                reorderState.listBounds = bounds
+                reorderState.updateListBounds(bounds)
             }
             .overlay(alignment: .topLeading) {
                 sidebarDragOverlay
@@ -136,6 +136,16 @@ struct SidebarView: View {
                         }
                     }
                 }
+            }
+
+            if model.showsMemoryUsage {
+                HStack {
+                    Spacer()
+                    MemoryUsageBadge(status: model.memoryStatus)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 11)
+                .padding(.top, 6)
             }
         }
     }
@@ -255,6 +265,38 @@ struct SidebarView: View {
 
 }
 
+private struct MemoryUsageBadge: View {
+    @Bindable var status: BrowserMemoryStatus
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "memorychip")
+            Text(value)
+                .monospacedDigit()
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 9)
+        .frame(height: 25)
+        .browserGlassSurface(cornerRadius: 9)
+        .help(status.isEstimated
+            ? BrowserLocalization.string("browser_memory_usage_estimated_help")
+            : BrowserLocalization.string("browser_memory_usage"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(BrowserLocalization.string("browser_memory_usage"))
+        .accessibilityValue(value)
+    }
+
+    private var value: String {
+        guard status.bytes > 0 else { return "…" }
+        let formatted = ByteCountFormatter.string(
+            fromByteCount: Int64(clamping: status.bytes),
+            countStyle: .memory
+        )
+        return status.isEstimated ? "≈\(formatted)" : formatted
+    }
+}
+
 private enum SidebarCoordinateSpace {
     static let name = "sidebar-reorder-space"
 }
@@ -334,12 +376,12 @@ private struct SidebarItemLayoutReader: View {
 @MainActor
 @Observable
 private final class SidebarReorderState {
-    var listBounds = CGRect.zero
+    @ObservationIgnored private(set) var listBounds = CGRect.zero
     private(set) var anchorTab: BrowserTab?
     private(set) var draggedTabIDs: Set<TabID> = []
     private(set) var sourceVisual: SidebarDragVisual = .regular
 
-    private var layouts: [SidebarLayoutKey: SidebarItemLayout] = [:]
+    @ObservationIgnored private var layouts: [SidebarLayoutKey: SidebarItemLayout] = [:]
     private var target: SidebarReorderTarget?
     private var lastAppliedTarget: SidebarReorderTarget?
     private var sourceFrame = CGRect.zero
@@ -379,12 +421,18 @@ private final class SidebarReorderState {
         _ layouts: [SidebarLayoutKey: SidebarItemLayout],
         model: BrowserWindowModel
     ) {
+        guard layouts != self.layouts else { return }
         self.layouts = layouts
         guard let anchorTab else { return }
         if let currentFrame = layouts[.tab(anchorTab.id)]?.frame,
            sourceFrame.isEmpty {
             sourceFrame = currentFrame
         }
+    }
+
+    func updateListBounds(_ bounds: CGRect) {
+        guard bounds != listBounds else { return }
+        listBounds = bounds
     }
 
     func dragFromSidebar(
@@ -572,6 +620,16 @@ private struct PinnedTabCard: View {
                     TabFavicon(tab: tab, size: 24)
                         .offset(y: isHovering && tab.domain != nil ? -7 : 0)
 
+                    if tab.lifecycleState == .evicted {
+                        EvictedTabIndicator()
+                            .frame(
+                                maxWidth: .infinity,
+                                maxHeight: .infinity,
+                                alignment: .topLeading
+                            )
+                            .padding(7)
+                    }
+
                     if let domain = tab.domain {
                         Text(domain)
                             .font(.caption2)
@@ -623,7 +681,9 @@ private struct PinnedTabCard: View {
             )
         }
         .contextMenu { pinnedContextMenu }
-        .help(tab.url?.absoluteString ?? tab.displayTitle)
+        .help(tab.lifecycleState == .evicted
+            ? BrowserLocalization.string("tab_unloaded_help")
+            : (tab.url?.absoluteString ?? tab.displayTitle))
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(model.selectedTabIDs.contains(tab.id) ? .isSelected : [])
     }
@@ -633,6 +693,9 @@ private struct PinnedTabCard: View {
             tab.displayTitle,
             tab.domain,
             tab.isPinned ? BrowserLocalization.string("pinned") : nil,
+            tab.lifecycleState == .evicted
+                ? BrowserLocalization.string("tab_unloaded")
+                : nil,
             tab.isLoading ? BrowserLocalization.string("loading") : nil
         ]
         .compactMap { $0 }
@@ -729,6 +792,9 @@ private struct TabRow: View {
             TabFavicon(tab: tab, size: 22)
             tabTitle
             Spacer(minLength: 4)
+            if tab.lifecycleState == .evicted {
+                EvictedTabIndicator()
+            }
             trailingControl
         }
         .padding(.horizontal, 8)
@@ -821,6 +887,9 @@ private struct TabRow: View {
             tab.displayTitle,
             tab.domain,
             tab.isPinned ? BrowserLocalization.string("pinned") : nil,
+            tab.lifecycleState == .evicted
+                ? BrowserLocalization.string("tab_unloaded")
+                : nil,
             tab.isLoading ? BrowserLocalization.string("loading") : nil
         ]
         .compactMap { $0 }
@@ -1565,5 +1634,16 @@ struct TabFavicon: View {
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+private struct EvictedTabIndicator: View {
+    var body: some View {
+        Image(systemName: "moon.fill")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .frame(width: 16, height: 16)
+            .help(BrowserLocalization.string("tab_unloaded_help"))
+            .accessibilityLabel(BrowserLocalization.string("tab_unloaded"))
     }
 }

@@ -34,6 +34,10 @@
 	<string>Сервер запрашивает имя пользователя и пароль.</string>
 	<key>back</key>
 	<string>Назад</string>
+	<key>browser_memory_usage</key>
+	<string>Память, используемая браузером</string>
+	<key>browser_memory_usage_estimated_help</key>
+	<string>Оценка памяти браузера. macOS может скрывать изолированные процессы WebKit.</string>
 	<key>browsing_history</key>
 	<string>История посещений</string>
 	<key>cache_detail</key>
@@ -187,6 +191,12 @@
 	<string>Local Storage, IndexedDB и WebSQL</string>
 	<key>make_default_browser</key>
 	<string>Сделать браузером по умолчанию</string>
+	<key>memory_limit</key>
+	<string>Ограничение памяти</string>
+	<key>memory_limit_detail</key>
+	<string>Point начнёт выгружать самые давно использованные вкладки, когда память браузера достигнет %@.</string>
+	<key>memory_management</key>
+	<string>Управление памятью</string>
 	<key>microphone</key>
 	<string>Микрофон</string>
 	<key>move_folder</key>
@@ -277,6 +287,10 @@
 	<string>Обновить</string>
 	<key>reload_bypass_cache</key>
 	<string>Обновить без кэша</string>
+	<key>restoring_unloaded_tab</key>
+	<string>Вкладка восстанавливается</string>
+	<key>restoring_unloaded_tab_detail</key>
+	<string>Она была выгружена для экономии памяти и уже загружается снова.</string>
 	<key>remove_from_list</key>
 	<string>Удалить из списка</string>
 	<key>remove_saved_decision</key>
@@ -323,6 +337,8 @@
 	<string>Показать всю историю…</string>
 	<key>show_in_finder</key>
 	<string>Показать в Finder</string>
+	<key>show_memory_usage</key>
+	<string>Показывать использование памяти</string>
 	<key>sign_in</key>
 	<string>Войти</string>
 	<key>sign_in_to_host</key>
@@ -341,6 +357,10 @@
 	<string>Учёба</string>
 	<key>tabs</key>
 	<string>Вкладки</string>
+	<key>tab_unloaded</key>
+	<string>выгружена из памяти</string>
+	<key>tab_unloaded_help</key>
+	<string>Вкладка выгружена, чтобы снизить использование памяти. Она восстановится при открытии.</string>
 	<key>team</key>
 	<string>Команда</string>
 	<key>toggle_sidebar</key>
