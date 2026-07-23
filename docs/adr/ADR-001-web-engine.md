@@ -1,19 +1,19 @@
-# ADR-001: `WKWebView` как движок MVP
+# ADR-001: `WKWebView` as the MVP web engine
 
-- Статус: принято
-- Дата: 2026-07-22
+- Status: accepted
+- Date: 2026-07-22
 
-## Контекст
+## Context
 
-Browser требует вкладки, popup-навигацию, полный navigation policy, восстановление после завершения Web Content process и точный контроль жизненного цикла web view. Эти возможности важнее более короткого SwiftUI-only прототипа.
+Point needs tabs, popup navigation, complete navigation policy, recovery after a Web Content process termination, and precise web-view lifecycle control. These requirements matter more than the shorter implementation of a SwiftUI-only prototype.
 
-## Решение
+## Decision
 
-Использовать один `WKWebView` на live-вкладку и минимальный `NSViewRepresentable`-host. В SwiftUI-иерархию прикрепляется только активный web view. Восстановленные вкладки остаются metadata-only до первого выбора.
+Use one `WKWebView` per live tab and a minimal `NSViewRepresentable` host. SwiftUI attaches only the active web view to the view hierarchy. Restored tabs remain metadata-only until the user selects them.
 
-## Последствия
+## Consequences
 
-- Delegate/KVO-слой инкапсулирован в `BrowserEngine`.
-- Popup создаётся с конфигурацией, которую передал WebKit.
-- Фоновая вкладка не обязана занимать память сразу после восстановления сессии.
-- Downloads, permission queue и `interactionState` eviction добавляются после MVP без замены host-архитектуры.
+- Delegate and KVO integration is contained in `BrowserEngine`.
+- Popups are created with the configuration supplied by WebKit.
+- A background tab does not have to consume web-view memory immediately after session restore.
+- Downloads, the permission queue, and `interactionState`-based eviction can be added without replacing the host architecture.

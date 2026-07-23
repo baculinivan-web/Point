@@ -1,22 +1,22 @@
-# ADR-003: lifecycle вкладок и resident budget
+# ADR-003: Tab lifecycle and resident budgets
 
-- Статус: принято
-- Дата: 2026-07-22
+- Status: accepted
+- Date: 2026-07-22
 
-## Контекст
+## Context
 
-Metadata-only session restore ограничивает стартовую стоимость, но длительная сессия всё равно может удерживать отдельный `WKWebView` для каждой когда-либо выбранной вкладки. Частные WebKit API и постоянный polling памяти недопустимы.
+Metadata-only session restore reduces startup cost, but a long session can still retain one `WKWebView` for every tab the user has selected. Private WebKit APIs and constant memory polling are not acceptable.
 
-## Решение
+## Decision
 
-- Resident budget включает active и фоновые live/suspended вкладки: 2 для 8 GB, 4 для 16 GB, 7 для 24–32 GB и 10 выше 32 GB.
-- Warning, inactive app и серьёзный thermal state уменьшают budget; critical pressure оставляет active и явно protected вкладки.
-- LRU использует время последней активации. Новая/только что покинутая вкладка получает grace period.
-- Допустимая idle background вкладка suspend-ится парным `setAllMediaPlaybackSuspended`; при выборе выполняется resume.
-- Перед eviction opaque `interactionState` остаётся только в памяти процесса. Новый `WKWebView` получает его до attach; при отсутствии state загружается последний committed URL.
-- Active, playing-media, camera/microphone capture, element-fullscreen и незавершённые native UI flows защищены. Перед pressure eviction playback state обновляется асинхронным запросом WebKit с коротким fail-safe для зависшего content process.
-- Reconcile запускается событиями выбора/создания/закрытия, app/thermal/memory transitions и idle timer не чаще одного раза в 30 секунд.
+- The resident budget includes active and background live/suspended tabs: 2 for 8 GB, 4 for 16 GB, 7 for 24–32 GB, and 10 above 32 GB.
+- Warning, inactive-app, and serious thermal states reduce the budget; critical pressure keeps only the active and explicitly protected tabs.
+- LRU uses the last activation time. A new or just-visited tab receives a grace period.
+- An eligible idle background tab is suspended with paired `setAllMediaPlaybackSuspended`; selecting it resumes media.
+- Before eviction, opaque `interactionState` remains in process memory only. A new `WKWebView` receives it before attachment; without it, the last committed URL is loaded.
+- Active tabs, playing media, camera/microphone capture, element fullscreen, and unfinished native UI flows are protected. Before pressure eviction, playback state is refreshed asynchronously with a short fail-safe for a stalled content process.
+- Reconciliation is triggered by selection, creation, closure, app/thermal/memory transitions, and an idle timer no more often than once every 30 seconds.
 
-## Последствия
+## Consequences
 
-Фоновая вкладка может reload-нуться, если WebKit не вернул пригодный interaction state. Playback protection намеренно консервативна: public API сообщает playing state, но не гарантирует audible-only классификацию. WebAuthn/payment protection и воспроизводимые Instruments pressure benchmarks остаются отдельной работой перед закрытием всех exit criteria Phase 4.
+A background tab may reload if WebKit does not return usable interaction state. Playback protection is intentionally conservative: the public API reports playing state but does not guarantee an audible-only classification. WebAuthn/payment protection and reproducible Instruments pressure benchmarks remain follow-up work before all Phase 4 exit criteria are closed.
