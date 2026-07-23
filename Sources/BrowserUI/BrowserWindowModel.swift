@@ -66,8 +66,9 @@ public final class BrowserTab: Identifiable {
     }
 
     public var displayTitle: String {
-        if !title.isEmpty && title != "Новая вкладка" { return title }
-        return url?.host ?? "Новая вкладка"
+        let newTabTitle = BrowserLocalization.string("new_tab")
+        if !title.isEmpty && title != newTabTitle { return title }
+        return url?.host ?? newTabTitle
     }
 
     public var domain: String? { url?.host }
@@ -326,7 +327,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 return
             }
         } catch {
-            omniboxError = "Сессия не восстановлена: \(error.localizedDescription)"
+            omniboxError = BrowserLocalization.string(
+                "session_restore_failed",
+                error.localizedDescription
+            )
         }
 
         newTab()
@@ -409,7 +413,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 isLoadingSitePermissions = false
-                sitePermissionsError = "Не удалось отозвать разрешение: \(error.localizedDescription)"
+                sitePermissionsError = BrowserLocalization.string(
+                    "revoke_permission_failed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -434,7 +441,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 isLoadingSitePermissions = false
-                sitePermissionsError = "Не удалось очистить разрешения: \(error.localizedDescription)"
+                sitePermissionsError = BrowserLocalization.string(
+                    "clear_permissions_failed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -474,7 +484,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 isLoadingBrowsingHistory = false
-                browsingHistoryError = "Не удалось очистить историю: \(error.localizedDescription)"
+                browsingHistoryError = BrowserLocalization.string(
+                    "clear_history_failed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -568,11 +581,16 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 }
                 guard !Task.isCancelled else { return }
                 isClearingBrowsingData = false
-                clearBrowsingDataStatus = "Выбранные данные удалены"
+                clearBrowsingDataStatus = BrowserLocalization.string(
+                    "selected_data_removed"
+                )
             } catch {
                 guard !Task.isCancelled else { return }
                 isClearingBrowsingData = false
-                clearBrowsingDataStatus = "Часть данных могла быть удалена: \(error.localizedDescription)"
+                clearBrowsingDataStatus = BrowserLocalization.string(
+                    "some_data_may_be_removed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -795,7 +813,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let newFolder = TabFolder(
             snapshot: PersistedTabFolder(
                 id: id,
-                name: "Новая папка",
+                name: BrowserLocalization.string("new_folder"),
                 parentID: validParentID,
                 position: nextPosition(in: validParentID)
             )
@@ -1369,7 +1387,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let newTab = BrowserTab(
             snapshot: PersistedTab(
                 id: id,
-                title: "Новая вкладка",
+                title: BrowserLocalization.string("new_tab"),
                 url: request?.url,
                 isPinned: false,
                 position: nextPosition(in: nil)
@@ -1465,7 +1483,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             BrowserTab(
                 snapshot: PersistedTab(
                     id: id,
-                    title: "Новая вкладка",
+                    title: BrowserLocalization.string("new_tab"),
                     url: url,
                     isPinned: false,
                     position: nextPosition(in: nil)
@@ -1605,7 +1623,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 isLoadingSitePermissions = false
-                sitePermissionsError = "Не удалось загрузить разрешения: \(error.localizedDescription)"
+                sitePermissionsError = BrowserLocalization.string(
+                    "load_permissions_failed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -1650,7 +1671,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 isLoadingBrowsingHistory = false
-                browsingHistoryError = "Не удалось загрузить историю: \(error.localizedDescription)"
+                browsingHistoryError = BrowserLocalization.string(
+                    "load_history_failed",
+                    error.localizedDescription
+                )
             }
         }
     }
@@ -1745,7 +1769,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private func showDefaultBrowserResult(error: (any Error)?) {
         let alert = NSAlert()
         if let error {
-            alert.messageText = "Не удалось изменить браузер по умолчанию"
+            alert.messageText = BrowserLocalization.string(
+                "default_browser_change_failed"
+            )
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .warning
         } else {
@@ -1757,15 +1783,23 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 toOpen: URL(string: "https://example.com")!
             )?.standardizedFileURL
             if httpHandler == applicationURL, httpsHandler == applicationURL {
-                alert.messageText = "Browser назначен браузером по умолчанию"
-                alert.informativeText = "Ссылки HTTP и HTTPS будут открываться в Browser."
+                alert.messageText = BrowserLocalization.string(
+                    "default_browser_changed"
+                )
+                alert.informativeText = BrowserLocalization.string(
+                    "default_browser_links"
+                )
             } else {
-                alert.messageText = "macOS не подтвердила изменение"
-                alert.informativeText = "Проверьте браузер по умолчанию в Системных настройках."
+                alert.messageText = BrowserLocalization.string(
+                    "default_browser_not_confirmed"
+                )
+                alert.informativeText = BrowserLocalization.string(
+                    "check_default_browser_settings"
+                )
                 alert.alertStyle = .warning
             }
         }
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: BrowserLocalization.string("ok"))
         alert.runModal()
     }
 
@@ -1774,22 +1808,36 @@ public final class BrowserWindowModel: WebEngineEventSink {
         switch state {
         case .authorized:
             if passkeyAccessManager.isDeviceConfiguredForPasskeys {
-                alert.messageText = "Ключи входа доступны"
-                alert.informativeText = "WebKit может создавать и использовать passkeys из Keychain и совместимых менеджеров на сайтах с WebAuthn."
+                alert.messageText = BrowserLocalization.string(
+                    "passkeys_available"
+                )
+                alert.informativeText = BrowserLocalization.string(
+                    "passkeys_available_info"
+                )
             } else {
-                alert.messageText = "Ключи входа разрешены"
-                alert.informativeText = "Доступ разрешён, но macOS сообщает, что на этом устройстве ещё не настроен провайдер passkeys. Проверьте приложение «Пароли» и настройки автозаполнения."
+                alert.messageText = BrowserLocalization.string(
+                    "passkeys_allowed"
+                )
+                alert.informativeText = BrowserLocalization.string(
+                    "passkeys_not_configured"
+                )
                 alert.alertStyle = .warning
             }
         case .denied:
-            alert.messageText = "Доступ к ключам входа запрещён"
-            alert.informativeText = "Разрешение можно изменить в настройках конфиденциальности macOS."
+            alert.messageText = BrowserLocalization.string("passkeys_denied")
+            alert.informativeText = BrowserLocalization.string(
+                "passkeys_denied_info"
+            )
             alert.alertStyle = .warning
         case .notDetermined:
-            alert.messageText = "Разрешение не выбрано"
-            alert.informativeText = "Повторите запрос и подтвердите системный диалог macOS."
+            alert.messageText = BrowserLocalization.string(
+                "passkeys_not_determined"
+            )
+            alert.informativeText = BrowserLocalization.string(
+                "passkeys_not_determined_info"
+            )
         }
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: BrowserLocalization.string("ok"))
         alert.runModal()
     }
 
@@ -1945,7 +1993,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         if let engine = tab.engine {
             tab.url = engine.url ?? tab.url
-            if engine.title != "Новая вкладка" {
+            if engine.title != BrowserLocalization.string("new_tab") {
                 tab.title = engine.title
             }
             tab.interactionState = engine.captureInteractionState()

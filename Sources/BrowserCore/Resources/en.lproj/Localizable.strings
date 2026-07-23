@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>active_downloads</key>
+	<string>Active Downloads</string>
+	<key>active_downloads_info</key>
+	<string>Quitting Point will interrupt %d active downloads.</string>
+	<key>address_and_search</key>
+	<string>Address and Search</string>
+	<key>address_or_search_placeholder</key>
+	<string>Address or search query</string>
+	<key>all_time_period</key>
+	<string>Period: all time</string>
+	<key>allow_camera</key>
+	<string>Allow access to the camera?</string>
+	<key>allow_camera_microphone</key>
+	<string>Allow access to the camera and microphone?</string>
+	<key>allow_microphone</key>
+	<string>Allow access to the microphone?</string>
+	<key>allow_once</key>
+	<string>Allow Once</string>
+	<key>allow_passkeys</key>
+	<string>Allow Passkeys…</string>
+	<key>allowed</key>
+	<string>Allowed</string>
+	<key>always_allow</key>
+	<string>Always Allow</string>
+	<key>archive</key>
+	<string>Archive</string>
+	<key>authentication_realm</key>
+	<string>The server requests a username and password. Realm: %@</string>
+	<key>authentication_request</key>
+	<string>The server requests a username and password.</string>
+	<key>back</key>
+	<string>Back</string>
+	<key>browsing_history</key>
+	<string>Browsing History</string>
+	<key>cache_detail</key>
+	<string>Disk, memory, and offline web cache</string>
+	<key>camera</key>
+	<string>Camera</string>
+	<key>camera_microphone</key>
+	<string>Camera and Microphone</string>
+	<key>cancel</key>
+	<string>Cancel</string>
+	<key>cancel_download</key>
+	<string>Cancel Download</string>
+	<key>cancelled</key>
+	<string>Cancelled</string>
+	<key>check_default_browser_settings</key>
+	<string>Check the default browser in System Settings.</string>
+	<key>choose_location</key>
+	<string>Choosing location…</string>
+	<key>clear</key>
+	<string>Clear</string>
+	<key>clear_all</key>
+	<string>Clear All</string>
+	<key>clear_all_history_question</key>
+	<string>Clear all browsing history?</string>
+	<key>clear_browser_data</key>
+	<string>Clear Browser Data…</string>
+	<key>clear_browser_data_title</key>
+	<string>Clear Browser Data</string>
+	<key>clear_history</key>
+	<string>Clear History</string>
+	<key>clear_history_failed</key>
+	<string>Could not clear history: %@</string>
+	<key>clear_permissions_failed</key>
+	<string>Could not clear permissions: %@</string>
+	<key>close</key>
+	<string>Close</string>
+	<key>close_named_tab</key>
+	<string>Close %@</string>
+	<key>close_search</key>
+	<string>Close Search</string>
+	<key>close_tab</key>
+	<string>Close Tab</string>
+	<key>cookies</key>
+	<string>Cookies</string>
+	<key>cookies_detail</key>
+	<string>Sign-in sessions and site preferences</string>
+	<key>cookies_relogin_info</key>
+	<string>Cookies and site data will require signing in again</string>
+	<key>credentials_blocked</key>
+	<string>URLs with a username or password are blocked</string>
+	<key>default_browser_change_failed</key>
+	<string>Could Not Change Default Browser</string>
+	<key>default_browser_changed</key>
+	<string>Browser Is Now the Default Browser</string>
+	<key>default_browser_links</key>
+	<string>HTTP and HTTPS links will open in Browser.</string>
+	<key>default_browser_not_confirmed</key>
+	<string>macOS Did Not Confirm the Change</string>
+	<key>default_search_engine</key>
+	<string>Default Search Engine</string>
+	<key>delete_folder</key>
+	<string>Delete Folder</string>
+	<key>delete_folder_contents</key>
+	<string>Delete Folder and Contents</string>
+	<key>denied</key>
+	<string>Denied</string>
+	<key>deselect_all</key>
+	<string>Deselect All</string>
+	<key>development</key>
+	<string>Development</string>
+	<key>documents</key>
+	<string>Documents</string>
+	<key>dont_allow</key>
+	<string>Don't Allow</string>
+	<key>download_failed</key>
+	<string>Could Not Download File</string>
+	<key>download_history</key>
+	<string>Download History</string>
+	<key>download_history_detail</key>
+	<string>Completed records; active downloads will remain</string>
+	<key>download_in_progress</key>
+	<string>Downloading…</string>
+	<key>download_progress_label</key>
+	<string>Download %@, %@</string>
+	<key>downloads</key>
+	<string>Downloads</string>
+	<key>downloads_directory_unavailable</key>
+	<string>The Downloads folder is unavailable</string>
+	<key>downloads_empty_info</key>
+	<string>Downloads from this session will appear here</string>
+	<key>downloads_shortcut</key>
+	<string>Downloads (⌘⇧J)</string>
+	<key>embedded_media_request</key>
+	<string>Request embedded in %@</string>
+	<key>external_url_details</key>
+	<string>Scheme: %@
+%@</string>
+	<key>favicons</key>
+	<string>Favicons</string>
+	<key>favicons_cache_info</key>
+	<string>Favicons are loaded only from the local cache</string>
+	<key>favicons_detail</key>
+	<string>Memory/disk cache for site icons</string>
+	<key>favorites</key>
+	<string>Favorites</string>
+	<key>find_on_page</key>
+	<string>Find on Page</string>
+	<key>finished</key>
+	<string>Finished</string>
+	<key>folder</key>
+	<string>Folder</string>
+	<key>folder_icon</key>
+	<string>Folder Icon</string>
+	<key>folder_name_placeholder</key>
+	<string>Folder Name</string>
+	<key>forward</key>
+	<string>Forward</string>
+	<key>games</key>
+	<string>Games</string>
+	<key>hide_download_indicator</key>
+	<string>Hide Download Indicator</string>
+	<key>hide_sidebar</key>
+	<string>Hide Sidebar</string>
+	<key>hide_sidebar_shortcut</key>
+	<string>Hide Sidebar (⌘S)</string>
+	<key>history</key>
+	<string>History</string>
+	<key>history_category</key>
+	<string>Browsing History</string>
+	<key>history_category_detail</key>
+	<string>List of visited pages</string>
+	<key>history_clear_info</key>
+	<string>Tabs, cookies, and site data will remain unchanged.</string>
+	<key>history_empty</key>
+	<string>No History</string>
+	<key>history_empty_info</key>
+	<string>Visited pages will appear here</string>
+	<key>history_unavailable</key>
+	<string>History Unavailable</string>
+	<key>in_progress</key>
+	<string>In Progress</string>
+	<key>load_history_failed</key>
+	<string>Could not load history: %@</string>
+	<key>load_permissions_failed</key>
+	<string>Could not load permissions: %@</string>
+	<key>loading</key>
+	<string>loading</string>
+	<key>local_site_data</key>
+	<string>Local Site Data</string>
+	<key>local_storage_detail</key>
+	<string>Local Storage, IndexedDB, and WebSQL</string>
+	<key>make_default_browser</key>
+	<string>Make Default Browser</string>
+	<key>microphone</key>
+	<string>Microphone</string>
+	<key>move_folder</key>
+	<string>Move Folder</string>
+	<key>move_selected_here</key>
+	<string>Move Selected Here</string>
+	<key>move_to_folder</key>
+	<string>Move to Folder</string>
+	<key>move_to_new_window</key>
+	<string>Move to New Window</string>
+	<key>move_to_top_level</key>
+	<string>Move to Top Level</string>
+	<key>navigation</key>
+	<string>Navigation</string>
+	<key>new_folder</key>
+	<string>New Folder</string>
+	<key>new_folder_from_selection</key>
+	<string>New Folder from Selection</string>
+	<key>new_folder_with_tab</key>
+	<string>New Folder with Tab</string>
+	<key>new_nested_folder</key>
+	<string>New Nested Folder</string>
+	<key>new_private_window</key>
+	<string>New Private Window</string>
+	<key>new_tab</key>
+	<string>New Tab</string>
+	<key>new_window</key>
+	<string>New Window</string>
+	<key>no_downloads</key>
+	<string>No Downloads</string>
+	<key>no_folder</key>
+	<string>No Folder</string>
+	<key>no_saved_permissions</key>
+	<string>No Saved Permissions</string>
+	<key>ok</key>
+	<string>OK</string>
+	<key>open</key>
+	<string>Open</string>
+	<key>open_in_other_app</key>
+	<string>Open Link in Another App?</string>
+	<key>open_tab</key>
+	<string>Open Tab</string>
+	<key>partial_status_prefix</key>
+	<string>Some</string>
+	<key>passkeys_allowed</key>
+	<string>Passkeys Allowed</string>
+	<key>passkeys_available</key>
+	<string>Passkeys Available</string>
+	<key>passkeys_available_info</key>
+	<string>WebKit can create and use passkeys from Keychain and compatible managers on sites with WebAuthn.</string>
+	<key>passkeys_denied</key>
+	<string>Passkey Access Denied</string>
+	<key>passkeys_denied_info</key>
+	<string>You can change this permission in macOS Privacy settings.</string>
+	<key>passkeys_not_configured</key>
+	<string>Access is allowed, but macOS reports that no passkey provider is configured on this device. Check the Passwords app and AutoFill settings.</string>
+	<key>passkeys_not_determined</key>
+	<string>Passkey Permission Not Selected</string>
+	<key>passkeys_not_determined_info</key>
+	<string>Try again and confirm the macOS system dialog.</string>
+	<key>password</key>
+	<string>Password</string>
+	<key>permissions_empty_info</key>
+	<string>New decisions will appear after a site requests access</string>
+	<key>persistent_https_only</key>
+	<string>Persistent access is available only for HTTPS</string>
+	<key>personal</key>
+	<string>Personal</string>
+	<key>pin</key>
+	<string>Pin</string>
+	<key>pin_sidebar</key>
+	<string>Pin Sidebar</string>
+	<key>pin_sidebar_shortcut</key>
+	<string>Pin Sidebar (⌘S)</string>
+	<key>pinned</key>
+	<string>pinned</string>
+	<key>private_window</key>
+	<string>Private Window</string>
+	<key>private_window_info</key>
+	<string>Local data disappears when the window closes. Private browsing does not hide you from websites or the network.</string>
+	<key>private_window_title</key>
+	<string>Point — Private Mode</string>
+	<key>quit</key>
+	<string>Quit</string>
+	<key>reading</key>
+	<string>Reading</string>
+	<key>reload</key>
+	<string>Reload</string>
+	<key>reload_bypass_cache</key>
+	<string>Reload Without Cache</string>
+	<key>remove_from_list</key>
+	<string>Remove from List</string>
+	<key>remove_saved_decision</key>
+	<string>Remove Saved Decision</string>
+	<key>rename</key>
+	<string>Rename</string>
+	<key>reopen_closed_tab</key>
+	<string>Reopen Closed Tab</string>
+	<key>resume_download</key>
+	<string>Resume Download</string>
+	<key>resume_downloads</key>
+	<string>Resume Downloads</string>
+	<key>revoke_permission_failed</key>
+	<string>Could not revoke permission: %@</string>
+	<key>revoke_permission_for</key>
+	<string>Revoke permission for %@</string>
+	<key>save_site_decision</key>
+	<string>Save Decision for This Site</string>
+	<key>search_engine_help</key>
+	<string>Search: %@</string>
+	<key>search_engine_label</key>
+	<string>Search engine: %@</string>
+	<key>search_engine_yandex</key>
+	<string>Yandex</string>
+	<key>search_engine_yandex_monogram</key>
+	<string>Y</string>
+	<key>search_or_address</key>
+	<string>Search or address</string>
+	<key>search_query_failed</key>
+	<string>Could Not Create Search Query</string>
+	<key>select_all</key>
+	<string>Select All</string>
+	<key>selected_data_removed</key>
+	<string>Selected Data Removed</string>
+	<key>service_workers</key>
+	<string>Service Workers</string>
+	<key>service_workers_detail</key>
+	<string>Background site registrations</string>
+	<key>session_restore_failed</key>
+	<string>Could Not Restore Session: %@</string>
+	<key>shopping</key>
+	<string>Shopping</string>
+	<key>show_full_history</key>
+	<string>Show All History…</string>
+	<key>show_in_finder</key>
+	<string>Show in Finder</string>
+	<key>sign_in</key>
+	<string>Sign In</string>
+	<key>sign_in_to_host</key>
+	<string>Sign In to %@</string>
+	<key>site_permissions</key>
+	<string>Site Permissions…</string>
+	<key>site_permissions_detail</key>
+	<string>Saved camera and microphone decisions</string>
+	<key>site_permissions_unavailable</key>
+	<string>Site Permissions Unavailable</string>
+	<key>some_data_may_be_removed</key>
+	<string>Some data may have been removed: %@</string>
+	<key>stop</key>
+	<string>Stop</string>
+	<key>study</key>
+	<string>Study</string>
+	<key>tabs</key>
+	<string>Tabs</string>
+	<key>team</key>
+	<string>Team</string>
+	<key>toggle_sidebar</key>
+	<string>Show or Hide Sidebar</string>
+	<key>travel</key>
+	<string>Travel</string>
+	<key>unpin</key>
+	<string>Unpin</string>
+	<key>unsupported_scheme</key>
+	<string>The %@ scheme is not supported</string>
+	<key>username</key>
+	<string>Username</string>
+	<key>video</key>
+	<string>Video</string>
+	<key>web_cache</key>
+	<string>Web Cache</string>
+	<key>web_page</key>
+	<string>Web Page</string>
+	<key>work</key>
+	<string>Work</string>
+</dict>
+</plist>

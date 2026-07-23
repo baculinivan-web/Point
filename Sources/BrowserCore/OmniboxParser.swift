@@ -45,10 +45,14 @@ public struct OmniboxParser: Sendable {
 
         if let explicit = URLComponents(string: input), let scheme = explicit.scheme {
             guard ["http", "https"].contains(scheme.lowercased()) else {
-                return .blocked(reason: "Схема \(scheme) не поддерживается")
+                return .blocked(
+                    reason: BrowserLocalization.string("unsupported_scheme", scheme)
+                )
             }
             guard explicit.user == nil, explicit.password == nil else {
-                return .blocked(reason: "Адреса с логином или паролем заблокированы")
+                return .blocked(
+                    reason: BrowserLocalization.string("credentials_blocked")
+                )
             }
             guard let url = explicit.url, explicit.host != nil else {
                 return searchURL(for: input)
@@ -122,7 +126,9 @@ public struct OmniboxParser: Sendable {
             URLQueryItem(name: searchQueryParameter, value: query)
         ]
         guard let url = components?.url else {
-            return .blocked(reason: "Не удалось сформировать поисковый запрос")
+            return .blocked(
+                reason: BrowserLocalization.string("search_query_failed")
+            )
         }
         return .search(url)
     }

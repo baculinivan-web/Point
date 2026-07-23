@@ -47,9 +47,9 @@ struct SidebarView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "eye.slash.fill")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Приватное окно")
+                        Text(BrowserLocalization.string("private_window"))
                             .fontWeight(.semibold)
-                        Text("Локальные данные исчезнут после закрытия. Режим не скрывает вас от сайтов и сети.")
+                        Text(BrowserLocalization.string("private_window_info"))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -71,7 +71,7 @@ struct SidebarView: View {
                 } label: {
                     HStack(spacing: 9) {
                         Image(systemName: "magnifyingglass")
-                        Text(model.activeTab?.domain ?? "Поиск или адрес")
+                        Text(model.activeTab?.domain ?? BrowserLocalization.string("search_or_address"))
                             .lineLimit(1)
                         Spacer()
                         Text("⌘L")
@@ -84,7 +84,7 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 12)
-                .accessibilityLabel("Адрес и поиск")
+                .accessibilityLabel(BrowserLocalization.string("address_and_search"))
 
                 VStack(spacing: 0) {
                     if !model.pinnedTabs.isEmpty {
@@ -127,11 +127,11 @@ struct SidebarView: View {
                     }
                 }
                 .contextMenu {
-                    Button("Новая папка") {
+                    Button(BrowserLocalization.string("new_folder")) {
                         model.createFolder()
                     }
                     if model.selectedTabCount > 0 {
-                        Button("Новая папка из выбранных") {
+                        Button(BrowserLocalization.string("new_folder_from_selection")) {
                             model.createFolderFromSelection()
                         }
                     }
@@ -175,8 +175,12 @@ struct SidebarView: View {
                 Image(systemName: "sidebar.left")
                     .frame(width: 24, height: 24)
             }
-            .help(model.sidebarMode == .autoHide ? "Закрепить sidebar (⌘S)" : "Скрыть sidebar (⌘S)")
-            .accessibilityLabel(model.sidebarMode == .autoHide ? "Закрепить боковую панель" : "Скрыть боковую панель")
+            .help(model.sidebarMode == .autoHide
+                ? BrowserLocalization.string("pin_sidebar_shortcut")
+                : BrowserLocalization.string("hide_sidebar_shortcut"))
+            .accessibilityLabel(model.sidebarMode == .autoHide
+                ? BrowserLocalization.string("pin_sidebar")
+                : BrowserLocalization.string("hide_sidebar"))
 
             Button {
                 guard let id = model.selectedTabID else { return }
@@ -186,7 +190,7 @@ struct SidebarView: View {
                     .frame(width: 24, height: 24)
             }
             .disabled(!(model.activeTab?.canGoBack ?? false))
-            .help("Назад")
+            .help(BrowserLocalization.string("back"))
 
             Button {
                 guard let id = model.selectedTabID else { return }
@@ -196,7 +200,7 @@ struct SidebarView: View {
                     .frame(width: 24, height: 24)
             }
             .disabled(!(model.activeTab?.canGoForward ?? false))
-            .help("Вперёд")
+            .help(BrowserLocalization.string("forward"))
 
             Button {
                 guard let tab = model.activeTab else { return }
@@ -210,7 +214,9 @@ struct SidebarView: View {
                     .frame(width: 24, height: 24)
             }
             .disabled(model.activeTab?.url == nil)
-            .help(model.activeTab?.isLoading == true ? "Остановить" : "Обновить")
+            .help(model.activeTab?.isLoading == true
+                ? BrowserLocalization.string("stop")
+                : BrowserLocalization.string("reload"))
 
             Spacer()
 
@@ -224,8 +230,8 @@ struct SidebarView: View {
                 )
                 .frame(width: 24, height: 24)
             }
-            .help("Загрузки (⌘⇧J)")
-            .accessibilityLabel("Загрузки")
+            .help(BrowserLocalization.string("downloads_shortcut"))
+            .accessibilityLabel(BrowserLocalization.string("downloads"))
         }
         .buttonStyle(.borderless)
     }
@@ -600,7 +606,10 @@ private struct PinnedTabCard: View {
                 .buttonStyle(.plain)
                 .padding(5)
                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                .accessibilityLabel("Закрыть \(tab.displayTitle)")
+            .accessibilityLabel(BrowserLocalization.string(
+                "close_named_tab",
+                tab.displayTitle
+            ))
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHovering)
@@ -623,8 +632,8 @@ private struct PinnedTabCard: View {
         [
             tab.displayTitle,
             tab.domain,
-            "закреплена",
-            tab.isLoading ? "загружается" : nil
+            tab.isPinned ? BrowserLocalization.string("pinned") : nil,
+            tab.isLoading ? BrowserLocalization.string("loading") : nil
         ]
         .compactMap { $0 }
         .joined(separator: ", ")
@@ -639,15 +648,15 @@ private struct PinnedTabCard: View {
     @ViewBuilder
     private var pinnedContextMenu: some View {
         if model.selectedTabIDs.contains(tab.id), model.selectedTabCount > 1 {
-            Button("Новая папка из выбранных") {
+            Button(BrowserLocalization.string("new_folder_from_selection")) {
                 model.createFolderFromSelection()
             }
         } else {
-            Button("Новая папка с вкладкой") {
+            Button(BrowserLocalization.string("new_folder_with_tab")) {
                 model.createFolder(containing: [tab.id])
             }
         }
-        Menu("Переместить в папку") {
+        Menu(BrowserLocalization.string("move_to_folder")) {
             ForEach(sortedFolders) { folder in
                 Button(model.folderPath(folder.id)) {
                     model.moveTab(tab.id, to: folder.id)
@@ -656,15 +665,15 @@ private struct PinnedTabCard: View {
         }
         Divider()
         if !model.isPrivate {
-            Button("Переместить в новое окно") {
+            Button(BrowserLocalization.string("move_to_new_window")) {
                 if !model.selectedTabIDs.contains(tab.id) {
                     model.selectTab(tab.id)
                 }
                 model.transferSelectedTabsToNewWindow()
             }
         }
-        Button("Открепить") { model.setPinned(false, for: tab.id) }
-        Button("Закрыть") { model.closeTab(tab.id) }
+        Button(BrowserLocalization.string("unpin")) { model.setPinned(false, for: tab.id) }
+        Button(BrowserLocalization.string("close")) { model.closeTab(tab.id) }
     }
 
     private var sortedFolders: [TabFolder] {
@@ -773,16 +782,16 @@ private struct TabRow: View {
     @ViewBuilder
     private var tabContextMenu: some View {
         if model.selectedTabIDs.contains(tab.id), model.selectedTabCount > 1 {
-            Button("Новая папка из выбранных") {
+            Button(BrowserLocalization.string("new_folder_from_selection")) {
                 model.createFolderFromSelection()
             }
         } else {
-            Button("Новая папка с вкладкой") {
+            Button(BrowserLocalization.string("new_folder_with_tab")) {
                 model.createFolder(containing: [tab.id])
             }
         }
-        Menu("Переместить в папку") {
-            Button("Без папки") { model.moveTab(tab.id, to: nil) }
+        Menu(BrowserLocalization.string("move_to_folder")) {
+            Button(BrowserLocalization.string("no_folder")) { model.moveTab(tab.id, to: nil) }
             Divider()
             ForEach(sortedFolders) { folder in
                 Button(model.folderPath(folder.id)) {
@@ -792,25 +801,27 @@ private struct TabRow: View {
         }
         Divider()
         if !model.isPrivate {
-            Button("Переместить в новое окно") {
+            Button(BrowserLocalization.string("move_to_new_window")) {
                 if !model.selectedTabIDs.contains(tab.id) {
                     model.selectTab(tab.id)
                 }
                 model.transferSelectedTabsToNewWindow()
             }
         }
-        Button(tab.isPinned ? "Открепить" : "Закрепить") {
+        Button(tab.isPinned
+            ? BrowserLocalization.string("unpin")
+            : BrowserLocalization.string("pin")) {
             model.setPinned(!tab.isPinned, for: tab.id)
         }
-        Button("Закрыть") { model.closeTab(tab.id) }
+        Button(BrowserLocalization.string("close")) { model.closeTab(tab.id) }
     }
 
     private var accessibilityLabel: String {
         [
             tab.displayTitle,
             tab.domain,
-            tab.isPinned ? "закреплена" : nil,
-            tab.isLoading ? "загружается" : nil
+            tab.isPinned ? BrowserLocalization.string("pinned") : nil,
+            tab.isLoading ? BrowserLocalization.string("loading") : nil
         ]
         .compactMap { $0 }
         .joined(separator: ", ")
@@ -821,7 +832,7 @@ private struct TabRow: View {
     }
 
     private var closeAccessibilityLabel: String {
-        "Закрыть \(tab.displayTitle)"
+        BrowserLocalization.string("close_named_tab", tab.displayTitle)
     }
 
     private var sortedFolders: [TabFolder] {
@@ -931,7 +942,10 @@ private struct FolderRow: View {
                     )
 
                 if model.renamingFolderID == folder.id {
-                    TextField("Название папки", text: $draftName)
+                    TextField(
+                        BrowserLocalization.string("folder_name_placeholder"),
+                        text: $draftName
+                    )
                         .textFieldStyle(.plain)
                         .font(.callout.weight(.medium))
                         .focused($isRenameFocused)
@@ -1008,10 +1022,10 @@ private struct FolderRow: View {
                 )
             )
             .contextMenu {
-                Button("Переименовать") {
+                Button(BrowserLocalization.string("rename")) {
                     beginRenaming()
                 }
-                Menu("Значок папки") {
+                Menu(BrowserLocalization.string("folder_icon")) {
                     ForEach(FolderSymbolOption.popular) { option in
                         Button {
                             model.setFolderSymbol(option.symbolName, for: folder.id)
@@ -1020,16 +1034,16 @@ private struct FolderRow: View {
                         }
                     }
                 }
-                Button("Новая вложенная папка") {
+                Button(BrowserLocalization.string("new_nested_folder")) {
                     model.createFolder(inside: folder.id)
                 }
                 if model.selectedTabCount > 0 {
-                    Button("Поместить выбранные сюда") {
+                    Button(BrowserLocalization.string("move_selected_here")) {
                         model.moveSelectedTabs(to: folder.id)
                     }
                 }
-                Menu("Переместить папку") {
-                    Button("На верхний уровень") {
+                Menu(BrowserLocalization.string("move_folder")) {
+                    Button(BrowserLocalization.string("move_to_top_level")) {
                         model.moveFolder(folder.id, inside: nil)
                     }
                     Divider()
@@ -1044,10 +1058,10 @@ private struct FolderRow: View {
                     }
                 }
                 Divider()
-                Button("Удалить папку", role: .destructive) {
+                Button(BrowserLocalization.string("delete_folder"), role: .destructive) {
                     model.deleteFolder(folder.id)
                 }
-                Button("Удалить папку и содержимое", role: .destructive) {
+                Button(BrowserLocalization.string("delete_folder_contents"), role: .destructive) {
                     model.deleteFolderWithContents(folder.id)
                 }
             }
@@ -1154,20 +1168,20 @@ private struct FolderSymbolOption: Identifiable {
     var id: String { symbolName }
 
     static let popular: [FolderSymbolOption] = [
-        FolderSymbolOption(symbolName: "folder.fill", title: "Папка"),
-        FolderSymbolOption(symbolName: "briefcase.fill", title: "Работа"),
-        FolderSymbolOption(symbolName: "book.closed.fill", title: "Чтение"),
-        FolderSymbolOption(symbolName: "graduationcap.fill", title: "Учёба"),
-        FolderSymbolOption(symbolName: "star.fill", title: "Избранное"),
-        FolderSymbolOption(symbolName: "heart.fill", title: "Личное"),
-        FolderSymbolOption(symbolName: "person.2.fill", title: "Команда"),
-        FolderSymbolOption(symbolName: "cart.fill", title: "Покупки"),
-        FolderSymbolOption(symbolName: "airplane", title: "Путешествия"),
-        FolderSymbolOption(symbolName: "gamecontroller.fill", title: "Игры"),
-        FolderSymbolOption(symbolName: "play.rectangle.fill", title: "Видео"),
-        FolderSymbolOption(symbolName: "terminal.fill", title: "Разработка"),
-        FolderSymbolOption(symbolName: "doc.text.fill", title: "Документы"),
-        FolderSymbolOption(symbolName: "tray.full.fill", title: "Архив")
+        FolderSymbolOption(symbolName: "folder.fill", title: BrowserLocalization.string("folder")),
+        FolderSymbolOption(symbolName: "briefcase.fill", title: BrowserLocalization.string("work")),
+        FolderSymbolOption(symbolName: "book.closed.fill", title: BrowserLocalization.string("reading")),
+        FolderSymbolOption(symbolName: "graduationcap.fill", title: BrowserLocalization.string("study")),
+        FolderSymbolOption(symbolName: "star.fill", title: BrowserLocalization.string("favorites")),
+        FolderSymbolOption(symbolName: "heart.fill", title: BrowserLocalization.string("personal")),
+        FolderSymbolOption(symbolName: "person.2.fill", title: BrowserLocalization.string("team")),
+        FolderSymbolOption(symbolName: "cart.fill", title: BrowserLocalization.string("shopping")),
+        FolderSymbolOption(symbolName: "airplane", title: BrowserLocalization.string("travel")),
+        FolderSymbolOption(symbolName: "gamecontroller.fill", title: BrowserLocalization.string("games")),
+        FolderSymbolOption(symbolName: "play.rectangle.fill", title: BrowserLocalization.string("video")),
+        FolderSymbolOption(symbolName: "terminal.fill", title: BrowserLocalization.string("development")),
+        FolderSymbolOption(symbolName: "doc.text.fill", title: BrowserLocalization.string("documents")),
+        FolderSymbolOption(symbolName: "tray.full.fill", title: BrowserLocalization.string("archive"))
     ]
 }
 
@@ -1473,7 +1487,9 @@ private struct NewTabRow: View {
                 }
                 .frame(width: 22, height: 22)
 
-                Text(showsDropTarget ? "Переместить на верхний уровень" : "Новая вкладка")
+                Text(showsDropTarget
+                    ? BrowserLocalization.string("move_to_top_level")
+                    : BrowserLocalization.string("new_tab"))
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
@@ -1520,7 +1536,7 @@ private struct NewTabRow: View {
                 isTargeted: $isDropTargeted
             )
         )
-        .accessibilityLabel("Новая вкладка")
+        .accessibilityLabel(BrowserLocalization.string("new_tab"))
     }
 }
 

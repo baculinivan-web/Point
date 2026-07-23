@@ -1,0 +1,2 @@
+"NSCameraUsageDescription" = "Browser использует камеру только по запросу открытого сайта.";
+"NSMicrophoneUsageDescription" = "Browser использует микрофон только по запросу открытого сайта.";

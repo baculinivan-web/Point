@@ -17,7 +17,7 @@ public enum SearchEngine: String, CaseIterable, Codable, Identifiable, Sendable 
         case .google: "Google"
         case .bing: "Bing"
         case .brave: "Brave Search"
-        case .yandex: "Яндекс"
+        case .yandex: BrowserLocalization.string("search_engine_yandex")
         case .perplexity: "Perplexity"
         case .chatGPT: "ChatGPT"
         }

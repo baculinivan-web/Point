@@ -16,7 +16,7 @@ struct OmniboxOverlay: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Menu {
-                    Section("Поисковая система по умолчанию") {
+                    Section(BrowserLocalization.string("default_search_engine")) {
                         ForEach(SearchEngine.allCases) { searchEngine in
                             Button {
                                 model.selectSearchEngine(searchEngine)
@@ -35,11 +35,20 @@ struct OmniboxOverlay: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .help("Поиск: \(model.searchEngine.displayName)")
+                .help(BrowserLocalization.string(
+                    "search_engine_help",
+                    model.searchEngine.displayName
+                ))
                 .accessibilityLabel(
-                    "Поисковая система: \(model.searchEngine.displayName)"
+                    BrowserLocalization.string(
+                        "search_engine_label",
+                        model.searchEngine.displayName
+                    )
                 )
-                TextField("Адрес или поисковый запрос", text: $model.omniboxText)
+                TextField(
+                    BrowserLocalization.string("address_or_search_placeholder"),
+                    text: $model.omniboxText
+                )
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .focused($isFocused)
@@ -61,7 +70,7 @@ struct OmniboxOverlay: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Очистить")
+                    .accessibilityLabel(BrowserLocalization.string("clear"))
                 }
             }
             .padding(.horizontal, 18)
@@ -92,7 +101,7 @@ struct OmniboxOverlay: View {
                                     }
                                 }
                                 Spacer()
-                                Text("Открытая вкладка")
+                                Text(BrowserLocalization.string("open_tab"))
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                             }
@@ -132,7 +141,7 @@ struct OmniboxOverlay: View {
             highlightedTabID = nil
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Адрес и поиск")
+        .accessibilityLabel(BrowserLocalization.string("address_and_search"))
     }
 
     private func moveHighlight(by offset: Int) {
@@ -218,7 +227,7 @@ private extension SearchEngine {
         case .google: "G"
         case .bing: "b"
         case .brave: "B"
-        case .yandex: "Я"
+        case .yandex: BrowserLocalization.string("search_engine_yandex_monogram")
         case .perplexity: "P"
         case .chatGPT: "C"
         }
@@ -290,7 +299,10 @@ struct FindOverlay: View {
         HStack(spacing: 8) {
             Image(systemName: "text.magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Найти на странице", text: $model.findText)
+            TextField(
+                BrowserLocalization.string("find_on_page"),
+                text: $model.findText
+            )
                 .textFieldStyle(.plain)
                 .frame(width: 210)
                 .focused($isFocused)
@@ -302,7 +314,7 @@ struct FindOverlay: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Закрыть поиск")
+            .accessibilityLabel(BrowserLocalization.string("close_search"))
         }
         .padding(.horizontal, 14)
         .frame(height: 42)
@@ -338,30 +350,33 @@ struct MediaPermissionOverlay: View {
             }
 
             if prompt.origin != prompt.topLevelOrigin {
-                Text("Запрос встроен в страницу \(prompt.topLevelOrigin.displayName)")
+                Text(BrowserLocalization.string(
+                    "embedded_media_request",
+                    prompt.topLevelOrigin.displayName
+                ))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 9) {
-                Button("Не разрешать") {
+                Button(BrowserLocalization.string("dont_allow")) {
                     onResolve(.deny)
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer(minLength: 8)
 
-                Button("Разрешать всегда") {
+                Button(BrowserLocalization.string("always_allow")) {
                     onResolve(.alwaysAllow)
                 }
                 .disabled(!prompt.canAlwaysAllow)
                 .help(
                     prompt.canAlwaysAllow
-                        ? "Сохранить решение для этого сайта"
-                        : "Постоянное разрешение доступно только для HTTPS"
+                        ? BrowserLocalization.string("save_site_decision")
+                        : BrowserLocalization.string("persistent_https_only")
                 )
 
-                Button("Разрешить один раз") {
+                Button(BrowserLocalization.string("allow_once")) {
                     onResolve(.allowOnce)
                 }
                 .buttonStyle(.borderedProminent)
@@ -381,11 +396,11 @@ private extension MediaPermissionKind {
     var title: String {
         switch self {
         case .camera:
-            "Разрешить доступ к камере?"
+            BrowserLocalization.string("allow_camera")
         case .microphone:
-            "Разрешить доступ к микрофону?"
+            BrowserLocalization.string("allow_microphone")
         case .cameraAndMicrophone:
-            "Разрешить доступ к камере и микрофону?"
+            BrowserLocalization.string("allow_camera_microphone")
         }
     }
 
@@ -403,11 +418,11 @@ private extension MediaPermissionKind {
     var managementTitle: String {
         switch self {
         case .camera:
-            "Камера"
+            BrowserLocalization.string("camera")
         case .microphone:
-            "Микрофон"
+            BrowserLocalization.string("microphone")
         case .cameraAndMicrophone:
-            "Камера и микрофон"
+            BrowserLocalization.string("camera_microphone")
         }
     }
 }
@@ -428,12 +443,12 @@ struct SitePermissionsOverlay: View {
         .shadow(color: .black.opacity(0.18), radius: 28, y: 14)
         .onExitCommand { model.dismissSitePermissions() }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Разрешения сайтов")
+        .accessibilityLabel(BrowserLocalization.string("site_permissions"))
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Разрешения сайтов")
+            Text(BrowserLocalization.string("site_permissions"))
                 .font(.headline)
             if model.isLoadingSitePermissions {
                 ProgressView()
@@ -446,7 +461,7 @@ struct SitePermissionsOverlay: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Закрыть")
+            .accessibilityLabel(BrowserLocalization.string("close"))
         }
         .padding(.horizontal, 18)
         .frame(height: 54)
@@ -456,16 +471,16 @@ struct SitePermissionsOverlay: View {
     private var content: some View {
         if let error = model.sitePermissionsError {
             ContentUnavailableView(
-                "Разрешения недоступны",
+                BrowserLocalization.string("site_permissions_unavailable"),
                 systemImage: "exclamationmark.triangle",
                 description: Text(error)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.sitePermissions.isEmpty {
             ContentUnavailableView(
-                "Нет сохранённых разрешений",
+                BrowserLocalization.string("no_saved_permissions"),
                 systemImage: "hand.raised",
-                description: Text("Новые решения появятся после запроса сайта")
+                description: Text(BrowserLocalization.string("permissions_empty_info"))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -486,11 +501,11 @@ struct SitePermissionsOverlay: View {
 
     private var footer: some View {
         HStack {
-            Text("Persistent allow доступен только для HTTPS")
+            Text(BrowserLocalization.string("persistent_https_only"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Очистить все") {
+            Button(BrowserLocalization.string("clear_all")) {
                 model.clearSitePermissions()
             }
             .disabled(model.sitePermissions.isEmpty || model.isLoadingSitePermissions)
@@ -521,7 +536,9 @@ private struct SitePermissionRow: View {
 
             Spacer(minLength: 12)
 
-            Text(permission.decision == .allow ? "Разрешено" : "Запрещено")
+            Text(permission.decision == .allow
+                ? BrowserLocalization.string("allowed")
+                : BrowserLocalization.string("denied"))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(permission.decision == .allow ? Color.green : Color.secondary)
 
@@ -529,8 +546,11 @@ private struct SitePermissionRow: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.plain)
-            .help("Удалить сохранённое решение")
-            .accessibilityLabel("Отозвать разрешение для \(permission.origin.displayName)")
+            .help(BrowserLocalization.string("remove_saved_decision"))
+            .accessibilityLabel(BrowserLocalization.string(
+                "revoke_permission_for",
+                permission.origin.displayName
+            ))
         }
         .padding(.horizontal, 16)
         .frame(minHeight: 58)
@@ -554,23 +574,23 @@ struct BrowsingHistoryOverlay: View {
         .shadow(color: .black.opacity(0.18), radius: 28, y: 14)
         .onExitCommand { model.dismissBrowsingHistory() }
         .confirmationDialog(
-            "Очистить всю историю посещений?",
+            BrowserLocalization.string("clear_all_history_question"),
             isPresented: $confirmsClear,
             titleVisibility: .visible
         ) {
-            Button("Очистить историю", role: .destructive) {
+            Button(BrowserLocalization.string("clear_history"), role: .destructive) {
                 model.clearBrowsingHistory()
             }
         } message: {
-            Text("Вкладки, cookies и данные сайтов останутся без изменений.")
+            Text(BrowserLocalization.string("history_clear_info"))
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("История посещений")
+        .accessibilityLabel(BrowserLocalization.string("browsing_history"))
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("История")
+            Text(BrowserLocalization.string("history"))
                 .font(.headline)
             if model.isLoadingBrowsingHistory {
                 ProgressView()
@@ -583,7 +603,7 @@ struct BrowsingHistoryOverlay: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Закрыть")
+            .accessibilityLabel(BrowserLocalization.string("close"))
         }
         .padding(.horizontal, 18)
         .frame(height: 54)
@@ -593,16 +613,16 @@ struct BrowsingHistoryOverlay: View {
     private var content: some View {
         if let error = model.browsingHistoryError {
             ContentUnavailableView(
-                "История недоступна",
+                BrowserLocalization.string("history_unavailable"),
                 systemImage: "exclamationmark.triangle",
                 description: Text(error)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.browsingHistory.isEmpty, !model.isLoadingBrowsingHistory {
             ContentUnavailableView(
-                "История пуста",
+                BrowserLocalization.string("history_empty"),
                 systemImage: "clock.arrow.circlepath",
-                description: Text("Посещённые страницы появятся здесь")
+                description: Text(BrowserLocalization.string("history_empty_info"))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -626,11 +646,11 @@ struct BrowsingHistoryOverlay: View {
 
     private var footer: some View {
         HStack {
-            Text("Favicons загружаются только из локального кэша")
+            Text(BrowserLocalization.string("favicons_cache_info"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Очистить историю") {
+            Button(BrowserLocalization.string("clear_history")) {
                 confirmsClear = true
             }
             .disabled(model.browsingHistory.isEmpty || model.isLoadingBrowsingHistory)
@@ -696,7 +716,9 @@ private struct BrowsingHistoryRow: View {
 
     private var displayTitle: String {
         let title = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty, title != "Новая вкладка" { return title }
+        if !title.isEmpty, title != BrowserLocalization.string("new_tab") {
+            return title
+        }
         return entry.url.host ?? entry.url.absoluteString
     }
 
@@ -756,12 +778,12 @@ struct ClearBrowsingDataOverlay: View {
         .shadow(color: .black.opacity(0.18), radius: 28, y: 14)
         .onExitCommand { model.dismissClearBrowsingData() }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Очистка данных браузера")
+        .accessibilityLabel(BrowserLocalization.string("clear_browser_data"))
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Очистить данные браузера")
+            Text(BrowserLocalization.string("clear_browser_data_title"))
                 .font(.headline)
             if model.isClearingBrowsingData {
                 ProgressView()
@@ -775,7 +797,7 @@ struct ClearBrowsingDataOverlay: View {
             }
             .buttonStyle(.plain)
             .disabled(model.isClearingBrowsingData)
-            .accessibilityLabel("Закрыть")
+            .accessibilityLabel(BrowserLocalization.string("close"))
         }
         .padding(.horizontal, 18)
         .frame(height: 54)
@@ -784,11 +806,13 @@ struct ClearBrowsingDataOverlay: View {
     private var footer: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Период: за всё время")
+                Text(BrowserLocalization.string("all_time_period"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button(allSelected ? "Снять выбор" : "Выбрать всё") {
+                Button(allSelected
+                    ? BrowserLocalization.string("deselect_all")
+                    : BrowserLocalization.string("select_all")) {
                     model.selectedBrowsingDataCategories = allSelected
                         ? []
                         : Set(BrowsingDataCategory.allCases)
@@ -802,16 +826,18 @@ struct ClearBrowsingDataOverlay: View {
                     Text(status)
                         .font(.caption)
                         .foregroundStyle(
-                            status.hasPrefix("Часть") ? Color.red : Color.secondary
+                            status.hasPrefix(BrowserLocalization.string("partial_status_prefix"))
+                                ? Color.red
+                                : Color.secondary
                         )
                         .lineLimit(2)
                 } else {
-                    Text("Cookies и данные сайтов потребуют повторного входа")
+                    Text(BrowserLocalization.string("cookies_relogin_info"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Очистить", role: .destructive) {
+                Button(BrowserLocalization.string("clear"), role: .destructive) {
                     model.clearSelectedBrowsingData()
                 }
                 .buttonStyle(.borderedProminent)
@@ -847,27 +873,27 @@ struct ClearBrowsingDataOverlay: View {
 private extension BrowsingDataCategory {
     var title: String {
         switch self {
-        case .history: "История посещений"
-        case .cookies: "Cookies"
-        case .cache: "Web-кэш"
-        case .localStorage: "Локальные данные сайтов"
-        case .serviceWorkers: "Service workers"
-        case .sitePermissions: "Разрешения сайтов"
-        case .downloadHistory: "История загрузок"
-        case .favicons: "Favicons"
+        case .history: BrowserLocalization.string("history_category")
+        case .cookies: BrowserLocalization.string("cookies")
+        case .cache: BrowserLocalization.string("web_cache")
+        case .localStorage: BrowserLocalization.string("local_site_data")
+        case .serviceWorkers: BrowserLocalization.string("service_workers")
+        case .sitePermissions: BrowserLocalization.string("site_permissions")
+        case .downloadHistory: BrowserLocalization.string("download_history")
+        case .favicons: BrowserLocalization.string("favicons")
         }
     }
 
     var detail: String {
         switch self {
-        case .history: "Список посещённых страниц"
-        case .cookies: "Сеансы входа и предпочтения сайтов"
-        case .cache: "Disk, memory и offline web cache"
-        case .localStorage: "Local Storage, IndexedDB и WebSQL"
-        case .serviceWorkers: "Фоновые регистрации сайтов"
-        case .sitePermissions: "Сохранённые решения камеры и микрофона"
-        case .downloadHistory: "Завершённые записи; активные загрузки сохранятся"
-        case .favicons: "Memory/disk-кэш иконок сайтов"
+        case .history: BrowserLocalization.string("history_category_detail")
+        case .cookies: BrowserLocalization.string("cookies_detail")
+        case .cache: BrowserLocalization.string("cache_detail")
+        case .localStorage: BrowserLocalization.string("local_storage_detail")
+        case .serviceWorkers: BrowserLocalization.string("service_workers_detail")
+        case .sitePermissions: BrowserLocalization.string("site_permissions_detail")
+        case .downloadHistory: BrowserLocalization.string("download_history_detail")
+        case .favicons: BrowserLocalization.string("favicons_detail")
         }
     }
 
@@ -892,10 +918,10 @@ struct SidebarDownloadsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Загрузки")
+                Text(BrowserLocalization.string("downloads"))
                     .font(.headline)
                 Spacer()
-                Button("Очистить") {
+                Button(BrowserLocalization.string("clear")) {
                     manager.clearInactive()
                 }
                 .buttonStyle(.plain)
@@ -908,9 +934,9 @@ struct SidebarDownloadsView: View {
 
             if manager.items.isEmpty {
                 ContentUnavailableView(
-                    "Нет загрузок",
+                    BrowserLocalization.string("no_downloads"),
                     systemImage: "arrow.down.circle",
-                    description: Text("Загрузки текущего запуска появятся здесь")
+                    description: Text(BrowserLocalization.string("downloads_empty_info"))
                 )
                 .frame(height: 180)
             } else {
@@ -973,16 +999,16 @@ private struct DownloadRow: View {
     private var stateDetail: some View {
         switch item.state {
         case .awaitingDestination:
-            Text("Выбор места…")
+            Text(BrowserLocalization.string("choose_location"))
                 .foregroundStyle(.secondary)
         case .downloading:
             Text(progressLabel)
                 .foregroundStyle(.secondary)
         case .finished:
-            Text("Завершено")
+            Text(BrowserLocalization.string("finished"))
                 .foregroundStyle(.secondary)
         case .cancelled:
-            Text("Отменено")
+            Text(BrowserLocalization.string("cancelled"))
                 .foregroundStyle(.secondary)
         case let .failed(message):
             Text(message)
@@ -999,7 +1025,7 @@ private struct DownloadRow: View {
                 Image(systemName: "xmark.circle")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Отменить загрузку")
+            .accessibilityLabel(BrowserLocalization.string("cancel_download"))
         case .finished:
             Button {
                 if let destination = item.destinationURL {
@@ -1010,26 +1036,28 @@ private struct DownloadRow: View {
             }
             .buttonStyle(.plain)
             .disabled(item.destinationURL == nil)
-            .accessibilityLabel("Показать в Finder")
+            .accessibilityLabel(BrowserLocalization.string("show_in_finder"))
         case .cancelled, .failed:
             if item.resumeData != nil {
                 Button(action: onResume) {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Продолжить загрузку")
+                .accessibilityLabel(BrowserLocalization.string("resume_download"))
             } else {
                 Button(action: onRemove) {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Удалить из списка")
+                .accessibilityLabel(BrowserLocalization.string("remove_from_list"))
             }
         }
     }
 
     private var progressLabel: String {
-        guard let progress = item.fractionCompleted else { return "Загрузка…" }
+        guard let progress = item.fractionCompleted else {
+            return BrowserLocalization.string("download_in_progress")
+        }
         return progress.formatted(.percent.precision(.fractionLength(0)))
     }
 

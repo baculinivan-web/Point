@@ -34,7 +34,10 @@ struct BrowserApp: App {
             BrowserCommands()
         }
 
-        WindowGroup("Приватное окно", id: BrowserSceneID.privateBrowsing) {
+        WindowGroup(
+            BrowserLocalization.string("private_window"),
+            id: BrowserSceneID.privateBrowsing
+        ) {
             BrowserWindowScene(runtime: runtime, isPrivate: true)
         }
         .windowStyle(.hiddenTitleBar)
@@ -244,10 +247,13 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
         if activeCount > 0 {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Есть активные загрузки"
-            alert.informativeText = "При выходе из Point \(activeCount) активных загрузок будут прерваны."
-            alert.addButton(withTitle: "Продолжить загрузки")
-            alert.addButton(withTitle: "Выйти")
+            alert.messageText = BrowserLocalization.string("active_downloads")
+            alert.informativeText = BrowserLocalization.string(
+                "active_downloads_info",
+                activeCount
+            )
+            alert.addButton(withTitle: BrowserLocalization.string("resume_downloads"))
+            alert.addButton(withTitle: BrowserLocalization.string("quit"))
             guard alert.runModal() != .alertFirstButtonReturn else {
                 return .terminateCancel
             }

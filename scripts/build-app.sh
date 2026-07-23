@@ -34,13 +34,28 @@ CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 cd "${PROJECT_DIR}"
 swift build -c "${CONFIGURATION}"
 
+XCSTRINGSTOOL="$(xcode-select -p)/usr/bin/xcstringstool"
+if [[ ! -x "${XCSTRINGSTOOL}" ]]; then
+    print -u2 "xcstringstool is required to compile Localizable.xcstrings."
+    exit 1
+fi
+"${XCSTRINGSTOOL}" compile \
+    "Sources/BrowserCore/Resources/Localizable.xcstrings" \
+    --output-directory ".build/${CONFIGURATION}/Browser_BrowserCore.bundle" \
+    --format stringsAndStringsdict
+
 rm -rf "${APP_DIR}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 cp ".build/${CONFIGURATION}/Browser" "${MACOS_DIR}/Browser"
 cp "Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"
+cp -R "Resources/en.lproj" "${RESOURCES_DIR}/"
+cp -R "Resources/ru.lproj" "${RESOURCES_DIR}/"
 rm -rf "${APP_DIR}/Browser_BrowserUI.bundle"
 rm -rf "${RESOURCES_DIR}/Browser_BrowserUI.bundle"
 cp -R ".build/${CONFIGURATION}/Browser_BrowserUI.bundle" "${RESOURCES_DIR}/"
+rm -rf "${APP_DIR}/Browser_BrowserCore.bundle"
+rm -rf "${RESOURCES_DIR}/Browser_BrowserCore.bundle"
+cp -R ".build/${CONFIGURATION}/Browser_BrowserCore.bundle" "${RESOURCES_DIR}/"
 
 xcrun actool \
     --compile "${RESOURCES_DIR}" \

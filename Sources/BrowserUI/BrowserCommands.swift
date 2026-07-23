@@ -19,31 +19,31 @@ public struct BrowserCommands: Commands {
 
     public var body: some Commands {
         CommandGroup(after: .appInfo) {
-            Button("Сделать браузером по умолчанию") {
+            Button(BrowserLocalization.string("make_default_browser")) {
                 model?.makeDefaultBrowser()
             }
 
-            Button("Разрешить ключи входа…") {
+            Button(BrowserLocalization.string("allow_passkeys")) {
                 model?.requestPasskeyAccess()
             }
 
-            Button("Разрешения сайтов…") {
+            Button(BrowserLocalization.string("site_permissions")) {
                 model?.presentSitePermissions()
             }
 
-            Button("Очистить данные браузера…") {
+            Button(BrowserLocalization.string("clear_browser_data")) {
                 model?.presentClearBrowsingData()
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
         }
 
         CommandGroup(replacing: .newItem) {
-            Button("Новая вкладка") {
+            Button(BrowserLocalization.string("new_tab")) {
                 model?.newTab()
             }
             .keyboardShortcut("t")
 
-            Button("Новое окно") {
+            Button(BrowserLocalization.string("new_window")) {
                 if let model {
                     model.openWindowRequest?(false)
                 } else {
@@ -56,79 +56,79 @@ public struct BrowserCommands: Commands {
             }
             .keyboardShortcut("n")
 
-            Button("Новое приватное окно") {
+            Button(BrowserLocalization.string("new_private_window")) {
                 model?.openWindowRequest?(true)
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
         }
 
-        CommandMenu("Вкладки") {
-            Button("Закрыть вкладку") {
+        CommandMenu(BrowserLocalization.string("tabs")) {
+            Button(BrowserLocalization.string("close_tab")) {
                 guard let id = model?.selectedTabID else { return }
                 model?.closeTab(id)
             }
             .keyboardShortcut("w")
 
-            Button("Открыть закрытую вкладку") {
+            Button(BrowserLocalization.string("reopen_closed_tab")) {
                 model?.reopenClosedTab()
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
 
-            Button("Переместить в новое окно") {
+            Button(BrowserLocalization.string("move_to_new_window")) {
                 model?.transferSelectedTabsToNewWindow()
             }
             .disabled(model?.isPrivate != false || model?.selectedTabID == nil)
 
             Divider()
 
-            Button("Адрес и поиск") {
+            Button(BrowserLocalization.string("address_and_search")) {
                 model?.presentOmnibox()
             }
             .keyboardShortcut("l")
 
-            Button("Найти на странице") {
+            Button(BrowserLocalization.string("find_on_page")) {
                 model?.isFindPresented = true
             }
             .keyboardShortcut("f")
 
-            Button("Загрузки") {
+            Button(BrowserLocalization.string("downloads")) {
                 model?.toggleDownloads()
             }
             .keyboardShortcut("j", modifiers: [.command, .shift])
 
-            Button("Показать или скрыть sidebar") {
+            Button(BrowserLocalization.string("toggle_sidebar")) {
                 model?.toggleSidebarMode()
             }
             .keyboardShortcut("s", modifiers: [.command])
         }
 
-        CommandMenu("История") {
-            Button("Показать всю историю…") {
+        CommandMenu(BrowserLocalization.string("history")) {
+            Button(BrowserLocalization.string("show_full_history")) {
                 model?.presentBrowsingHistory()
             }
             .keyboardShortcut("y")
         }
 
-        CommandMenu("Переход") {
-            Button("Назад") {
+        CommandMenu(BrowserLocalization.string("navigation")) {
+            Button(BrowserLocalization.string("back")) {
                 guard let id = model?.selectedTabID else { return }
                 model?.dispatch(.goBack(id))
             }
             .keyboardShortcut("[")
 
-            Button("Вперёд") {
+            Button(BrowserLocalization.string("forward")) {
                 guard let id = model?.selectedTabID else { return }
                 model?.dispatch(.goForward(id))
             }
             .keyboardShortcut("]")
 
-            Button("Обновить") {
+            Button(BrowserLocalization.string("reload")) {
                 guard let id = model?.selectedTabID else { return }
                 model?.dispatch(.reload(id, bypassCache: false))
             }
             .keyboardShortcut("r")
 
-            Button("Обновить без кэша") {
+            Button(BrowserLocalization.string("reload_bypass_cache")) {
                 guard let id = model?.selectedTabID else { return }
                 model?.dispatch(.reload(id, bypassCache: true))
             }

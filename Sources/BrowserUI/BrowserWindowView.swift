@@ -254,8 +254,12 @@ private struct DownloadProgressBubble: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help("Скрыть индикатор загрузки")
-        .accessibilityLabel("Загрузка \(download.suggestedFilename), \(progressLabel)")
+        .help(BrowserLocalization.string("hide_download_indicator"))
+        .accessibilityLabel(BrowserLocalization.string(
+            "download_progress_label",
+            download.suggestedFilename,
+            progressLabel
+        ))
         .task(id: download.id) {
             guard !reduceMotion else { return }
             withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
@@ -313,7 +317,9 @@ private struct DownloadProgressBubble: View {
     }
 
     private var progressLabel: String {
-        guard let fraction = download.fractionCompleted else { return "выполняется" }
+        guard let fraction = download.fractionCompleted else {
+            return BrowserLocalization.string("in_progress")
+        }
         return fraction.formatted(.percent.precision(.fractionLength(0)))
     }
 }
@@ -441,7 +447,9 @@ private struct WindowAccessor: NSViewRepresentable {
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
             window.minSize = NSSize(width: 760, height: 520)
-            window.title = isPrivate ? "Point — Приватный режим" : "Point"
+            window.title = isPrivate
+                ? BrowserLocalization.string("private_window_title")
+                : "Point"
             window.representedURL = nil
 
             let isFullScreen = window.styleMask.contains(.fullScreen)

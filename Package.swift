@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "Browser",
+    defaultLocalization: "ru",
     platforms: [
         .macOS(.v26)
     ],
@@ -11,7 +12,10 @@ let package = Package(
         .executable(name: "Browser", targets: ["BrowserApp"])
     ],
     targets: [
-        .target(name: "BrowserCore"),
+        .target(
+            name: "BrowserCore",
+            resources: [.process("Resources")]
+        ),
         .target(
             name: "BrowserEngine",
             dependencies: ["BrowserCore"]

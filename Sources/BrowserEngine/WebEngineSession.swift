@@ -43,7 +43,9 @@ public final class WebEngineSession: NSObject {
     private var captureStopOperationsRemaining = 0
     private var pendingMainFrameNavigationWasBackForward = false
 
-    public var title: String { webView.title ?? "Новая вкладка" }
+    public var title: String {
+        webView.title ?? BrowserLocalization.string("new_tab")
+    }
     public var url: URL? { webView.url }
     public var estimatedProgress: Double { webView.estimatedProgress }
     public var isLoading: Bool { webView.isLoading }
@@ -336,24 +338,32 @@ extension WebEngineSession: WKNavigationDelegate {
         defer { setPendingUIFlow(false) }
 
         let username = NSTextField(string: challenge.proposedCredential?.user ?? "")
-        username.placeholderString = "Имя пользователя"
+        username.placeholderString = BrowserLocalization.string("username")
         let password = NSSecureTextField(string: "")
-        password.placeholderString = "Пароль"
+        password.placeholderString = BrowserLocalization.string("password")
         let fields = NSStackView(views: [username, password])
         fields.orientation = .vertical
         fields.spacing = 8
         fields.frame = NSRect(x: 0, y: 0, width: 320, height: 58)
 
         let alert = NSAlert()
-        alert.messageText = "Вход на \(challenge.protectionSpace.host)"
+        alert.messageText = BrowserLocalization.string(
+            "sign_in_to_host",
+            challenge.protectionSpace.host
+        )
         if let realm = challenge.protectionSpace.realm, !realm.isEmpty {
-            alert.informativeText = "Сервер запрашивает имя пользователя и пароль. Область: \(realm)"
+            alert.informativeText = BrowserLocalization.string(
+                "authentication_realm",
+                realm
+            )
         } else {
-            alert.informativeText = "Сервер запрашивает имя пользователя и пароль."
+            alert.informativeText = BrowserLocalization.string(
+                "authentication_request"
+            )
         }
         alert.accessoryView = fields
-        alert.addButton(withTitle: "Войти")
-        alert.addButton(withTitle: "Отмена")
+        alert.addButton(withTitle: BrowserLocalization.string("sign_in"))
+        alert.addButton(withTitle: BrowserLocalization.string("cancel"))
 
         guard alert.runModal() == .alertFirstButtonReturn else {
             completionHandler(.cancelAuthenticationChallenge, nil)
@@ -404,10 +414,14 @@ extension WebEngineSession: WKNavigationDelegate {
 
         let scheme = url.scheme?.lowercased() ?? "external"
         let alert = NSAlert()
-        alert.messageText = "Открыть ссылку в другом приложении?"
-        alert.informativeText = "Схема: \(scheme)\n\(url.absoluteString)"
-        alert.addButton(withTitle: "Открыть")
-        alert.addButton(withTitle: "Отмена")
+        alert.messageText = BrowserLocalization.string("open_in_other_app")
+        alert.informativeText = BrowserLocalization.string(
+            "external_url_details",
+            scheme,
+            url.absoluteString
+        )
+        alert.addButton(withTitle: BrowserLocalization.string("open"))
+        alert.addButton(withTitle: BrowserLocalization.string("cancel"))
         if alert.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(url)
         }
@@ -579,9 +593,10 @@ extension WebEngineSession: WKUIDelegate {
         setPendingUIFlow(true)
         defer { setPendingUIFlow(false) }
         let alert = NSAlert()
-        alert.messageText = webView.url?.host ?? "Веб-страница"
+        alert.messageText = webView.url?.host
+            ?? BrowserLocalization.string("web_page")
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: BrowserLocalization.string("ok"))
         alert.runModal()
         completionHandler()
     }
@@ -595,10 +610,11 @@ extension WebEngineSession: WKUIDelegate {
         setPendingUIFlow(true)
         defer { setPendingUIFlow(false) }
         let alert = NSAlert()
-        alert.messageText = webView.url?.host ?? "Веб-страница"
+        alert.messageText = webView.url?.host
+            ?? BrowserLocalization.string("web_page")
         alert.informativeText = message
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Отмена")
+        alert.addButton(withTitle: BrowserLocalization.string("ok"))
+        alert.addButton(withTitle: BrowserLocalization.string("cancel"))
         completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
 
@@ -620,11 +636,13 @@ extension WebEngineSession: WKUIDelegate {
         input.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
 
         let alert = NSAlert()
-        alert.messageText = frame.request.url?.host ?? webView.url?.host ?? "Веб-страница"
+        alert.messageText = frame.request.url?.host
+            ?? webView.url?.host
+            ?? BrowserLocalization.string("web_page")
         alert.informativeText = prompt
         alert.accessoryView = input
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Отмена")
+        alert.addButton(withTitle: BrowserLocalization.string("ok"))
+        alert.addButton(withTitle: BrowserLocalization.string("cancel"))
         completionHandler(
             alert.runModal() == .alertFirstButtonReturn
                 ? input.stringValue

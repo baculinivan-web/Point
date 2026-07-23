@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>active_downloads</key>
+	<string>Есть активные загрузки</string>
+	<key>active_downloads_info</key>
+	<string>При выходе из Point %d активных загрузок будут прерваны.</string>
+	<key>address_and_search</key>
+	<string>Адрес и поиск</string>
+	<key>address_or_search_placeholder</key>
+	<string>Адрес или поисковый запрос</string>
+	<key>all_time_period</key>
+	<string>Период: за всё время</string>
+	<key>allow_camera</key>
+	<string>Разрешить доступ к камере?</string>
+	<key>allow_camera_microphone</key>
+	<string>Разрешить доступ к камере и микрофону?</string>
+	<key>allow_microphone</key>
+	<string>Разрешить доступ к микрофону?</string>
+	<key>allow_once</key>
+	<string>Разрешить один раз</string>
+	<key>allow_passkeys</key>
+	<string>Разрешить ключи входа…</string>
+	<key>allowed</key>
+	<string>Разрешено</string>
+	<key>always_allow</key>
+	<string>Разрешать всегда</string>
+	<key>archive</key>
+	<string>Архив</string>
+	<key>authentication_realm</key>
+	<string>Сервер запрашивает имя пользователя и пароль. Область: %@</string>
+	<key>authentication_request</key>
+	<string>Сервер запрашивает имя пользователя и пароль.</string>
+	<key>back</key>
+	<string>Назад</string>
+	<key>browsing_history</key>
+	<string>История посещений</string>
+	<key>cache_detail</key>
+	<string>Disk, memory и offline web cache</string>
+	<key>camera</key>
+	<string>Камера</string>
+	<key>camera_microphone</key>
+	<string>Камера и микрофон</string>
+	<key>cancel</key>
+	<string>Отмена</string>
+	<key>cancel_download</key>
+	<string>Отменить загрузку</string>
+	<key>cancelled</key>
+	<string>Отменено</string>
+	<key>check_default_browser_settings</key>
+	<string>Проверьте браузер по умолчанию в Системных настройках.</string>
+	<key>choose_location</key>
+	<string>Выбор места…</string>
+	<key>clear</key>
+	<string>Очистить</string>
+	<key>clear_all</key>
+	<string>Очистить все</string>
+	<key>clear_all_history_question</key>
+	<string>Очистить всю историю посещений?</string>
+	<key>clear_browser_data</key>
+	<string>Очистить данные браузера…</string>
+	<key>clear_browser_data_title</key>
+	<string>Очистить данные браузера</string>
+	<key>clear_history</key>
+	<string>Очистить историю</string>
+	<key>clear_history_failed</key>
+	<string>Не удалось очистить историю: %@</string>
+	<key>clear_permissions_failed</key>
+	<string>Не удалось очистить разрешения: %@</string>
+	<key>close</key>
+	<string>Закрыть</string>
+	<key>close_named_tab</key>
+	<string>Закрыть %@</string>
+	<key>close_search</key>
+	<string>Закрыть поиск</string>
+	<key>close_tab</key>
+	<string>Закрыть вкладку</string>
+	<key>cookies</key>
+	<string>Cookies</string>
+	<key>cookies_detail</key>
+	<string>Сеансы входа и предпочтения сайтов</string>
+	<key>cookies_relogin_info</key>
+	<string>Cookies и данные сайтов потребуют повторного входа</string>
+	<key>credentials_blocked</key>
+	<string>Адреса с логином или паролем заблокированы</string>
+	<key>default_browser_change_failed</key>
+	<string>Не удалось изменить браузер по умолчанию</string>
+	<key>default_browser_changed</key>
+	<string>Browser назначен браузером по умолчанию</string>
+	<key>default_browser_links</key>
+	<string>Ссылки HTTP и HTTPS будут открываться в Browser.</string>
+	<key>default_browser_not_confirmed</key>
+	<string>macOS не подтвердила изменение</string>
+	<key>default_search_engine</key>
+	<string>Поисковая система по умолчанию</string>
+	<key>delete_folder</key>
+	<string>Удалить папку</string>
+	<key>delete_folder_contents</key>
+	<string>Удалить папку и содержимое</string>
+	<key>denied</key>
+	<string>Запрещено</string>
+	<key>deselect_all</key>
+	<string>Снять выбор</string>
+	<key>development</key>
+	<string>Разработка</string>
+	<key>documents</key>
+	<string>Документы</string>
+	<key>dont_allow</key>
+	<string>Не разрешать</string>
+	<key>download_failed</key>
+	<string>Не удалось загрузить файл</string>
+	<key>download_history</key>
+	<string>История загрузок</string>
+	<key>download_history_detail</key>
+	<string>Завершённые записи; активные загрузки сохранятся</string>
+	<key>download_in_progress</key>
+	<string>Загрузка…</string>
+	<key>download_progress_label</key>
+	<string>Загрузка %@, %@</string>
+	<key>downloads</key>
+	<string>Загрузки</string>
+	<key>downloads_directory_unavailable</key>
+	<string>Папка Загрузки недоступна</string>
+	<key>downloads_empty_info</key>
+	<string>Загрузки текущего запуска появятся здесь</string>
+	<key>downloads_shortcut</key>
+	<string>Загрузки (⌘⇧J)</string>
+	<key>embedded_media_request</key>
+	<string>Запрос встроен в страницу %@</string>
+	<key>external_url_details</key>
+	<string>Схема: %@
+%@</string>
+	<key>favicons</key>
+	<string>Favicons</string>
+	<key>favicons_cache_info</key>
+	<string>Favicons загружаются только из локального кэша</string>
+	<key>favicons_detail</key>
+	<string>Memory/disk-кэш иконок сайтов</string>
+	<key>favorites</key>
+	<string>Избранное</string>
+	<key>find_on_page</key>
+	<string>Найти на странице</string>
+	<key>finished</key>
+	<string>Завершено</string>
+	<key>folder</key>
+	<string>Папка</string>
+	<key>folder_icon</key>
+	<string>Значок папки</string>
+	<key>folder_name_placeholder</key>
+	<string>Название папки</string>
+	<key>forward</key>
+	<string>Вперёд</string>
+	<key>games</key>
+	<string>Игры</string>
+	<key>hide_download_indicator</key>
+	<string>Скрыть индикатор загрузки</string>
+	<key>hide_sidebar</key>
+	<string>Скрыть боковую панель</string>
+	<key>hide_sidebar_shortcut</key>
+	<string>Скрыть sidebar (⌘S)</string>
+	<key>history</key>
+	<string>История</string>
+	<key>history_category</key>
+	<string>История посещений</string>
+	<key>history_category_detail</key>
+	<string>Список посещённых страниц</string>
+	<key>history_clear_info</key>
+	<string>Вкладки, cookies и данные сайтов останутся без изменений.</string>
+	<key>history_empty</key>
+	<string>История пуста</string>
+	<key>history_empty_info</key>
+	<string>Посещённые страницы появятся здесь</string>
+	<key>history_unavailable</key>
+	<string>История недоступна</string>
+	<key>in_progress</key>
+	<string>выполняется</string>
+	<key>load_history_failed</key>
+	<string>Не удалось загрузить историю: %@</string>
+	<key>load_permissions_failed</key>
+	<string>Не удалось загрузить разрешения: %@</string>
+	<key>loading</key>
+	<string>загружается</string>
+	<key>local_site_data</key>
+	<string>Локальные данные сайтов</string>
+	<key>local_storage_detail</key>
+	<string>Local Storage, IndexedDB и WebSQL</string>
+	<key>make_default_browser</key>
+	<string>Сделать браузером по умолчанию</string>
+	<key>microphone</key>
+	<string>Микрофон</string>
+	<key>move_folder</key>
+	<string>Переместить папку</string>
+	<key>move_selected_here</key>
+	<string>Поместить выбранные сюда</string>
+	<key>move_to_folder</key>
+	<string>Переместить в папку</string>
+	<key>move_to_new_window</key>
+	<string>Переместить в новое окно</string>
+	<key>move_to_top_level</key>
+	<string>На верхний уровень</string>
+	<key>navigation</key>
+	<string>Переход</string>
+	<key>new_folder</key>
+	<string>Новая папка</string>
+	<key>new_folder_from_selection</key>
+	<string>Новая папка из выбранных</string>
+	<key>new_folder_with_tab</key>
+	<string>Новая папка с вкладкой</string>
+	<key>new_nested_folder</key>
+	<string>Новая вложенная папка</string>
+	<key>new_private_window</key>
+	<string>Новое приватное окно</string>
+	<key>new_tab</key>
+	<string>Новая вкладка</string>
+	<key>new_window</key>
+	<string>Новое окно</string>
+	<key>no_downloads</key>
+	<string>Нет загрузок</string>
+	<key>no_folder</key>
+	<string>Без папки</string>
+	<key>no_saved_permissions</key>
+	<string>Нет сохранённых разрешений</string>
+	<key>ok</key>
+	<string>OK</string>
+	<key>open</key>
+	<string>Открыть</string>
+	<key>open_in_other_app</key>
+	<string>Открыть ссылку в другом приложении?</string>
+	<key>open_tab</key>
+	<string>Открытая вкладка</string>
+	<key>partial_status_prefix</key>
+	<string>Часть</string>
+	<key>passkeys_allowed</key>
+	<string>Ключи входа разрешены</string>
+	<key>passkeys_available</key>
+	<string>Ключи входа доступны</string>
+	<key>passkeys_available_info</key>
+	<string>WebKit может создавать и использовать passkeys из Keychain и совместимых менеджеров на сайтах с WebAuthn.</string>
+	<key>passkeys_denied</key>
+	<string>Доступ к ключам входа запрещён</string>
+	<key>passkeys_denied_info</key>
+	<string>Разрешение можно изменить в настройках конфиденциальности macOS.</string>
+	<key>passkeys_not_configured</key>
+	<string>Доступ разрешён, но macOS сообщает, что на этом устройстве ещё не настроен провайдер passkeys. Проверьте приложение «Пароли» и настройки автозаполнения.</string>
+	<key>passkeys_not_determined</key>
+	<string>Разрешение не выбрано</string>
+	<key>passkeys_not_determined_info</key>
+	<string>Повторите запрос и подтвердите системный диалог macOS.</string>
+	<key>password</key>
+	<string>Пароль</string>
+	<key>permissions_empty_info</key>
+	<string>Новые решения появятся после запроса сайта</string>
+	<key>persistent_https_only</key>
+	<string>Постоянное разрешение доступно только для HTTPS</string>
+	<key>personal</key>
+	<string>Личное</string>
+	<key>pin</key>
+	<string>Закрепить</string>
+	<key>pin_sidebar</key>
+	<string>Закрепить боковую панель</string>
+	<key>pin_sidebar_shortcut</key>
+	<string>Закрепить sidebar (⌘S)</string>
+	<key>pinned</key>
+	<string>закреплена</string>
+	<key>private_window</key>
+	<string>Приватное окно</string>
+	<key>private_window_info</key>
+	<string>Локальные данные исчезнут после закрытия. Режим не скрывает вас от сайтов и сети.</string>
+	<key>private_window_title</key>
+	<string>Point — Приватный режим</string>
+	<key>quit</key>
+	<string>Выйти</string>
+	<key>reading</key>
+	<string>Чтение</string>
+	<key>reload</key>
+	<string>Обновить</string>
+	<key>reload_bypass_cache</key>
+	<string>Обновить без кэша</string>
+	<key>remove_from_list</key>
+	<string>Удалить из списка</string>
+	<key>remove_saved_decision</key>
+	<string>Удалить сохранённое решение</string>
+	<key>rename</key>
+	<string>Переименовать</string>
+	<key>reopen_closed_tab</key>
+	<string>Открыть закрытую вкладку</string>
+	<key>resume_download</key>
+	<string>Продолжить загрузку</string>
+	<key>resume_downloads</key>
+	<string>Продолжить загрузки</string>
+	<key>revoke_permission_failed</key>
+	<string>Не удалось отозвать разрешение: %@</string>
+	<key>revoke_permission_for</key>
+	<string>Отозвать разрешение для %@</string>
+	<key>save_site_decision</key>
+	<string>Сохранить решение для этого сайта</string>
+	<key>search_engine_help</key>
+	<string>Поиск: %@</string>
+	<key>search_engine_label</key>
+	<string>Поисковая система: %@</string>
+	<key>search_engine_yandex</key>
+	<string>Яндекс</string>
+	<key>search_engine_yandex_monogram</key>
+	<string>Я</string>
+	<key>search_or_address</key>
+	<string>Поиск или адрес</string>
+	<key>search_query_failed</key>
+	<string>Не удалось сформировать поисковый запрос</string>
+	<key>select_all</key>
+	<string>Выбрать всё</string>
+	<key>selected_data_removed</key>
+	<string>Выбранные данные удалены</string>
+	<key>service_workers</key>
+	<string>Service workers</string>
+	<key>service_workers_detail</key>
+	<string>Фоновые регистрации сайтов</string>
+	<key>session_restore_failed</key>
+	<string>Сессия не восстановлена: %@</string>
+	<key>shopping</key>
+	<string>Покупки</string>
+	<key>show_full_history</key>
+	<string>Показать всю историю…</string>
+	<key>show_in_finder</key>
+	<string>Показать в Finder</string>
+	<key>sign_in</key>
+	<string>Войти</string>
+	<key>sign_in_to_host</key>
+	<string>Вход на %@</string>
+	<key>site_permissions</key>
+	<string>Разрешения сайтов…</string>
+	<key>site_permissions_detail</key>
+	<string>Сохранённые решения камеры и микрофона</string>
+	<key>site_permissions_unavailable</key>
+	<string>Разрешения недоступны</string>
+	<key>some_data_may_be_removed</key>
+	<string>Часть данных могла быть удалена: %@</string>
+	<key>stop</key>
+	<string>Остановить</string>
+	<key>study</key>
+	<string>Учёба</string>
+	<key>tabs</key>
+	<string>Вкладки</string>
+	<key>team</key>
+	<string>Команда</string>
+	<key>toggle_sidebar</key>
+	<string>Показать или скрыть sidebar</string>
+	<key>travel</key>
+	<string>Путешествия</string>
+	<key>unpin</key>
+	<string>Открепить</string>
+	<key>unsupported_scheme</key>
+	<string>Схема %@ не поддерживается</string>
+	<key>username</key>
+	<string>Имя пользователя</string>
+	<key>video</key>
+	<string>Видео</string>
+	<key>web_cache</key>
+	<string>Web-кэш</string>
+	<key>web_page</key>
+	<string>Веб-страница</string>
+	<key>work</key>
+	<string>Работа</string>
+</dict>
+</plist>

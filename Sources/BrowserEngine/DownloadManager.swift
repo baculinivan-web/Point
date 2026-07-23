@@ -42,7 +42,7 @@ public final class DownloadManager: NSObject, WKDownloadDelegate {
             case .cancelled:
                 .cancelled
             case .failed:
-                .failed("Не удалось загрузить файл")
+                .failed(BrowserLocalization.string("download_failed"))
             }
             return DownloadItem(
                 id: record.id,
@@ -158,7 +158,9 @@ public final class DownloadManager: NSObject, WKDownloadDelegate {
             in: .userDomainMask
         ).first else {
             update(record.id) { item in
-                item.state = .failed("Папка Загрузки недоступна")
+                item.state = .failed(
+                    BrowserLocalization.string("downloads_directory_unavailable")
+                )
                 item.completedAt = Date()
             }
             completionHandler(nil)
