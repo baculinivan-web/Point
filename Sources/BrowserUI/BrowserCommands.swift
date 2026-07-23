@@ -44,9 +44,22 @@ public struct BrowserCommands: Commands {
             .keyboardShortcut("t")
 
             Button("Новое окно") {
-                NSApp.sendAction(#selector(NSWindowController.newWindowForTab(_:)), to: nil, from: nil)
+                if let model {
+                    model.openWindowRequest?(false)
+                } else {
+                    NSApp.sendAction(
+                        #selector(NSWindowController.newWindowForTab(_:)),
+                        to: nil,
+                        from: nil
+                    )
+                }
             }
             .keyboardShortcut("n")
+
+            Button("Новое приватное окно") {
+                model?.openWindowRequest?(true)
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
         }
 
         CommandMenu("Вкладки") {
@@ -60,6 +73,11 @@ public struct BrowserCommands: Commands {
                 model?.reopenClosedTab()
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
+
+            Button("Переместить в новое окно") {
+                model?.transferSelectedTabsToNewWindow()
+            }
+            .disabled(model?.isPrivate != false || model?.selectedTabID == nil)
 
             Divider()
 

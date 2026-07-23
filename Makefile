@@ -1,4 +1,4 @@
-.PHONY: build test app run clean
+.PHONY: build test app run release clean
 
 build:
 	swift build
@@ -11,6 +11,9 @@ app:
 
 run: app
 	open dist/Point.app
+
+release:
+	./scripts/notarize-app.sh
 
 clean:
 	swift package clean

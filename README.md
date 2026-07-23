@@ -1,4 +1,4 @@
-# Browser MVP
+# Point 0.1.1 Public Beta
 
 Нативный минималистичный браузер для macOS 26 на Swift 6, SwiftUI и WebKit. Реализация следует продуктовым принципам из [PRODUCT_VISION.md](docs/PRODUCT_VISION.md) и архитектурным границам из [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
@@ -6,6 +6,8 @@
 
 - настоящее web-содержимое через `WKWebView`;
 - несколько вкладок без reload при обычном переключении;
+- несколько обычных окон и перенос выбранных вкладок в новое окно без reload: живой `WKWebView`, media и scroll state меняют владельца вместе с вкладкой;
+- приватные окна по `⌘⇧N` с отдельным non-persistent WebKit store, memory-only session/history/permissions/download list/favicon cache и без восстановления после закрытия;
 - системные двухпальцевые горизонтальные gestures для нативной истории текущего процесса;
 - восстановление вкладок после перезапуска вместе с persisted back/forward stack до 50 committed переходов на tab;
 - Back/Forward и `⌘[`/`⌘]` после restart загружают выбранную старую страницу только по действию пользователя, без фонового replay сетевых запросов;
@@ -33,6 +35,7 @@
 - общая локальная история посещений: запись после main-frame commit, обновление title после finish, объединение быстрых дублей, лимит 5000 записей и окно «История» по `⌘Y`;
 - строки истории переиспользуют origin-keyed favicon cache только в cache-only режиме и не создают сетевые запросы при открытии списка;
 - независимая очистка history, cookies, web cache, local storage/IndexedDB/WebSQL, service workers, site permissions, download history и favicon cache через `⌘⇧⌫`; активные загрузки при этом сохраняются;
+- автоматическая maintenance-очистка раз в 7 дней: WebKit cache и записи истории старше 90 дней;
 - регистрация `http/https`, приём внешних URL и явная команда назначения браузером по умолчанию в меню приложения;
 - обычные, attachment и unsupported-MIME загрузки через `WKDownload`: автоматическое сохранение в системную папку `Загрузки`, безопасный filename/collision suffix, progress, cancel/resume и сохранение resume data;
 - компактный Liquid Glass progress bubble сверху слева; hover показывает крестик, скрывающий индикатор без отмены загрузки;
@@ -40,6 +43,7 @@
 - единый для всех окон DownloadManager и атомарная история последних 200 завершённых/отменённых/ошибочных загрузок между запусками без source URL, query и resume data;
 - системное подтверждение выхода при активных загрузках; подтверждённый quit сначала flush-ит поставленную в очередь download history;
 - восстановление URL, title, порядка и режима sidebar;
+- session и browsing history в SwiftData с одноразовой миграцией прежних `session.json`/`history.json` в файлы `.migrated`;
 - системные shortcuts и accessibility labels;
 - нативный Liquid Glass с Reduce Transparency/Reduce Motion fallback.
 
@@ -53,6 +57,15 @@ make run
 ```
 
 `make run` собирает локально подписанный app bundle в `dist/Point.app`. Проект также можно открыть в Xcode как Swift Package через `Package.swift`.
+
+Production release требует сертификат Developer ID Application и заранее сохранённый профиль `notarytool`:
+
+```bash
+xcrun notarytool store-credentials point-notary
+NOTARY_PROFILE=point-notary make release
+```
+
+Release pipeline собирает `release`, включает Hardened Runtime и secure timestamp, проверяет подпись, отправляет zip в Apple, stapling-ит ticket и выполняет финальные `stapler`/Gatekeeper checks. Без Developer ID identity или notary profile скрипт завершается до публикации.
 
 Для ручной проверки download и camera без внешних сайтов:
 
@@ -70,7 +83,7 @@ python3 scripts/manual-test-server.py
 - `BrowserUI` — window model, sidebar, omnibox и design system;
 - `BrowserApp` — composition root и scenes.
 
-## Текущий технический этап
+## Состояние public beta
 
 MVP и основной Phase 4 lifecycle-контур реализованы. Lifecycle policy покрыта unit-тестами; eviction/restore размечены signpost-интервалами. `interactionState` намеренно хранится только в памяти процесса. Для restart отдельно сохраняется безопасный логический URL/title stack вкладки: он восстанавливает доступность Back/Forward, но не архивирует form/scroll state и не выполняет старые запросы до команды пользователя.
 
@@ -78,10 +91,12 @@ MVP и основной Phase 4 lifecycle-контур реализованы. L
 
 Phase 5 продолжен download pipeline, нативными web-dialog/auth flows и полной camera/microphone permission queue. Media completion handlers завершаются ровно один раз; запросы фоновых вкладок откладываются, stale origin отменяется на navigation, а persistent decisions изолированы по origin и типу ресурса. Загрузка после передачи в `WKDownload` не зависит от жизни исходной вкладки; app-scoped DownloadManager поддерживает cancel/resume, reveal, безопасную persistent history и quit-confirmation.
 
-Минимальная история посещений и Clear Browsing Data из Phase 5 реализованы. История хранится в `Application Support/Browser/history.json`, download history — в `downloads.json`, site decisions — в `permissions.json`; favicon являются пересоздаваемыми данными и остаются в `Caches/Browser/Favicons`. Текущая очистка использует точный период «за всё время»; выбор произвольного периода остаётся дальнейшим расширением.
+Минимальная история посещений и Clear Browsing Data из Phase 5 реализованы. Session и browsing history хранятся в SwiftData; download history остаётся в `downloads.json`, site decisions — в `permissions.json`; favicon являются пересоздаваемыми данными и остаются в `Caches/Browser/Favicons`. Ручная очистка использует точный период «за всё время»; maintenance дополнительно удаляет историю старше 90 дней и WebKit cache раз в 7 дней. Выбор произвольного периода остаётся дальнейшим расширением.
 
 Ограничения текущего Phase 5: остаётся локальная integration-проверка OAuth popup, blob download, fullscreen и TLS flows. После удаления WebKit data live-вкладки перезагружаются; очистка download history намеренно не отменяет активные загрузки.
 
-До public beta также остаются: private windows, миграция session/history schema на SwiftData, multiple-window tab transfer, периодическая очистка browsing data и production signing/notarization. Двухпальцевый swipe надёжно использует нативный список WebKit текущего процесса; после restart восстановленный логический Back/Forward stack доступен кнопками и `⌘[`/`⌘]`, но trackpad swipe на этой persisted-границе пока работает нестабильно и считается известным ограничением.
+Public-beta scope закрывает private windows, SwiftData migration, multiple-window live tab transfer, периодическую очистку и воспроизводимый production signing/notarization pipeline.
 
-Session snapshot вместе с per-tab navigation stack временно хранится как атомарный JSON. Интерфейс `SessionRepository` отделяет это решение от UI, поэтому переход на SwiftData не затронет модели окна и WebKit engine.
+Известное ограничение 0.1.1: двухпальцевый swipe надёжно использует нативный список WebKit текущего процесса; после restart восстановленный логический Back/Forward stack доступен кнопками и `⌘[`/`⌘]`, но trackpad swipe на самой persisted-границе может быть менее предсказуемым. Старые страницы по-прежнему не загружаются в фоне и открываются только по действию пользователя.
+
+Приватный режим не делает пользователя анонимным для сайтов, сети, работодателя или интернет-провайдера. Он гарантирует локальную изоляцию окна и освобождение его runtime после закрытия, но загруженные по явному действию файлы остаются на диске.

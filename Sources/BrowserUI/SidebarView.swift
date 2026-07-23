@@ -43,6 +43,23 @@ struct SidebarView: View {
                 .padding(.top, isFullScreen ? 24 : 38)
                 .padding(.bottom, 10)
 
+            if model.isPrivate {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "eye.slash.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Приватное окно")
+                            .fontWeight(.semibold)
+                        Text("Локальные данные исчезнут после закрытия. Режим не скрывает вас от сайтов и сети.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+            }
+
             if model.isDownloadsPresented {
                 SidebarDownloadsView(
                     manager: model.downloadManager,
@@ -638,6 +655,14 @@ private struct PinnedTabCard: View {
             }
         }
         Divider()
+        if !model.isPrivate {
+            Button("Переместить в новое окно") {
+                if !model.selectedTabIDs.contains(tab.id) {
+                    model.selectTab(tab.id)
+                }
+                model.transferSelectedTabsToNewWindow()
+            }
+        }
         Button("Открепить") { model.setPinned(false, for: tab.id) }
         Button("Закрыть") { model.closeTab(tab.id) }
     }
@@ -766,6 +791,14 @@ private struct TabRow: View {
             }
         }
         Divider()
+        if !model.isPrivate {
+            Button("Переместить в новое окно") {
+                if !model.selectedTabIDs.contains(tab.id) {
+                    model.selectTab(tab.id)
+                }
+                model.transferSelectedTabsToNewWindow()
+            }
+        }
         Button(tab.isPinned ? "Открепить" : "Закрепить") {
             model.setPinned(!tab.isPinned, for: tab.id)
         }

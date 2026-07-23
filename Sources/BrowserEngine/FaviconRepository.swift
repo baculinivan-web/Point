@@ -5,10 +5,16 @@ import ImageIO
 
 public actor FaviconRepository {
     private let directoryURL: URL
+    private let persistsToDisk: Bool
+    private let urlSession: URLSession
     private let memoryCache = NSCache<NSString, FaviconImageBox>()
     private var inFlight: [String: Task<CGImage?, Never>] = [:]
 
-    public init(directoryURL: URL? = nil) {
+    public init(
+        directoryURL: URL? = nil,
+        persistsToDisk: Bool = true
+    ) {
+        self.persistsToDisk = persistsToDisk
         if let directoryURL {
             self.directoryURL = directoryURL
         } else {
@@ -17,6 +23,14 @@ public actor FaviconRepository {
                 in: .userDomainMask
             )[0]
             .appending(path: "Browser/Favicons", directoryHint: .isDirectory)
+        }
+        if persistsToDisk {
+            urlSession = .shared
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.urlCache = nil
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            urlSession = URLSession(configuration: configuration)
         }
         memoryCache.countLimit = 128
         memoryCache.totalCostLimit = 16 * 1_024 * 1_024
@@ -33,22 +47,25 @@ public actor FaviconRepository {
 
         let fileURL = directoryURL.appending(path: key, directoryHint: .notDirectory)
         let task = Task<CGImage?, Never> {
-            if let data = try? Data(contentsOf: fileURL),
+            if persistsToDisk,
+               let data = try? Data(contentsOf: fileURL),
                let image = Self.decode(data) {
                 return image
             }
-            guard let (data, response) = try? await URLSession.shared.data(from: iconURL),
+            guard let (data, response) = try? await urlSession.data(from: iconURL),
                   data.count <= 2 * 1_024 * 1_024,
                   let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode),
                   let image = Self.decode(data)
             else { return nil }
 
-            try? FileManager.default.createDirectory(
-                at: directoryURL,
-                withIntermediateDirectories: true
-            )
-            try? data.write(to: fileURL, options: .atomic)
+            if persistsToDisk {
+                try? FileManager.default.createDirectory(
+                    at: directoryURL,
+                    withIntermediateDirectories: true
+                )
+                try? data.write(to: fileURL, options: .atomic)
+            }
             return image
         }
         inFlight[key] = task
@@ -69,6 +86,7 @@ public actor FaviconRepository {
         if let cached = memoryCache.object(forKey: key as NSString) {
             return cached.image
         }
+        guard persistsToDisk else { return nil }
         let fileURL = directoryURL.appending(path: key, directoryHint: .notDirectory)
         guard let data = try? Data(contentsOf: fileURL),
               let image = Self.decode(data)
@@ -89,6 +107,7 @@ public actor FaviconRepository {
         inFlight.values.forEach { $0.cancel() }
         inFlight.removeAll()
         memoryCache.removeAllObjects()
+        guard persistsToDisk else { return }
         guard FileManager.default.fileExists(atPath: directoryURL.path) else { return }
         try FileManager.default.removeItem(at: directoryURL)
     }

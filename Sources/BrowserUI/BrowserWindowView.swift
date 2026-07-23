@@ -133,6 +133,7 @@ public struct BrowserWindowView: View {
         .background(
             WindowAccessor(
                 showsTrafficLights: model.isSidebarVisible,
+                isPrivate: model.isPrivate,
                 isFullScreen: $isFullScreen
             )
         )
@@ -368,6 +369,7 @@ private struct LoadingBar: View {
 
 private struct WindowAccessor: NSViewRepresentable {
     let showsTrafficLights: Bool
+    let isPrivate: Bool
     @Binding var isFullScreen: Bool
 
     @MainActor
@@ -375,6 +377,7 @@ private struct WindowAccessor: NSViewRepresentable {
         var originalButtonFrames: [ObjectIdentifier: NSRect] = [:]
         weak var window: NSWindow?
         var showsTrafficLights = true
+        var isPrivate = false
         var onFullScreenChange: (@MainActor (Bool) -> Void)?
         var lastReportedFullScreen: Bool?
 
@@ -385,10 +388,12 @@ private struct WindowAccessor: NSViewRepresentable {
         func configure(
             _ window: NSWindow?,
             showsTrafficLights: Bool,
+            isPrivate: Bool,
             onFullScreenChange: @escaping @MainActor (Bool) -> Void
         ) {
             guard let window else { return }
             self.showsTrafficLights = showsTrafficLights
+            self.isPrivate = isPrivate
             self.onFullScreenChange = onFullScreenChange
 
             if self.window !== window {
@@ -436,6 +441,8 @@ private struct WindowAccessor: NSViewRepresentable {
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
             window.minSize = NSSize(width: 760, height: 520)
+            window.title = isPrivate ? "Point — Приватный режим" : "Point"
+            window.representedURL = nil
 
             let isFullScreen = window.styleMask.contains(.fullScreen)
             if lastReportedFullScreen != isFullScreen {
@@ -477,6 +484,7 @@ private struct WindowAccessor: NSViewRepresentable {
             context.coordinator.configure(
                 view.window,
                 showsTrafficLights: showsTrafficLights,
+                isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
         }
@@ -488,6 +496,7 @@ private struct WindowAccessor: NSViewRepresentable {
             context.coordinator.configure(
                 nsView.window,
                 showsTrafficLights: showsTrafficLights,
+                isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
         }

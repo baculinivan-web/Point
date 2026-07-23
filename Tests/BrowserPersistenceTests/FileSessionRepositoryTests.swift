@@ -264,3 +264,127 @@ struct FileBrowsingHistoryRepositoryTests {
         #expect(try await repository.recent(limit: 10).isEmpty)
     }
 }
+
+@Suite("SwiftData persistence and migration")
+struct SwiftDataRepositoryTests {
+    @Test("Legacy JSON session migrates once into the primary window")
+    func sessionMigration() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserSwiftDataSession-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let tabID = TabID()
+        let snapshot = BrowserSessionSnapshot(
+            selectedTabID: tabID,
+            sidebarMode: .pinned,
+            tabs: [
+                PersistedTab(
+                    id: tabID,
+                    title: "Migrated",
+                    url: URL(string: "https://example.com"),
+                    isPinned: false,
+                    position: 1024
+                )
+            ]
+        )
+        let legacyURL = directory.appending(path: "session.json")
+        try JSONEncoder().encode(snapshot).write(to: legacyURL)
+
+        let controller = try BrowserPersistenceController(
+            storeURL: directory.appending(path: "Browser.store"),
+            legacyDirectoryURL: directory
+        )
+        let repository = controller.sessionRepository(
+            windowID: BrowserPersistenceController.primaryWindowID,
+            migratesLegacySession: true
+        )
+
+        #expect(try await repository.load() == snapshot)
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path))
+        #expect(
+            FileManager.default.fileExists(
+                atPath: legacyURL.appendingPathExtension("migrated").path
+            )
+        )
+        #expect(
+            try await controller.sessionRepository(
+                windowID: UUID()
+            ).load() == nil
+        )
+    }
+
+    @Test("Legacy history migrates, remains ordered, and supports retention")
+    func historyMigrationAndRetention() async throws {
+        struct LegacySnapshot: Codable {
+            let schemaVersion: Int
+            let entries: [BrowsingHistoryEntry]
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserSwiftDataHistory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let oldDate = Date(timeIntervalSince1970: 100)
+        let recentDate = Date(timeIntervalSince1970: 200)
+        let snapshot = LegacySnapshot(
+            schemaVersion: 1,
+            entries: [
+                BrowsingHistoryEntry(
+                    url: URL(string: "https://example.com/recent")!,
+                    title: "Recent",
+                    visitedAt: recentDate
+                ),
+                BrowsingHistoryEntry(
+                    url: URL(string: "https://example.com/old")!,
+                    title: "Old",
+                    visitedAt: oldDate
+                )
+            ]
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(snapshot).write(
+            to: directory.appending(path: "history.json")
+        )
+
+        let controller = try BrowserPersistenceController(
+            storeURL: directory.appending(path: "Browser.store"),
+            legacyDirectoryURL: directory
+        )
+        let repository = controller.browsingHistoryRepository()
+        #expect(try await repository.recent(limit: 10).count == 2)
+
+        try await repository.removeVisits(
+            before: Date(timeIntervalSince1970: 150)
+        )
+        let remaining = try await repository.recent(limit: 10)
+        #expect(remaining.map(\.title) == ["Recent"])
+    }
+
+    @Test("Private repositories do not retain data")
+    func privateRepositoriesAreEphemeral() async throws {
+        let session = InMemorySessionRepository()
+        let snapshot = BrowserSessionSnapshot(
+            selectedTabID: nil,
+            sidebarMode: .autoHide,
+            tabs: []
+        )
+        try await session.save(snapshot)
+        #expect(try await session.load() == nil)
+
+        let history = InMemoryBrowsingHistoryRepository()
+        _ = try await history.recordVisit(
+            url: URL(string: "https://private.example")!,
+            title: "Private",
+            visitedAt: Date()
+        )
+        try await history.removeAll()
+        #expect(try await history.recent(limit: 10).isEmpty)
+    }
+}

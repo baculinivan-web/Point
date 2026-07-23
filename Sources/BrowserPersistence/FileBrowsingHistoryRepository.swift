@@ -100,6 +100,11 @@ public actor FileBrowsingHistoryRepository: BrowsingHistoryRepository {
         try persist([])
     }
 
+    public func removeVisits(before date: Date) async throws {
+        let entries = try loadIfNeeded().filter { $0.visitedAt >= date }
+        try persist(entries)
+    }
+
     private func loadIfNeeded() throws -> [BrowsingHistoryEntry] {
         if let cachedEntries {
             return cachedEntries

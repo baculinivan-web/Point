@@ -75,12 +75,14 @@ public final class WebEngineSession: NSObject {
     public init(
         tabID: TabID,
         configuration suppliedConfiguration: WKWebViewConfiguration? = nil,
+        websiteDataStore: WKWebsiteDataStore? = nil,
         downloadManager: DownloadManager? = nil
     ) {
         self.tabID = tabID
         self.downloadManager = downloadManager
 
-        let configuration = suppliedConfiguration ?? Self.makeConfiguration()
+        let configuration = suppliedConfiguration
+            ?? Self.makeConfiguration(websiteDataStore: websiteDataStore)
         webView = WKWebView(frame: .zero, configuration: configuration)
 
         super.init()
@@ -212,9 +214,11 @@ public final class WebEngineSession: NSObject {
         }
     }
 
-    private static func makeConfiguration() -> WKWebViewConfiguration {
+    private static func makeConfiguration(
+        websiteDataStore: WKWebsiteDataStore?
+    ) -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = websiteDataStore ?? .default()
         configuration.upgradeKnownHostsToHTTPS = true
         configuration.suppressesIncrementalRendering = false
         configuration.allowsAirPlayForMediaPlayback = true

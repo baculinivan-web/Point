@@ -162,6 +162,7 @@ private struct PendingMediaPermissionRequest {
 @MainActor
 @Observable
 public final class BrowserWindowModel: WebEngineEventSink {
+    public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
     public private(set) var folders: [TabFolder] = []
     public var selectedTabID: TabID?
@@ -196,10 +197,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public let downloadManager: DownloadManager
     public let passkeyAccessManager: PasskeyAccessManager
     public let faviconRepository: FaviconRepository
+    public var openWindowRequest: (@MainActor (_ isPrivate: Bool) -> Void)?
 
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
     private let browsingHistoryRepository: any BrowsingHistoryRepository
+    @ObservationIgnored private let websiteDataStore: WKWebsiteDataStore
     private var parser: OmniboxParser
     private let lifecyclePolicy = TabLifecyclePolicy()
     private let physicalMemoryBytes = ProcessInfo.processInfo.physicalMemory
@@ -239,7 +242,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
         parser: OmniboxParser? = nil,
         downloadManager: DownloadManager? = nil,
         passkeyAccessManager: PasskeyAccessManager? = nil,
-        faviconRepository: FaviconRepository? = nil
+        faviconRepository: FaviconRepository? = nil,
+        isPrivate: Bool = false,
+        websiteDataStore: WKWebsiteDataStore? = nil
     ) {
         let storedSearchEngine = UserDefaults.standard
             .string(forKey: "DefaultSearchEngine")
@@ -248,11 +253,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.repository = repository
         self.sitePermissionRepository = sitePermissionRepository
         self.browsingHistoryRepository = browsingHistoryRepository
+        self.isPrivate = isPrivate
+        self.websiteDataStore = websiteDataStore
+            ?? (isPrivate ? .nonPersistent() : .default())
         self.searchEngine = storedSearchEngine
         self.parser = parser ?? OmniboxParser(searchEngine: storedSearchEngine)
         self.downloadManager = downloadManager ?? DownloadManager()
         self.passkeyAccessManager = passkeyAccessManager ?? .shared
-        self.faviconRepository = faviconRepository ?? FaviconRepository()
+        self.faviconRepository = faviconRepository
+            ?? FaviconRepository(persistsToDisk: !isPrivate)
     }
 
     public var activeTab: BrowserTab? {
@@ -522,7 +531,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     websiteDataTypes.insert(WKWebsiteDataTypeServiceWorkerRegistrations)
                 }
                 if !websiteDataTypes.isEmpty {
-                    await WKWebsiteDataStore.default().removeData(
+                    await websiteDataStore.removeData(
                         ofTypes: websiteDataTypes,
                         modifiedSince: .distantPast
                     )
@@ -661,6 +670,54 @@ public final class BrowserWindowModel: WebEngineEventSink {
             selectTab(tabs[nextIndex].id)
         }
         normalizeSiblingPositions(in: removedFolderID)
+        reconcileLifecycle()
+        persist()
+    }
+
+    public func transferSelectedTabsToNewWindow() {
+        guard !isPrivate, let openWindowRequest else { return }
+        let ids = selectedTabIDs.isEmpty
+            ? Set(selectedTabID.map { [$0] } ?? [])
+            : selectedTabIDs
+        let movingTabs = orderedTabs(in: ids)
+        guard !movingTabs.isEmpty else { return }
+
+        let movingIDs = Set(movingTabs.map(\.id))
+        tabs.removeAll { movingIDs.contains($0.id) }
+        selectedTabIDs.subtract(movingIDs)
+        if selectionAnchorID.map(movingIDs.contains) == true {
+            selectionAnchorID = nil
+        }
+        for tab in movingTabs {
+            tab.folderID = nil
+            tab.isPinned = false
+        }
+
+        if tabs.isEmpty {
+            selectedTabID = nil
+            selectedTabIDs = []
+            dismissOmnibox()
+            newTab()
+        } else if selectedTabID.map(movingIDs.contains) == true {
+            selectTab(tabs[0].id)
+        }
+        normalizeAllSiblingPositions()
+        BrowserWindowTransferCenter.shared.stage(movingTabs)
+        persist()
+        openWindowRequest(false)
+    }
+
+    public func adoptTransferredTabs(_ transferredTabs: [BrowserTab]) {
+        guard !isPrivate, !transferredTabs.isEmpty else { return }
+        dismissOmnibox()
+        for (index, tab) in transferredTabs.enumerated() {
+            tab.folderID = nil
+            tab.isPinned = false
+            tab.position = nextPosition(in: nil) + Int64(index) * 1024
+            tab.engine?.eventSink = self
+            tabs.append(tab)
+        }
+        selectTab(transferredTabs[0].id)
         reconcileLifecycle()
         persist()
     }
@@ -1321,6 +1378,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let engine = WebEngineSession(
             tabID: id,
             configuration: configuration,
+            websiteDataStore: websiteDataStore,
             downloadManager: downloadManager
         )
         engine.eventSink = self
@@ -1443,6 +1501,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tab.lifecycleState = .restoring
         let engine = WebEngineSession(
             tabID: tab.id,
+            websiteDataStore: websiteDataStore,
             downloadManager: downloadManager
         )
         engine.eventSink = self
@@ -1639,7 +1698,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
         url: URL,
         title: String
     ) {
-        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+        guard !isPrivate,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else {
             return
         }
         let repository = browsingHistoryRepository
@@ -2206,6 +2267,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     private func persist() {
+        guard !isPrivate else { return }
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: selectedTabID,
             sidebarMode: sidebarMode,
