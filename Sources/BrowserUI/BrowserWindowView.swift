@@ -10,7 +10,6 @@ public struct BrowserWindowView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
-    @State private var isPointerOverSidebar = false
 
     public init(model: BrowserWindowModel) {
         self.model = model
@@ -18,10 +17,7 @@ public struct BrowserWindowView: View {
 
     public var body: some View {
         ZStack(alignment: .leading) {
-            WebSurface(
-                model: model,
-                blocksPagePointerInteraction: isPointerOverSidebar
-            )
+            WebSurface(model: model)
                 .padding(.leading, model.sidebarMode == .pinned ? 300 : 0)
                 .ignoresSafeArea()
 
@@ -41,10 +37,8 @@ public struct BrowserWindowView: View {
                 .onContinuousHover { phase in
                     switch phase {
                     case .active:
-                        isPointerOverSidebar = true
                         hideTask?.cancel()
                     case .ended:
-                        isPointerOverSidebar = false
                         scheduleHide()
                     }
                 }
@@ -325,7 +319,6 @@ private struct DownloadProgressBubble: View {
 
 private struct WebSurface: View {
     let model: BrowserWindowModel
-    let blocksPagePointerInteraction: Bool
 
     var body: some View {
         Group {
@@ -334,7 +327,6 @@ private struct WebSurface: View {
                 WKWebViewHost(
                     webView: engine.webView,
                     blockedLeadingWidth: blockedWebInteractionWidth,
-                    blocksPagePointerInteraction: blocksPagePointerInteraction,
                     onSwipeBack: { [weak model] in
                         model?.handleNavigationSwipe(.back) ?? false
                     },

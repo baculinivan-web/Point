@@ -36,7 +36,7 @@ public final class WebContainerView: NSView {
             webView.topAnchor.constraint(equalTo: topAnchor),
             webView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
-        installInteractionShield(in: webView)
+        installInteractionShield(above: webView)
     }
 
     @MainActor
@@ -44,36 +44,6 @@ public final class WebContainerView: NSView {
         let width = max(0, width)
         interactionShieldWidthConstraint?.constant = width
         interactionShield.isHidden = width == 0
-    }
-
-    @MainActor
-    public func setPagePointerInteractionBlocked(_ blocked: Bool) {
-        guard let webView = attachedWebView else { return }
-
-        let script: String
-        if blocked {
-            script = """
-                (() => {
-                    const id = '__point_page_pointer_lock';
-                    if (document.getElementById(id)) return;
-                    const style = document.createElement('style');
-                    style.id = id;
-                    style.textContent = `
-                        :root, :root *, :root *::before, :root *::after {
-                            pointer-events: none !important;
-                            user-select: none !important;
-                        }
-                    `;
-                    (document.head || document.documentElement).appendChild(style);
-                })();
-                """
-        } else {
-            script = """
-                document.getElementById('__point_page_pointer_lock')?.remove();
-                """
-        }
-
-        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
     @MainActor
@@ -102,18 +72,18 @@ public final class WebContainerView: NSView {
     }
 
     @MainActor
-    private func installInteractionShield(in webView: WKWebView) {
+    private func installInteractionShield(above webView: WKWebView) {
         interactionShield.removeFromSuperview()
         interactionShieldWidthConstraint?.isActive = false
-        webView.addSubview(interactionShield, positioned: .above, relativeTo: nil)
+        addSubview(interactionShield, positioned: .above, relativeTo: webView)
 
         let widthConstraint = interactionShield.widthAnchor.constraint(equalToConstant: 0)
         interactionShieldWidthConstraint = widthConstraint
 
         NSLayoutConstraint.activate([
-            interactionShield.leadingAnchor.constraint(equalTo: webView.leadingAnchor),
-            interactionShield.topAnchor.constraint(equalTo: webView.topAnchor),
-            interactionShield.bottomAnchor.constraint(equalTo: webView.bottomAnchor),
+            interactionShield.leadingAnchor.constraint(equalTo: leadingAnchor),
+            interactionShield.topAnchor.constraint(equalTo: topAnchor),
+            interactionShield.bottomAnchor.constraint(equalTo: bottomAnchor),
             widthConstraint
         ])
     }
@@ -165,29 +135,22 @@ private final class WebInteractionShieldView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         bounds.contains(convert(point, from: superview)) ? self : nil
     }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
-    }
 }
 
 public struct WKWebViewHost: NSViewRepresentable {
     public let webView: WKWebView
     public let blockedLeadingWidth: CGFloat
-    public let blocksPagePointerInteraction: Bool
     private let onSwipeBack: @MainActor () -> Bool
     private let onSwipeForward: @MainActor () -> Bool
 
     public init(
         webView: WKWebView,
         blockedLeadingWidth: CGFloat = 0,
-        blocksPagePointerInteraction: Bool = false,
         onSwipeBack: @escaping @MainActor () -> Bool,
         onSwipeForward: @escaping @MainActor () -> Bool
     ) {
         self.webView = webView
         self.blockedLeadingWidth = blockedLeadingWidth
-        self.blocksPagePointerInteraction = blocksPagePointerInteraction
         self.onSwipeBack = onSwipeBack
         self.onSwipeForward = onSwipeForward
     }
@@ -200,7 +163,6 @@ public struct WKWebViewHost: NSViewRepresentable {
             onSwipeForward: onSwipeForward
         )
         host.setBlockedLeadingWidth(blockedLeadingWidth)
-        host.setPagePointerInteractionBlocked(blocksPagePointerInteraction)
         return host
     }
 
@@ -211,6 +173,5 @@ public struct WKWebViewHost: NSViewRepresentable {
             onSwipeForward: onSwipeForward
         )
         host.setBlockedLeadingWidth(blockedLeadingWidth)
-        host.setPagePointerInteractionBlocked(blocksPagePointerInteraction)
     }
 }

@@ -39,9 +39,14 @@
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>16</string>
+	<string>20</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
     <key>NSCameraUsageDescription</key>
     <string>Browser использует камеру только по запросу открытого сайта.</string>
     <key>NSMicrophoneUsageDescription</key>
