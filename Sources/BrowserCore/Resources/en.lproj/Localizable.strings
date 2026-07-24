@@ -80,6 +80,10 @@
 	<string>Close Search</string>
 	<key>close_tab</key>
 	<string>Close Tab</string>
+	<key>close_preview</key>
+	<string>Close Preview</string>
+	<key>dismiss_preview_tip</key>
+	<string>Dismiss preview tip</string>
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>
@@ -141,6 +145,12 @@
 	<key>external_url_details</key>
 	<string>Scheme: %@
 %@</string>
+	<key>expand_preview</key>
+	<string>Open Preview in New Tab</string>
+	<key>preview_tip_message</key>
+	<string>Hold ⇧ while clicking a link to open it in a preview.</string>
+	<key>preview_tip_title</key>
+	<string>Preview links</string>
 	<key>favicons</key>
 	<string>Favicons</string>
 	<key>favicons_cache_info</key>

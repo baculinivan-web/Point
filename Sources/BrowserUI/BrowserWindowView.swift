@@ -26,7 +26,7 @@ public struct BrowserWindowView: View {
                 )
                 .ignoresSafeArea()
 
-            if model.sidebarMode == .autoHide {
+            if model.sidebarMode == .autoHide, model.previewTab == nil {
                 edgeSensor
             }
 
@@ -37,8 +37,8 @@ public struct BrowserWindowView: View {
                 .ignoresSafeArea()
                 .offset(x: sidebarOffset)
                 .opacity(model.isSidebarVisible ? 1 : 0)
-                .allowsHitTesting(model.isSidebarVisible)
-                .accessibilityHidden(!model.isSidebarVisible)
+                .allowsHitTesting(model.isSidebarVisible && model.previewTab == nil)
+                .accessibilityHidden(!model.isSidebarVisible || model.previewTab != nil)
                 .onContinuousHover { phase in
                     switch phase {
                     case .active:
@@ -47,6 +47,12 @@ public struct BrowserWindowView: View {
                         scheduleHide()
                     }
                 }
+
+            if model.previewTab != nil {
+                WebPreviewOverlay(model: model)
+                    .ignoresSafeArea()
+                    .zIndex(30)
+            }
 
             if let tab = model.activeTab, tab.isLoading {
                 LoadingBar(progress: tab.progress)
@@ -82,7 +88,7 @@ public struct BrowserWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(.top, 72)
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                .zIndex(6)
+                .zIndex(40)
             }
 
             if model.isOmniboxPresented {
@@ -412,6 +418,116 @@ private struct WebSurface: View {
 
     private var blockedWebInteractionWidth: CGFloat {
         model.sidebarMode == .autoHide && model.isSidebarVisible ? 300 : 0
+    }
+}
+
+private struct WebPreviewOverlay: View {
+    let model: BrowserWindowModel
+
+    var body: some View {
+        GeometryReader { geometry in
+            let sidebarWidth = model.sidebarMode == .pinned ? 300.0 : 0.0
+            let availableWidth = max(0, geometry.size.width - sidebarWidth)
+            let plateWidth = max(0, availableWidth - 48)
+            let plateHeight = max(0, geometry.size.height - 48)
+            let previewWidth = max(0, plateWidth - 16)
+            let previewHeight = max(0, plateHeight - 16)
+
+            ZStack {
+                Color.black.opacity(0.22)
+
+                if let preview = model.previewTab,
+                   let engine = preview.engine {
+                    ZStack(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .fill(.clear)
+                            .browserGlassSurface(cornerRadius: 26)
+
+                        WKWebViewHost(
+                            webView: engine.webView,
+                            onSwipeBack: { false },
+                            onSwipeForward: { false }
+                        )
+                        .frame(width: previewWidth, height: previewHeight)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                        )
+                        .padding(8)
+
+                        PreviewControls(
+                            onClose: model.dismissPreview,
+                            onExpand: model.expandPreviewToTab
+                        )
+                        .padding(14)
+                    }
+                    .frame(
+                        width: plateWidth,
+                        height: plateHeight
+                    )
+                    .shadow(color: .black.opacity(0.28), radius: 28, y: 12)
+                    .accessibilityElement(children: .contain)
+                }
+            }
+            .frame(width: availableWidth, height: geometry.size.height)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+}
+
+private struct PreviewControls: View {
+    let onClose: () -> Void
+    let onExpand: () -> Void
+
+    var body: some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 8) {
+                PreviewGlassButton(
+                    symbol: "xmark",
+                    help: BrowserLocalization.string("close_preview"),
+                    action: onClose
+                )
+                PreviewGlassButton(
+                    symbol: "arrow.up.left.and.arrow.down.right",
+                    help: BrowserLocalization.string("expand_preview"),
+                    action: onExpand
+                )
+            }
+        }
+    }
+}
+
+private struct PreviewGlassButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 36, height: 36)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+        .previewGlassBubble(reduceTransparency: reduceTransparency)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func previewGlassBubble(reduceTransparency: Bool) -> some View {
+        if reduceTransparency {
+            background(Color(nsColor: .windowBackgroundColor), in: Circle())
+                .overlay(Circle().stroke(.separator, lineWidth: 1))
+        } else if #available(macOS 26, *) {
+            glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            background(.ultraThinMaterial, in: Circle())
+        }
     }
 }
 

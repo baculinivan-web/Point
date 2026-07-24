@@ -171,6 +171,14 @@ struct SidebarView: View {
                 .padding(.bottom, 11)
                 .padding(.top, 6)
             }
+
+            if !model.isPreviewTipDismissed {
+                PreviewTipCard(onDismiss: model.dismissPreviewTip)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+            }
         }
     }
 
@@ -297,6 +305,47 @@ struct SidebarView: View {
         }
     }
 
+}
+
+private struct PreviewTipCard: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "shift")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 24, height: 24)
+                .background(.tertiary, in: RoundedRectangle(cornerRadius: 7))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(BrowserLocalization.string("preview_tip_title"))
+                    .font(.caption.weight(.semibold))
+                Text(BrowserLocalization.string("preview_tip_message"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help(BrowserLocalization.string("dismiss_preview_tip"))
+            .accessibilityLabel(BrowserLocalization.string("dismiss_preview_tip"))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+    }
 }
 
 private struct MemoryUsageBadge: View {

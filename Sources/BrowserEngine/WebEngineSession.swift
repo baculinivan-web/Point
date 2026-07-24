@@ -24,6 +24,10 @@ public protocol WebEngineEventSink: AnyObject {
         createNewTabWith configuration: WKWebViewConfiguration,
         request: URLRequest?
     ) -> WKWebView?
+    func webEngine(
+        _ session: WebEngineSession,
+        requestsPreviewFor request: URLRequest
+    )
     func webEngineRequestedClose(_ session: WebEngineSession)
 }
 
@@ -393,7 +397,16 @@ extension WebEngineSession: WKNavigationDelegate {
                 navigationAction.navigationType == .backForward
         }
 
-        switch navigationSchemePolicy.disposition(for: url) {
+        let disposition = navigationSchemePolicy.disposition(for: url)
+        if disposition == .allowInWebView,
+           navigationAction.navigationType == .linkActivated,
+           navigationAction.modifierFlags.contains(.shift) {
+            decisionHandler(.cancel)
+            eventSink?.webEngine(self, requestsPreviewFor: navigationAction.request)
+            return
+        }
+
+        switch disposition {
         case .allowInWebView where ["http", "https", "blob"].contains(scheme):
             decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
         case .allowInWebView:

@@ -80,6 +80,10 @@
 	<string>Закрыть поиск</string>
 	<key>close_tab</key>
 	<string>Закрыть вкладку</string>
+	<key>close_preview</key>
+	<string>Закрыть предпросмотр</string>
+	<key>dismiss_preview_tip</key>
+	<string>Скрыть подсказку о предпросмотре</string>
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>
@@ -141,6 +145,12 @@
 	<key>external_url_details</key>
 	<string>Схема: %@
 %@</string>
+	<key>expand_preview</key>
+	<string>Открыть предпросмотр в новой вкладке</string>
+	<key>preview_tip_message</key>
+	<string>Удерживайте ⇧ и нажмите на ссылку, чтобы открыть её в предпросмотре.</string>
+	<key>preview_tip_title</key>
+	<string>Предпросмотр ссылок</string>
 	<key>favicons</key>
 	<string>Favicons</string>
 	<key>favicons_cache_info</key>

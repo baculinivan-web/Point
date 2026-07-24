@@ -180,8 +180,13 @@ public final class BrowserMemoryStatus {
 @MainActor
 @Observable
 public final class BrowserWindowModel: WebEngineEventSink {
+    private static let previewTipDismissedKey = "HasDismissedPreviewTip"
+
     public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
+    /// A live, non-persisted tab presented above the current page.
+    /// Promoting it moves the same WebKit view into `tabs` without navigation.
+    public private(set) var previewTab: BrowserTab?
     public private(set) var folders: [TabFolder] = []
     public var selectedTabID: TabID?
     public private(set) var selectedTabIDs: Set<TabID> = []
@@ -196,6 +201,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var omniboxError: String?
     public var isFindPresented = false
     public var findText = ""
+    public private(set) var isPreviewTipDismissed: Bool
     public var isDownloadsPresented = false
     public private(set) var mediaPermissionPrompt: MediaPermissionPrompt?
     public var isSitePermissionsPresented = false
@@ -282,6 +288,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
             ?? (isPrivate ? .nonPersistent() : .default())
         self.showsMemoryUsage = UserDefaults.standard.bool(
             forKey: "ShowsBrowserMemoryUsage"
+        )
+        self.isPreviewTipDismissed = UserDefaults.standard.bool(
+            forKey: Self.previewTipDismissedKey
         )
         self.searchEngine = storedSearchEngine
         self.parser = parser ?? OmniboxParser(searchEngine: storedSearchEngine)
@@ -697,6 +706,28 @@ public final class BrowserWindowModel: WebEngineEventSink {
             isNewTabComposerPresented = true
             isOmniboxPresented = true
         }
+    }
+
+    public func dismissPreview() {
+        guard let previewTab else { return }
+        cancelMediaPermissionRequests(for: previewTab.id)
+        dispose(tab: previewTab)
+        self.previewTab = nil
+    }
+
+    public func expandPreviewToTab() {
+        guard let previewTab else { return }
+
+        dismissOmnibox()
+        self.previewTab = nil
+        previewTab.folderID = nil
+        previewTab.isPinned = false
+        previewTab.position = nextPosition(in: nil)
+        previewTab.lifecycleState = .active
+        tabs.append(previewTab)
+        selectTab(previewTab.id)
+        reconcileLifecycle()
+        persist()
     }
 
     public func closeTab(_ id: TabID) {
@@ -1162,6 +1193,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func toggleDownloads() {
+        guard previewTab == nil else { return }
         isDownloadsPresented.toggle()
         if isDownloadsPresented, sidebarMode == .autoHide {
             isSidebarVisible = true
@@ -1169,6 +1201,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func toggleSidebarMode() {
+        guard previewTab == nil else { return }
         sidebarMode = sidebarMode == .pinned ? .autoHide : .pinned
         isSidebarVisible = sidebarMode == .pinned
         persist()
@@ -1182,8 +1215,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
         )
     }
 
+    public func dismissPreviewTip() {
+        guard !isPreviewTipDismissed else { return }
+        isPreviewTipDismissed = true
+        UserDefaults.standard.set(true, forKey: Self.previewTipDismissedKey)
+    }
+
     public func showAutoHideSidebar() {
-        guard sidebarMode == .autoHide else { return }
+        guard previewTab == nil, sidebarMode == .autoHide else { return }
         isSidebarVisible = true
     }
 
@@ -1196,7 +1235,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidChange(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID) else { return }
+        guard let tab = tab(for: session) else { return }
         tab.title = session.title
         tab.progress = session.estimatedProgress
         tab.isLoading = session.isLoading
@@ -1217,7 +1256,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidCommit(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID), let committedURL = session.url else { return }
+        guard let tab = tab(for: session), let committedURL = session.url else { return }
         tab.isShowingRestorationPlaceholder = false
         let previousCacheKey = tab.url.flatMap(FaviconCacheKey.make(for:))
         tab.url = committedURL
@@ -1278,7 +1317,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidFinish(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID) else { return }
+        guard let tab = tab(for: session) else { return }
         tab.isShowingRestorationPlaceholder = false
         guard
               let finishedURL = session.url,
@@ -1302,14 +1341,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidFailNavigation(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID) else { return }
+        guard let tab = tab(for: session) else { return }
         tab.isShowingRestorationPlaceholder = false
         tab.pendingNavigationHistoryIndex = nil
         updateNavigationAvailability(for: tab, session: session)
     }
 
     public func webEngineDidCrash(_ session: WebEngineSession) {
-        guard let tab = tab(session.tabID) else { return }
+        if previewTab?.engine === session {
+            dismissPreview()
+            return
+        }
+        guard let tab = tab(for: session) else { return }
         tab.pendingNavigationHistoryIndex = nil
         cancelMediaPermissionRequests(for: tab.id)
         tab.lifecycleState = .crashed
@@ -1326,7 +1369,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineIsActive(_ session: WebEngineSession) -> Bool {
-        session.tabID == selectedTabID
+        session.tabID == selectedTabID || previewTab?.engine === session
     }
 
     public func webEngine(
@@ -1348,7 +1391,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             guard let self,
                   let session,
                   acceptsMediaPermissionRequests,
-                  tab(tabID)?.engine === session,
+                  tab(for: session)?.engine === session,
                   SiteOrigin(url: session.url) == topLevelOrigin
             else {
                 decisionHandler(false)
@@ -1411,7 +1454,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         _ session: WebEngineSession,
         didDiscoverFaviconAt iconURL: URL
     ) {
-        guard let tab = tab(session.tabID), let pageURL = session.url ?? tab.url else {
+        guard let tab = tab(for: session), let pageURL = session.url ?? tab.url else {
             return
         }
         let expectedKey = FaviconCacheKey.make(for: pageURL)
@@ -1466,14 +1509,52 @@ public final class BrowserWindowModel: WebEngineEventSink {
         return engine.webView
     }
 
+    public func webEngine(
+        _ session: WebEngineSession,
+        requestsPreviewFor request: URLRequest
+    ) {
+        guard tab(for: session)?.engine === session,
+              let url = request.url
+        else { return }
+
+        dismissPreview()
+        let preview = BrowserTab(
+            snapshot: PersistedTab(
+                id: TabID(),
+                title: BrowserLocalization.string("new_tab"),
+                url: url,
+                isPinned: false,
+                position: 0
+            )
+        )
+        let engine = WebEngineSession(
+            tabID: preview.id,
+            websiteDataStore: websiteDataStore,
+            downloadManager: downloadManager
+        )
+        engine.eventSink = self
+        preview.engine = engine
+        preview.lifecycleState = .active
+        preview.hasLoadedInitialURL = true
+        if sidebarMode == .autoHide {
+            isSidebarVisible = false
+        }
+        previewTab = preview
+        engine.load(request)
+    }
+
     public func webEngineRequestedClose(_ session: WebEngineSession) {
-        closeTab(session.tabID)
+        if previewTab?.engine === session {
+            dismissPreview()
+        } else {
+            closeTab(session.tabID)
+        }
     }
 
     private func presentNextMediaPermissionIfPossible() {
-        guard mediaPermissionPrompt == nil, let selectedTabID else { return }
+        guard mediaPermissionPrompt == nil else { return }
         mediaPermissionPrompt = pendingMediaPermissionRequests.first {
-            $0.prompt.tabID == selectedTabID
+            $0.prompt.tabID == previewTab?.id || $0.prompt.tabID == selectedTabID
         }?.prompt
     }
 
@@ -1551,6 +1632,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func tab(_ id: TabID) -> BrowserTab? {
         tabs.first { $0.id == id }
+    }
+
+    private func tab(for session: WebEngineSession) -> BrowserTab? {
+        if previewTab?.engine === session {
+            return previewTab
+        }
+        return tab(session.tabID)
     }
 
     private func updateNavigationAvailability(
