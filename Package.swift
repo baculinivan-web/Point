@@ -14,6 +14,10 @@ let package = Package(
     targets: [
         .target(
             name: "BrowserCore",
+            exclude: [
+                "Resources/en.lproj",
+                "Resources/ru.lproj"
+            ],
             resources: [.process("Resources")]
         ),
         .target(

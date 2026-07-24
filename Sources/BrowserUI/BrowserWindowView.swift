@@ -32,8 +32,6 @@ public struct BrowserWindowView: View {
 
             SidebarView(model: model, isFullScreen: isFullScreen)
                 .frame(width: model.sidebarMode == .pinned ? 300 : 280)
-                .padding(.leading, model.sidebarMode == .pinned ? 0 : 10)
-                .padding(.vertical, model.sidebarMode == .pinned ? 0 : 10)
                 .ignoresSafeArea()
                 .offset(x: sidebarOffset)
                 .opacity(model.isSidebarVisible ? 1 : 0)
@@ -535,6 +533,7 @@ private struct WindowAccessor: NSViewRepresentable {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
+            window.tabbingMode = .disallowed
             window.minSize = NSSize(width: 760, height: 520)
             window.title = isPrivate
                 ? BrowserLocalization.string("private_window_title")
@@ -565,8 +564,7 @@ private struct WindowAccessor: NSViewRepresentable {
                     )
                 }
 
-                // In full screen AppKit owns the traffic-light reveal on top-edge hover.
-                button.isHidden = isFullScreen ? false : !showsTrafficLights
+                button.isHidden = true
             }
         }
     }

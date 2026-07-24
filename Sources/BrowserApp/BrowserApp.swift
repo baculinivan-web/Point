@@ -19,6 +19,8 @@ struct BrowserApp: App {
     private let runtime: BrowserRuntime
 
     init() {
+        NSWindow.allowsAutomaticWindowTabbing = false
+
         let runtime = BrowserRuntime()
         self.runtime = runtime
         applicationDelegate.runtime = runtime

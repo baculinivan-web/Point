@@ -27,11 +27,9 @@ struct SidebarView: View {
                     .contentShape(Rectangle())
             } else {
                 sidebarBase
-                    .browserGlassSurface(cornerRadius: 20)
-                    .shadow(color: .black.opacity(0.16), radius: 24, x: 6, y: 8)
-                    .contentShape(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    )
+                    .browserGlassSurface(cornerRadius: 0)
+                    .shadow(color: .black.opacity(0.10), radius: 24, x: 6, y: 8)
+                    .contentShape(Rectangle())
             }
         }
         .simultaneousGesture(sidebarReorderGesture)
@@ -64,7 +62,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             navigationHeader
                 .padding(.horizontal, 12)
-                .padding(.top, isFullScreen ? 24 : 38)
+                .padding(.top, isFullScreen ? 24 : 12)
                 .padding(.bottom, 10)
 
             if model.isPrivate {

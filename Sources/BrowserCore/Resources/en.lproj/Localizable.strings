@@ -80,6 +80,8 @@
 	<string>Close Search</string>
 	<key>close_tab</key>
 	<string>Close Tab</string>
+	<key>close_window</key>
+	<string>Close Window</string>
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>

@@ -1,3 +1,4 @@
+import AppKit
 import BrowserCore
 import SwiftUI
 
@@ -35,6 +36,13 @@ public struct BrowserCommands: Commands {
                 model?.presentClearBrowsingData()
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
+        }
+
+        CommandGroup(replacing: .saveItem) {
+            Button(BrowserLocalization.string("close_window")) {
+                NSApp.keyWindow?.performClose(nil)
+            }
+            .keyboardShortcut("w", modifiers: [.command, .shift])
         }
 
         CommandGroup(replacing: .newItem) {

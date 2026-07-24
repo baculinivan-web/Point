@@ -80,6 +80,8 @@
 	<string>Закрыть поиск</string>
 	<key>close_tab</key>
 	<string>Закрыть вкладку</string>
+	<key>close_window</key>
+	<string>Закрыть окно</string>
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>
