@@ -397,25 +397,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func makeDefaultBrowser() {
-        let applicationURL = Bundle.main.bundleURL
-        NSWorkspace.shared.setDefaultApplication(
-            at: applicationURL,
-            toOpenURLsWithScheme: "http"
-        ) { [weak self] httpError in
-            guard httpError == nil else {
-                Task { @MainActor [weak self] in
-                    self?.showDefaultBrowserResult(error: httpError)
-                }
-                return
-            }
-            NSWorkspace.shared.setDefaultApplication(
-                at: applicationURL,
-                toOpenURLsWithScheme: "https"
-            ) { [weak self] httpsError in
-                Task { @MainActor [weak self] in
-                    self?.showDefaultBrowserResult(error: httpsError)
-                }
-            }
+        DefaultBrowserService.makeDefaultBrowser { [weak self] error in
+            self?.showDefaultBrowserResult(error: error)
         }
     }
 
@@ -1959,14 +1942,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .warning
         } else {
-            let applicationURL = Bundle.main.bundleURL.standardizedFileURL
-            let httpHandler = NSWorkspace.shared.urlForApplication(
-                toOpen: URL(string: "http://example.com")!
-            )?.standardizedFileURL
-            let httpsHandler = NSWorkspace.shared.urlForApplication(
-                toOpen: URL(string: "https://example.com")!
-            )?.standardizedFileURL
-            if httpHandler == applicationURL, httpsHandler == applicationURL {
+            if DefaultBrowserService.isDefaultBrowser() {
                 alert.messageText = BrowserLocalization.string(
                     "default_browser_changed"
                 )

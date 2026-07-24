@@ -101,9 +101,9 @@
 	<key>default_browser_change_failed</key>
 	<string>Не удалось изменить браузер по умолчанию</string>
 	<key>default_browser_changed</key>
-	<string>Browser назначен браузером по умолчанию</string>
+	<string>Point назначен браузером по умолчанию</string>
 	<key>default_browser_links</key>
-	<string>Ссылки HTTP и HTTPS будут открываться в Browser.</string>
+	<string>Ссылки HTTP и HTTPS будут открываться в Point.</string>
 	<key>default_browser_not_confirmed</key>
 	<string>macOS не подтвердила изменение</string>
 	<key>default_search_engine</key>

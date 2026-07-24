@@ -26,14 +26,25 @@
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
             <key>CFBundleURLName</key>
-            <string>Web URL</string>
+            <string>HTTP URL</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>http</string>
+            </array>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>HTTPS URL</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
                 <string>https</string>
             </array>
             <key>LSHandlerRank</key>
-            <string>Alternate</string>
+            <string>Default</string>
         </dict>
     </array>
     <key>CFBundleShortVersionString</key>
