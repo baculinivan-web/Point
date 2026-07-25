@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 — Link Previews
+
+- Added Shift-click link previews backed by a live WebKit session, with promotion to a tab without reloading the page.
+- Refined preview presentation for pinned and auto-hide sidebars with Liquid Glass controls and framing.
+- Added a persistent sidebar hint explaining link previews.
+- Updated the bundle version to `0.1.4` (`26`).
+
 ## 0.1.3 — Fullscreen Media Stability
 
 - Preserved WebKit's fullscreen view hierarchy during SwiftUI host updates.
