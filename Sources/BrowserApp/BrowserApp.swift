@@ -307,6 +307,7 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
         Task { @MainActor [weak self] in
             await runtime.downloadManager.flushHistory()
             await AIChatStore.shared.flush()
+            await AIMemoryStore.shared.flush()
             self?.isTerminationReplyPending = false
             sender.reply(toApplicationShouldTerminate: true)
         }

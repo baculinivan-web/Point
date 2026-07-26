@@ -16,6 +16,7 @@ public final class AIChatSettings {
         static let ollamaModel = "AIChatOllamaModel"
         static let includesPageContext = "AIChatIncludesPageContext"
         static let panelWidth = "AIChatPanelWidth"
+        static let contextLimitOverride = "AIChatContextLimitOverride"
     }
 
     public static let panelWidthRange: ClosedRange<Double> = 300...760
@@ -68,6 +69,16 @@ public final class AIChatSettings {
         }
     }
 
+    /// Context window in tokens. Zero means "derive it from the model".
+    public var contextLimitOverride: Int {
+        didSet {
+            UserDefaults.standard.set(
+                contextLimitOverride,
+                forKey: DefaultsKey.contextLimitOverride
+            )
+        }
+    }
+
     /// Whether the active page is shared with the model by default.
     public var includesPageContext: Bool {
         didSet {
@@ -104,6 +115,7 @@ public final class AIChatSettings {
         includesPageContext = defaults.object(
             forKey: DefaultsKey.includesPageContext
         ) as? Bool ?? true
+        contextLimitOverride = defaults.integer(forKey: DefaultsKey.contextLimitOverride)
         let storedWidth = defaults.object(forKey: DefaultsKey.panelWidth) as? Double ?? 380
         panelWidth = min(
             max(storedWidth, Self.panelWidthRange.lowerBound),
@@ -176,6 +188,18 @@ public final class AIChatSettings {
             // A bare `…vl` tag such as "qwen2.5vl" carries no separator.
             return visionFamilies.contains { name.contains($0) }
                 || name.hasSuffix("vl")
+        }
+    }
+
+    /// Context window the usage meter and compaction work against.
+    public var contextLimit: Int {
+        if contextLimitOverride > 0 { return contextLimitOverride }
+        switch provider {
+        case .anthropic:
+            // Current Claude models carry a 1M window; older ones stay at 200K.
+            return anthropicModel.contains("haiku") ? 200_000 : 1_000_000
+        case .openAICompatible, .ollama:
+            return provider.defaultContextLimit
         }
     }
 

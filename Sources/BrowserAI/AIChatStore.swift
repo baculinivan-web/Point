@@ -68,13 +68,46 @@ public final class AIChatStore {
     private func load() {
         guard !didLoad else { return }
         didLoad = true
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let data = try? Data(contentsOf: fileURL), !data.isEmpty else { return }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        conversations = (try? decoder.decode(
-            [StoredChatConversation].self,
-            from: data
-        )) ?? []
+        if let all = try? decoder.decode([StoredChatConversation].self, from: data) {
+            conversations = all
+            return
+        }
+
+        // A single unreadable conversation must not discard the whole history,
+        // which is what a plain array decode does. Salvage per entry instead,
+        // and keep the original file so a shape change never destroys chats.
+        conversations = Self.salvageConversations(from: data, decoder: decoder)
+        preserveUnreadableFile()
+    }
+
+    /// Decodes entry by entry, keeping every conversation that still parses.
+    static func salvageConversations(
+        from data: Data,
+        decoder: JSONDecoder
+    ) -> [StoredChatConversation] {
+        guard let elements = try? decoder.decode([AIJSONValue].self, from: data) else {
+            return []
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return elements.compactMap { element in
+            guard let elementData = try? encoder.encode(element) else { return nil }
+            return try? decoder.decode(StoredChatConversation.self, from: elementData)
+        }
+    }
+
+    /// Moves an unreadable history aside rather than letting the next save
+    /// overwrite it.
+    private func preserveUnreadableFile() {
+        let backupURL = fileURL
+            .deletingLastPathComponent()
+            .appending(path: "chats-unreadable.json")
+        try? FileManager.default.removeItem(at: backupURL)
+        try? FileManager.default.copyItem(at: fileURL, to: backupURL)
     }
 
     func conversation(id: UUID) -> StoredChatConversation? {

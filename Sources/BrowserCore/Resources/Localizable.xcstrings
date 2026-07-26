@@ -161,6 +161,86 @@
         }
       }
     },
+    "ai_chat_compact": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сжать"
+          }
+        }
+      }
+    },
+    "ai_chat_compact_help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarize earlier turns to free up context. Recent messages are kept."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сжать ранние сообщения в конспект, чтобы освободить контекст. Последние сообщения сохранятся."
+          }
+        }
+      }
+    },
+    "ai_chat_compacted_notice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation compacted, about %d tokens freed"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Диалог сжат, освобождено примерно %d токенов"
+          }
+        }
+      }
+    },
+    "ai_chat_compacting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compacting the conversation…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сжимаю диалог…"
+          }
+        }
+      }
+    },
+    "ai_chat_context_used": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context %d%% full"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Контекст заполнен на %d%%"
+          }
+        }
+      }
+    },
     "ai_chat_detach": {
       "localizations": {
         "en": {
@@ -294,13 +374,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ask about this page or anything else…"
+            "value": "Ask…"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Спросите об этой странице или о чём угодно…"
+            "value": "Спросите…"
           }
         }
       }
@@ -609,6 +689,38 @@
         }
       }
     },
+    "ai_python_missing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python 3 was not found. Install the Xcode Command Line Tools with: xcode-select --install"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python 3 не найден. Установите Command Line Tools: xcode-select --install"
+          }
+        }
+      }
+    },
+    "ai_python_timeout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The script was stopped after %d seconds."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрипт остановлен через %d секунд."
+          }
+        }
+      }
+    },
     "ai_refusal_message": {
       "localizations": {
         "en": {
@@ -657,6 +769,38 @@
         }
       }
     },
+    "ai_settings_context_limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context limit (tokens)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лимит контекста (токенов)"
+          }
+        }
+      }
+    },
+    "ai_settings_context_limit_detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 uses the model's own window. Lower it for local models with a small context."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 — использовать окно модели. Уменьшите для локальных моделей с малым контекстом."
+          }
+        }
+      }
+    },
     "ai_settings_detail": {
       "localizations": {
         "en": {
@@ -669,6 +813,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Чат открывается рядом со страницей (⇧⌘A), видит, что вы читаете, умеет искать в интернете и открывать вкладки."
+          }
+        }
+      }
+    },
+    "ai_settings_memory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Память"
+          }
+        }
+      }
+    },
+    "ai_settings_memory_clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget everything"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Забыть всё"
+          }
+        }
+      }
+    },
+    "ai_settings_memory_count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d remembered notes"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запомнено записей: %d"
+          }
+        }
+      }
+    },
+    "ai_settings_memory_detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat keeps short notes across conversations and can search them."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чат хранит короткие заметки между диалогами и умеет искать по ним."
           }
         }
       }
@@ -993,6 +1201,54 @@
         }
       }
     },
+    "ai_tool_forget": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forgetting"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удаление из памяти"
+          }
+        }
+      }
+    },
+    "ai_tool_group_tabs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grouping tabs"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группировка вкладок"
+          }
+        }
+      }
+    },
+    "ai_tool_list_tabs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading open tabs"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтение открытых вкладок"
+          }
+        }
+      }
+    },
     "ai_tool_open_tab": {
       "localizations": {
         "en": {
@@ -1009,6 +1265,22 @@
         }
       }
     },
+    "ai_tool_python": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running Python"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполнение Python"
+          }
+        }
+      }
+    },
     "ai_tool_read_page": {
       "localizations": {
         "en": {
@@ -1021,6 +1293,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Чтение страницы"
+          }
+        }
+      }
+    },
+    "ai_tool_recall": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recalling memory"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обращение к памяти"
+          }
+        }
+      }
+    },
+    "ai_tool_remember": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remembering"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запоминание"
+          }
+        }
+      }
+    },
+    "ai_tool_screenshot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking a screenshot"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снимок страницы"
           }
         }
       }

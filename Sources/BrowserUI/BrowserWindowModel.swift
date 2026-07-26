@@ -1408,6 +1408,28 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
     }
 
+    /// Creates a folder with a given name without starting an inline rename,
+    /// used when the chat organizes tabs.
+    @discardableResult
+    func createNamedFolder(_ name: String, containing tabIDs: Set<TabID>) -> TabFolderID {
+        let id = TabFolderID()
+        folders.append(
+            TabFolder(
+                snapshot: PersistedTabFolder(
+                    id: id,
+                    name: name,
+                    position: nextPosition(in: nil)
+                )
+            )
+        )
+        if tabIDs.isEmpty {
+            persist()
+        } else {
+            moveTabs(tabIDs, to: id)
+        }
+        return id
+    }
+
     /// Opens a tab on behalf of the assistant, marked with the sparkle badge.
     @discardableResult
     func openAssistantTab(url: URL, inBackground: Bool) -> BrowserTab {

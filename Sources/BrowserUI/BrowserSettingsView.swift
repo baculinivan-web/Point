@@ -6,6 +6,7 @@ public struct BrowserSettingsView: View {
     @AppStorage(BrowserMemoryLimitSettings.defaultsKey)
     private var memoryLimitFraction = BrowserMemoryLimitSettings.defaultFraction
     @Bindable private var aiSettings = AIChatSettings.shared
+    @Bindable private var memories = AIMemoryStore.shared
 
     @State private var isDefaultBrowser = false
     @State private var isDefaultBrowserUpdateInProgress = false
@@ -110,6 +111,44 @@ public struct BrowserSettingsView: View {
                     BrowserLocalization.string("ai_settings_share_page"),
                     isOn: $aiSettings.includesPageContext
                 )
+
+                LabeledContent(
+                    BrowserLocalization.string("ai_settings_context_limit")
+                ) {
+                    TextField(
+                        BrowserLocalization.string("ai_settings_context_limit"),
+                        value: $aiSettings.contextLimitOverride,
+                        format: .number
+                    )
+                    .labelsHidden()
+                    .frame(width: 100)
+                }
+                Text(BrowserLocalization.string("ai_settings_context_limit_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section(BrowserLocalization.string("ai_settings_memory")) {
+                Text(BrowserLocalization.string("ai_settings_memory_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LabeledContent(
+                    BrowserLocalization.string(
+                        "ai_settings_memory_count",
+                        memories.memories.count
+                    )
+                ) {
+                    Button(
+                        BrowserLocalization.string("ai_settings_memory_clear"),
+                        role: .destructive
+                    ) {
+                        memories.forgetAll()
+                    }
+                    .disabled(memories.isEmpty)
+                }
             }
 
             Section(BrowserLocalization.string("memory_management")) {

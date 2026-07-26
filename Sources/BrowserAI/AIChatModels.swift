@@ -116,6 +116,20 @@ public struct AIToolCall: Sendable, Equatable, Identifiable, Codable {
     }
 }
 
+/// What a tool hands back: text for the model, plus any images it produced.
+///
+/// Images ride along as a follow-up user message rather than inside the tool
+/// result, because only some providers accept image blocks in tool results.
+public struct AIToolOutput: Sendable {
+    public var text: String
+    public var attachments: [AIAttachment]
+
+    public init(text: String, attachments: [AIAttachment] = []) {
+        self.text = text
+        self.attachments = attachments
+    }
+}
+
 public struct AIToolResult: Sendable, Equatable, Codable {
     public let callID: String
     public let content: String

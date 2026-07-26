@@ -21,7 +21,7 @@ public struct AIPageContext: Sendable, Equatable, Codable {
 public protocol AIChatToolExecutor: AnyObject {
     var toolSpecs: [AIToolSpec] { get }
     func currentPageContext() async -> AIPageContext?
-    func executeTool(name: String, arguments: AIJSONValue) async throws -> String
+    func executeTool(name: String, arguments: AIJSONValue) async throws -> AIToolOutput
 }
 
 /// A tool invocation as displayed in the transcript.
@@ -46,6 +46,8 @@ public struct AIChatMessage: Identifiable, Sendable, Codable {
     public enum Role: String, Sendable, Codable {
         case user
         case assistant
+        /// A harness note in the transcript, such as a compaction marker.
+        case notice
     }
 
     public var id: UUID
@@ -105,20 +107,63 @@ public final class AIChatSession {
     /// instead of an external application window.
     public var onOpenURL: (@MainActor (URL) -> Void)?
 
-    private var conversation: [AIConversationMessage] = []
+    /// Estimated tokens the next request would carry.
+    public private(set) var usedContextTokens = 0
+    public private(set) var isCompacting = false
+
+    private var conversation: [AIConversationMessage] = [] {
+        didSet { recalculateContextUsage() }
+    }
     private var conversationID = UUID()
     private var streamTask: Task<Void, Never>?
     private let settings: AIChatSettings
     private let store: AIChatStore
+    private let memories: AIMemoryStore
+
+    /// Warn from here, compact automatically past the second threshold.
+    private static let contextWarningFraction = 0.6
+    private static let contextCompactionFraction = 0.85
+    /// Turns kept verbatim after a compaction, so the thread stays coherent.
+    private static let turnsKeptAfterCompaction = 4
 
     private static let maxToolIterations = 12
     private static let pageContextCharacterLimit = 12000
     private static let toolResultCharacterLimit = 20000
     private static let titleCharacterLimit = 64
 
-    public init(settings: AIChatSettings = .shared, store: AIChatStore = .shared) {
+    public init(
+        settings: AIChatSettings = .shared,
+        store: AIChatStore = .shared,
+        memories: AIMemoryStore = .shared
+    ) {
         self.settings = settings
         self.store = store
+        self.memories = memories
+    }
+
+    // MARK: - Context budget
+
+    public var contextLimit: Int { settings.contextLimit }
+
+    public var contextUsageFraction: Double {
+        guard contextLimit > 0 else { return 0 }
+        return min(1, Double(usedContextTokens) / Double(contextLimit))
+    }
+
+    /// Whether the panel should surface the context meter.
+    public var isContextNearlyFull: Bool {
+        contextUsageFraction >= Self.contextWarningFraction
+    }
+
+    public var canCompact: Bool {
+        !isStreaming && !isCompacting && conversation.count > 2
+    }
+
+    private func recalculateContextUsage() {
+        usedContextTokens = AIContextBudget.estimatedTokens(
+            system: Self.systemPrompt(hasTools: true, memories: memoryDigest),
+            messages: conversation
+        )
     }
 
     public var isEmpty: Bool { messages.isEmpty }
@@ -229,14 +274,93 @@ public final class AIChatSession {
         }
     }
 
+    // MARK: - Compaction
+
+    /// Replaces older turns with a model-written summary, freeing context
+    /// while keeping the recent exchanges verbatim.
+    public func compact() {
+        guard canCompact, let provider = settings.makeProvider() else { return }
+        isCompacting = true
+        streamTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await performCompaction(provider: provider)
+            isCompacting = false
+            streamTask = nil
+            persist()
+        }
+    }
+
+    private func performCompaction(provider: any AIProvider) async {
+        let keep = min(Self.turnsKeptAfterCompaction, conversation.count)
+        let head = Array(conversation.dropLast(keep))
+        let tail = Array(conversation.suffix(keep))
+        guard !head.isEmpty else { return }
+
+        let request = AIChatRequest(
+            model: settings.activeModelName,
+            system: """
+            You compress conversation history. Write a dense brief of the \
+            exchange so far that lets the assistant continue seamlessly: open \
+            questions, decisions, facts established, URLs seen, and any task \
+            still in progress. Use terse bullet points. Do not add commentary.
+            """,
+            messages: head + [.user(text: "Summarize the conversation above.")],
+            tools: [],
+            maxTokens: 2000
+        )
+
+        var summary = ""
+        do {
+            for try await event in provider.streamChat(request) {
+                guard !Task.isCancelled else { return }
+                if case let .textDelta(delta) = event { summary += delta }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let before = usedContextTokens
+        conversation = [
+            .user(text: """
+            <conversation_summary>
+            \(trimmed)
+            </conversation_summary>
+            """)
+        ] + tail
+        messages.append(
+            AIChatMessage(
+                role: .notice,
+                text: BrowserLocalization.string(
+                    "ai_chat_compacted_notice",
+                    max(0, before - usedContextTokens)
+                )
+            )
+        )
+    }
+
+    private func compactIfContextIsFull(provider: any AIProvider) async {
+        guard contextUsageFraction >= Self.contextCompactionFraction,
+              conversation.count > 2
+        else { return }
+        isCompacting = true
+        await performCompaction(provider: provider)
+        isCompacting = false
+    }
+
     private func runAgentLoop(provider: any AIProvider) async {
         let tools = toolExecutor?.toolSpecs ?? []
 
         for _ in 0..<Self.maxToolIterations {
             guard !Task.isCancelled else { return }
+            // Tool results can fill the window mid-loop, so check every turn.
+            await compactIfContextIsFull(provider: provider)
             let request = AIChatRequest(
                 model: settings.activeModelName,
-                system: Self.systemPrompt(hasTools: !tools.isEmpty),
+                system: Self.systemPrompt(hasTools: !tools.isEmpty, memories: memoryDigest),
                 messages: conversation,
                 tools: tools,
                 maxTokens: settings.maxTokens
@@ -310,6 +434,7 @@ public final class AIChatSession {
             }
 
             var results: [AIToolResult] = []
+            var producedAttachments: [AIAttachment] = []
             for call in toolCalls {
                 let activity = AIChatToolActivity(
                     id: call.id,
@@ -318,8 +443,9 @@ public final class AIChatSession {
                     state: .running
                 )
                 updateLastAssistantMessage { $0.toolActivities.append(activity) }
-                let result = await executeToolCall(call)
+                let (result, attachments) = await executeToolCall(call)
                 results.append(result)
+                producedAttachments.append(contentsOf: attachments)
                 updateLastAssistantMessage { message in
                     guard let index = message.toolActivities.firstIndex(
                         where: { $0.id == call.id }
@@ -330,17 +456,32 @@ public final class AIChatSession {
                 }
             }
             conversation.append(.toolResults(results))
+            if !producedAttachments.isEmpty {
+                // Only some providers accept images inside a tool result, so
+                // deliver them as a follow-up user turn instead.
+                conversation.append(
+                    .user(
+                        text: "Images produced by the tool call are attached.",
+                        attachments: producedAttachments
+                    )
+                )
+            }
         }
 
         errorMessage = BrowserLocalization.string("ai_error_too_many_tools")
     }
 
-    private func executeToolCall(_ call: AIToolCall) async -> AIToolResult {
+    private func executeToolCall(
+        _ call: AIToolCall
+    ) async -> (AIToolResult, [AIAttachment]) {
         guard let toolExecutor else {
-            return AIToolResult(
-                callID: call.id,
-                content: "Tool execution is unavailable.",
-                isError: true
+            return (
+                AIToolResult(
+                    callID: call.id,
+                    content: "Tool execution is unavailable.",
+                    isError: true
+                ),
+                []
             )
         }
         do {
@@ -348,17 +489,32 @@ public final class AIChatSession {
                 name: call.name,
                 arguments: call.arguments
             )
-            return AIToolResult(
-                callID: call.id,
-                content: String(output.prefix(Self.toolResultCharacterLimit))
+            return (
+                AIToolResult(
+                    callID: call.id,
+                    content: String(output.text.prefix(Self.toolResultCharacterLimit))
+                ),
+                output.attachments
             )
         } catch {
-            return AIToolResult(
-                callID: call.id,
-                content: error.localizedDescription,
-                isError: true
+            return (
+                AIToolResult(
+                    callID: call.id,
+                    content: error.localizedDescription,
+                    isError: true
+                ),
+                []
             )
         }
+    }
+
+    /// Recent memories shown to the model so it knows what it already knows.
+    private var memoryDigest: String {
+        let recent = memories.recent(limit: 20)
+        guard !recent.isEmpty else { return "" }
+        return recent
+            .map { "- [\($0.shortID)] \($0.text)" }
+            .joined(separator: "\n")
     }
 
     private func updateLastAssistantMessage(_ mutate: (inout AIChatMessage) -> Void) {
@@ -399,7 +555,7 @@ public final class AIChatSession {
         """
     }
 
-    private static func systemPrompt(hasTools: Bool) -> String {
+    private static func systemPrompt(hasTools: Bool, memories: String = "") -> String {
         var prompt = """
         You are the built-in chat assistant of Point, a macOS web browser. You \
         help the person understand and act on web content: summarize pages, \
@@ -425,10 +581,29 @@ public final class AIChatSession {
             background=true unless they clearly want to switch to it.
             - read_page: fetch and read the text of a URL without opening a \
             visible tab; prefer it over open_tab when you only need content.
+            - screenshot_page: capture what a page looks like, for layout, \
+            charts, or anything the text alone does not convey.
+            - run_python: run a short Python script for calculation, parsing, \
+            or data work. It has no network access.
+            - list_tabs and group_tabs: see what is open and file tabs into a \
+            named folder when asked to tidy up.
+            - remember, recall_memories, search_memories, forget_memory: keep \
+            durable notes across conversations. Remember only what stays \
+            useful later — preferences, ongoing projects, stable facts about \
+            the person — and never secrets. Search your memories before \
+            claiming you do not know something about them.
 
             Use tools when they genuinely improve the answer; answer directly \
             from context when you can. After searching, cite source URLs in \
             your answer.
+            """
+        }
+        if !memories.isEmpty {
+            prompt += """
+
+
+            Things you remember from earlier conversations:
+            \(memories)
             """
         }
         return prompt

@@ -300,6 +300,9 @@ struct AIChatConversationView: View {
     /// glass, which is what the material is for.
     private var composerLayer: some View {
         VStack(spacing: 6) {
+            if session.isContextNearlyFull {
+                AIChatContextMeter(session: session)
+            }
             if let error = session.errorMessage {
                 AIChatErrorBanner(message: error) {
                     session.errorMessage = nil
@@ -325,6 +328,7 @@ struct AIChatConversationView: View {
                 AIChatAttachmentStrip(attachments: attachments) { id in
                     attachments.removeAll { $0.id == id }
                 }
+                .padding(.leading, 3)
             }
 
             HStack(alignment: .bottom, spacing: 6) {
@@ -436,6 +440,57 @@ struct AIChatConversationView: View {
     }
 }
 
+/// Warns as the conversation fills the model's context and offers to compact
+/// it. Past the automatic threshold the chat compacts itself before sending.
+private struct AIChatContextMeter: View {
+    @Bindable var session: AIChatSession
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if session.isCompacting {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: "gauge.with.dots.needle.67percent")
+                    .font(.caption)
+                    .foregroundStyle(tint)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(
+                    session.isCompacting
+                        ? BrowserLocalization.string("ai_chat_compacting")
+                        : BrowserLocalization.string(
+                            "ai_chat_context_used",
+                            Int(session.contextUsageFraction * 100)
+                        )
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+                ProgressView(value: session.contextUsageFraction)
+                    .controlSize(.mini)
+                    .tint(tint)
+            }
+
+            if !session.isCompacting {
+                Button(BrowserLocalization.string("ai_chat_compact")) {
+                    session.compact()
+                }
+                .controlSize(.small)
+                .disabled(!session.canCompact)
+                .help(BrowserLocalization.string("ai_chat_compact_help"))
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .browserTintedGlass(cornerRadius: 13, tint: tint.opacity(0.10))
+    }
+
+    private var tint: Color {
+        session.contextUsageFraction >= 0.85 ? .orange : .accentColor
+    }
+}
+
 private struct AIChatErrorBanner: View {
     let message: String
     let onDismiss: () -> Void
@@ -471,10 +526,19 @@ private struct AIChatMessageView: View {
 
     var body: some View {
         switch message.role {
+        case .notice:
+            Label(message.text, systemImage: "arrow.down.right.and.arrow.up.left")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 2)
         case .user:
             VStack(alignment: .trailing, spacing: 6) {
                 if !message.attachments.isEmpty {
-                    AIChatAttachmentStrip(attachments: message.attachments)
+                    AIChatAttachmentStrip(
+                        attachments: message.attachments,
+                        alignment: .trailing
+                    )
                 }
                 if !message.text.isEmpty {
                     Text(message.text)
@@ -508,18 +572,31 @@ private struct AIChatMessageView: View {
 /// Shown in the composer (removable) and above the sent message.
 private struct AIChatAttachmentStrip: View {
     let attachments: [AIAttachment]
+    /// Sent messages align with their bubble on the trailing edge; the
+    /// composer keeps its chips on the leading edge.
+    var alignment: HorizontalAlignment = .leading
     var onRemove: ((UUID) -> Void)?
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        if alignment == .trailing {
             HStack(spacing: 6) {
+                Spacer(minLength: 0)
                 ForEach(attachments) { attachment in
                     chip(for: attachment)
                 }
             }
-            .padding(.horizontal, 1)
+            .padding(.trailing, 1)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(attachments) { attachment in
+                        chip(for: attachment)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -609,6 +686,13 @@ private struct AIChatToolActivityView: View {
         case "web_search": "magnifyingglass"
         case "open_tab": "plus.rectangle.on.rectangle"
         case "read_page": "doc.text.magnifyingglass"
+        case "screenshot_page": "camera.viewfinder"
+        case "run_python": "chevron.left.forwardslash.chevron.right"
+        case "list_tabs": "rectangle.stack"
+        case "group_tabs": "folder.badge.plus"
+        case "remember": "brain"
+        case "recall_memories", "search_memories": "brain.head.profile"
+        case "forget_memory": "trash"
         default: "wrench.and.screwdriver"
         }
     }
@@ -618,6 +702,14 @@ private struct AIChatToolActivityView: View {
         case "web_search": BrowserLocalization.string("ai_tool_web_search")
         case "open_tab": BrowserLocalization.string("ai_tool_open_tab")
         case "read_page": BrowserLocalization.string("ai_tool_read_page")
+        case "screenshot_page": BrowserLocalization.string("ai_tool_screenshot")
+        case "run_python": BrowserLocalization.string("ai_tool_python")
+        case "list_tabs": BrowserLocalization.string("ai_tool_list_tabs")
+        case "group_tabs": BrowserLocalization.string("ai_tool_group_tabs")
+        case "remember": BrowserLocalization.string("ai_tool_remember")
+        case "recall_memories", "search_memories":
+            BrowserLocalization.string("ai_tool_recall")
+        case "forget_memory": BrowserLocalization.string("ai_tool_forget")
         default: activity.name
         }
     }
