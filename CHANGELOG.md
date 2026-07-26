@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.5 — Split View and Default Browser
+
+- Added two-pane split workspaces: drag a sidebar tab onto either half of the page to pair it with the active tab.
+- Added a draggable divider that resizes the panes and persists the ratio across launches.
+- Both panes stay live and protected from suspension and eviction while the split is on screen.
+- Added Point selection as the default browser from Settings, with `http` and `https` handling declared at default rank.
+- Updated the bundle version to `0.1.5` (`27`).
+
 ## 0.1.4 — Link Previews
 
 - Added Shift-click link previews backed by a live WebKit session, with promotion to a tab without reloading the page.

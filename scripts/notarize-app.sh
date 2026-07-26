@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
 APP_PATH="${PROJECT_DIR}/dist/Point.app"
-SUBMISSION_PATH="${PROJECT_DIR}/dist/Point-0.1.4-notary.zip"
-ARCHIVE_PATH="${PROJECT_DIR}/dist/Point-0.1.4.zip"
+SUBMISSION_PATH="${PROJECT_DIR}/dist/Point-0.1.5-notary.zip"
+ARCHIVE_PATH="${PROJECT_DIR}/dist/Point-0.1.5.zip"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 
 if [[ -z "${NOTARY_PROFILE}" ]]; then

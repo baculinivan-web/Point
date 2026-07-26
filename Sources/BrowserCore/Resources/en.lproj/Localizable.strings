@@ -101,9 +101,9 @@
 	<key>default_browser_change_failed</key>
 	<string>Could Not Change Default Browser</string>
 	<key>default_browser_changed</key>
-	<string>Browser Is Now the Default Browser</string>
+	<string>Point Is Now the Default Browser</string>
 	<key>default_browser_links</key>
-	<string>HTTP and HTTPS links will open in Browser.</string>
+	<string>HTTP and HTTPS links will open in Point.</string>
 	<key>default_browser_not_confirmed</key>
 	<string>macOS Did Not Confirm the Change</string>
 	<key>default_search_engine</key>
