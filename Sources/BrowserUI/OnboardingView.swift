@@ -47,6 +47,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
     case welcome
     case split
     case search
+    case assistant
     case folders
     case defaultBrowser
 
@@ -57,6 +58,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .welcome: BrowserLocalization.string("onboarding_welcome_title")
         case .split: BrowserLocalization.string("onboarding_split_title")
         case .search: BrowserLocalization.string("onboarding_search_title")
+        case .assistant: BrowserLocalization.string("onboarding_assistant_title")
         case .folders: BrowserLocalization.string("onboarding_folders_title")
         case .defaultBrowser: BrowserLocalization.string("onboarding_default_title")
         }
@@ -67,6 +69,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .welcome: BrowserLocalization.string("onboarding_welcome_detail")
         case .split: BrowserLocalization.string("onboarding_split_detail")
         case .search: BrowserLocalization.string("onboarding_search_detail")
+        case .assistant: BrowserLocalization.string("onboarding_assistant_detail")
         case .folders: BrowserLocalization.string("onboarding_folders_detail")
         case .defaultBrowser: BrowserLocalization.string("default_browser_detail")
         }
@@ -80,6 +83,8 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
             [Color(red: 0.43, green: 0.36, blue: 0.94), Color(red: 0.69, green: 0.31, blue: 0.88)]
         case .search:
             [Color(red: 1.00, green: 0.48, blue: 0.35), Color(red: 0.96, green: 0.24, blue: 0.55)]
+        case .assistant:
+            [Color(red: 0.98, green: 0.62, blue: 0.15), Color(red: 0.91, green: 0.32, blue: 0.45)]
         case .folders:
             [Color(red: 0.07, green: 0.72, blue: 0.51), Color(red: 0.05, green: 0.58, blue: 0.65)]
         case .defaultBrowser:
@@ -392,9 +397,103 @@ private struct OnboardingArtwork: View {
         case .welcome: WelcomeArtwork()
         case .split: SplitArtwork()
         case .search: SearchArtwork()
+        case .assistant: AssistantArtwork()
         case .folders: FoldersArtwork()
         case .defaultBrowser: DefaultBrowserArtwork()
         }
+    }
+}
+
+/// A mock chat panel beside a mock page: the assistant answers about the page.
+private struct AssistantArtwork: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsReply = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            MockPage(accent: Color(red: 0.24, green: 0.51, blue: 0.96))
+                .frame(width: 170, height: 170)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Capsule()
+                        .fill(Color.primary.opacity(0.2))
+                        .frame(width: 64, height: 7)
+                    Spacer(minLength: 0)
+                }
+
+                HStack {
+                    Spacer(minLength: 18)
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.30))
+                        .frame(width: 96, height: 12)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        ProgressStandIn()
+                        Capsule()
+                            .fill(Color.primary.opacity(0.18))
+                            .frame(width: 74, height: 7)
+                    }
+                    Capsule().fill(Color.primary.opacity(0.16)).frame(height: 6)
+                    Capsule().fill(Color.primary.opacity(0.16)).frame(height: 6)
+                    Capsule()
+                        .fill(Color.primary.opacity(0.16))
+                        .frame(width: 88, height: 6)
+                }
+                .opacity(showsReply ? 1 : 0.25)
+                .offset(y: showsReply ? 0 : 4)
+
+                Spacer(minLength: 0)
+
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 26)
+                    .overlay(alignment: .trailing) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.trailing, 6)
+                    }
+            }
+            .padding(12)
+            .frame(width: 178, height: 170)
+            .background(MockSurface(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+        }
+        .task {
+            guard !reduceMotion else {
+                showsReply = true
+                return
+            }
+            while !Task.isCancelled {
+                withAnimation(.easeOut(duration: 0.6)) {
+                    showsReply = true
+                }
+                try? await Task.sleep(for: .milliseconds(2600))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.3)) {
+                    showsReply = false
+                }
+                try? await Task.sleep(for: .milliseconds(700))
+            }
+        }
+    }
+}
+
+private struct ProgressStandIn: View {
+    var body: some View {
+        Image(systemName: "magnifyingglass")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 14, height: 14)
+            .background(Color.accentColor.opacity(0.16), in: Circle())
     }
 }
 

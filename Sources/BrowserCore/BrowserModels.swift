@@ -155,6 +155,8 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
     public var folderID: TabFolderID?
     public var position: Int64
     public var navigationHistory: TabNavigationHistory?
+    /// True when the tab was opened by the AI assistant.
+    public var isAICreated: Bool
 
     public init(
         id: TabID,
@@ -164,7 +166,8 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         isPinned: Bool,
         folderID: TabFolderID? = nil,
         position: Int64,
-        navigationHistory: TabNavigationHistory? = nil
+        navigationHistory: TabNavigationHistory? = nil,
+        isAICreated: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -174,6 +177,35 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         self.folderID = folderID
         self.position = position
         self.navigationHistory = navigationHistory
+        self.isAICreated = isAICreated
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case url
+        case faviconURL
+        case isPinned
+        case folderID
+        case position
+        case navigationHistory
+        case isAICreated
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(TabID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        url = try container.decodeIfPresent(URL.self, forKey: .url)
+        faviconURL = try container.decodeIfPresent(URL.self, forKey: .faviconURL)
+        isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        folderID = try container.decodeIfPresent(TabFolderID.self, forKey: .folderID)
+        position = try container.decode(Int64.self, forKey: .position)
+        navigationHistory = try container.decodeIfPresent(
+            TabNavigationHistory.self,
+            forKey: .navigationHistory
+        )
+        isAICreated = try container.decodeIfPresent(Bool.self, forKey: .isAICreated) ?? false
     }
 }
 

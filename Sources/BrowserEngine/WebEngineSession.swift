@@ -210,6 +210,20 @@ public final class WebEngineSession: NSObject {
         }
     }
 
+    /// Extracts the readable text of the current page for the AI assistant.
+    public func extractPageText(limit: Int) async -> String? {
+        let script = """
+        (() => {
+          const root = document.querySelector('article') ||
+            document.querySelector('main') || document.body;
+          if (!root) { return ''; }
+          return root.innerText.replace(/\\n{3,}/g, '\\n\\n').slice(0, \(limit));
+        })()
+        """
+        let value = try? await webView.evaluateJavaScript(script)
+        return value as? String
+    }
+
     public func find(_ text: String) {
         guard !text.isEmpty else { return }
         let configuration = WKFindConfiguration()

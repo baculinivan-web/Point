@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — AI Assistant
+
+- Added a built-in AI chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, or detached into its own window.
+- Supported providers: Anthropic (Claude), any OpenAI-compatible server, and local models through Ollama — with in-app Ollama detection, one-click install, and model download.
+- The assistant receives the current page as context by default (toggleable), searches the web through the browser, reads pages, and opens tabs; assistant-opened tabs carry a sparkle badge in the sidebar.
+- API keys are stored in the keychain; responses stream live with visible tool activity.
+- Added an assistant page to the welcome tour and an AI section in Settings.
+- Updated the bundle version to `0.2.0` (`28`).
+
 ## 0.1.5 — Split View and Default Browser
 
 - Added two-pane split workspaces: drag a sidebar tab onto either half of the page to pair it with the active tab.

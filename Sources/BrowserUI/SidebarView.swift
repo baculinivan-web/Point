@@ -281,6 +281,19 @@ struct SidebarView: View {
             .help(BrowserLocalization.string("copy_page_address"))
             .accessibilityLabel(BrowserLocalization.string("copy_page_address"))
 
+            Button {
+                model.toggleAIChat()
+            } label: {
+                Image(
+                    systemName: model.isAIChatPanelVisible
+                        ? "sparkles.rectangle.stack.fill"
+                        : "sparkles"
+                )
+                .frame(width: 24, height: 24)
+            }
+            .help(BrowserLocalization.string("ai_chat_toggle_shortcut"))
+            .accessibilityLabel(BrowserLocalization.string("ai_chat_toggle"))
+
             Spacer()
 
             Button {
@@ -1783,6 +1796,18 @@ struct TabFavicon: View {
             }
         }
         .frame(width: size, height: size)
+        .overlay(alignment: .bottomTrailing) {
+            if tab.isAICreated {
+                Image(systemName: "sparkle")
+                    .font(.system(size: size * 0.34, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(1.5)
+                    .background(.background, in: Circle())
+                    .offset(x: size * 0.16, y: size * 0.16)
+                    .help(BrowserLocalization.string("ai_tab_badge"))
+                    .accessibilityLabel(BrowserLocalization.string("ai_tab_badge"))
+            }
+        }
     }
 }
 

@@ -25,12 +25,28 @@ public struct BrowserWindowView: View {
         ZStack(alignment: .leading) {
             WebSurface(model: model)
                 .padding(.leading, model.sidebarMode == .pinned ? 300 : 0)
+                .padding(
+                    .trailing,
+                    model.isAIChatPanelVisible ? AIChatLayout.panelWidth : 0
+                )
                 .clipShape(
                     LeadingRoundedRectangle(
                         radius: model.sidebarMode == .pinned ? 18 : 0
                     )
                 )
                 .ignoresSafeArea()
+
+            if model.isAIChatPanelVisible {
+                AIChatPanelView(model: model)
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: .trailing
+                    )
+                    .ignoresSafeArea()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(6)
+            }
 
             if model.sidebarMode == .autoHide, model.previewTab == nil {
                 edgeSensor
@@ -115,7 +131,10 @@ public struct BrowserWindowView: View {
                 FindOverlay(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.top, 14)
-                    .padding(.trailing, 14)
+                    .padding(
+                        .trailing,
+                        14 + (model.isAIChatPanelVisible ? AIChatLayout.panelWidth : 0)
+                    )
             }
 
             if model.isSitePermissionsPresented {
@@ -178,6 +197,10 @@ public struct BrowserWindowView: View {
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.22),
             value: model.isSidebarVisible
+        )
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: model.isAIChatPanelVisible
         )
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isOmniboxPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: indicatorDownload?.id)
