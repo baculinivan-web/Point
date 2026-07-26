@@ -433,28 +433,44 @@ public final class AIChatSession {
                 return
             }
 
-            var results: [AIToolResult] = []
-            var producedAttachments: [AIAttachment] = []
+            // Show every call as pending up front, then run them together: a
+            // turn that searches and reads three pages should not pay for
+            // each one in sequence.
             for call in toolCalls {
-                let activity = AIChatToolActivity(
-                    id: call.id,
-                    name: call.name,
-                    summary: Self.activitySummary(for: call),
-                    state: .running
-                )
-                updateLastAssistantMessage { $0.toolActivities.append(activity) }
-                let (result, attachments) = await executeToolCall(call)
-                results.append(result)
-                producedAttachments.append(contentsOf: attachments)
-                updateLastAssistantMessage { message in
-                    guard let index = message.toolActivities.firstIndex(
-                        where: { $0.id == call.id }
-                    ) else { return }
-                    message.toolActivities[index].state = result.isError
-                        ? .failed(result.content)
-                        : .finished
+                updateLastAssistantMessage {
+                    $0.toolActivities.append(
+                        AIChatToolActivity(
+                            id: call.id,
+                            name: call.name,
+                            summary: Self.activitySummary(for: call),
+                            state: .running
+                        )
+                    )
                 }
             }
+
+            // Start them all at once. Each releases the main actor while it
+            // waits on the network or a subprocess, so independent calls
+            // genuinely overlap; each marks its own chip the moment it lands.
+            let running = toolCalls.enumerated().map { index, call in
+                Task { @MainActor [weak self] in
+                    guard let self else { return ToolExecutionOutcome.unavailable(call, index) }
+                    let outcome = await executeToolCall(call, index: index)
+                    markToolActivity(callID: outcome.callID, result: outcome.result)
+                    return outcome
+                }
+            }
+
+            var completed: [ToolExecutionOutcome] = []
+            for task in running {
+                if Task.isCancelled { task.cancel() }
+                completed.append(await task.value)
+            }
+
+            // Results are collected in the model's own call order, which is
+            // what keeps the transcript readable.
+            let results = completed.map(\.result)
+            let producedAttachments = completed.flatMap(\.attachments)
             conversation.append(.toolResults(results))
             if !producedAttachments.isEmpty {
                 // Only some providers accept images inside a tool result, so
@@ -471,17 +487,50 @@ public final class AIChatSession {
         errorMessage = BrowserLocalization.string("ai_error_too_many_tools")
     }
 
+    /// One finished tool call, tagged with its position in the turn.
+    private struct ToolExecutionOutcome: Sendable {
+        let index: Int
+        let callID: String
+        let result: AIToolResult
+        let attachments: [AIAttachment]
+
+        static func unavailable(_ call: AIToolCall, _ index: Int) -> ToolExecutionOutcome {
+            ToolExecutionOutcome(
+                index: index,
+                callID: call.id,
+                result: AIToolResult(
+                    callID: call.id,
+                    content: "The chat was closed before the tool finished.",
+                    isError: true
+                ),
+                attachments: []
+            )
+        }
+    }
+
     private func executeToolCall(
-        _ call: AIToolCall
-    ) async -> (AIToolResult, [AIAttachment]) {
+        _ call: AIToolCall,
+        index: Int
+    ) async -> ToolExecutionOutcome {
+        func outcome(
+            _ result: AIToolResult,
+            _ attachments: [AIAttachment] = []
+        ) -> ToolExecutionOutcome {
+            ToolExecutionOutcome(
+                index: index,
+                callID: call.id,
+                result: result,
+                attachments: attachments
+            )
+        }
+
         guard let toolExecutor else {
-            return (
+            return outcome(
                 AIToolResult(
                     callID: call.id,
                     content: "Tool execution is unavailable.",
                     isError: true
-                ),
-                []
+                )
             )
         }
         do {
@@ -489,7 +538,7 @@ public final class AIChatSession {
                 name: call.name,
                 arguments: call.arguments
             )
-            return (
+            return outcome(
                 AIToolResult(
                     callID: call.id,
                     content: String(output.text.prefix(Self.toolResultCharacterLimit))
@@ -497,13 +546,12 @@ public final class AIChatSession {
                 output.attachments
             )
         } catch {
-            return (
+            return outcome(
                 AIToolResult(
                     callID: call.id,
                     content: error.localizedDescription,
                     isError: true
-                ),
-                []
+                )
             )
         }
     }
@@ -515,6 +563,17 @@ public final class AIChatSession {
         return recent
             .map { "- [\($0.shortID)] \($0.text)" }
             .joined(separator: "\n")
+    }
+
+    private func markToolActivity(callID: String, result: AIToolResult) {
+        updateLastAssistantMessage { message in
+            guard let index = message.toolActivities.firstIndex(
+                where: { $0.id == callID }
+            ) else { return }
+            message.toolActivities[index].state = result.isError
+                ? .failed(result.content)
+                : .finished
+        }
     }
 
     private func updateLastAssistantMessage(_ mutate: (inout AIChatMessage) -> Void) {

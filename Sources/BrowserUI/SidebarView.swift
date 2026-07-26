@@ -1391,7 +1391,7 @@ private struct FolderRow: View {
     }
 }
 
-private struct FolderSymbolOption: Identifiable {
+struct FolderSymbolOption: Identifiable {
     let symbolName: String
     let title: String
 

@@ -70,12 +70,17 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
             ),
             spec(
                 "group_tabs",
-                "Move tabs into a named folder in the sidebar to organize them.",
+                "Move tabs into a named folder in the sidebar to organize them. "
+                    + "Pick an icon that suits the folder's contents.",
                 properties: [
                     "name": string("Folder name."),
                     "tab_ids": array(
                         "Tab ids from list_tabs to move into the folder.",
                         itemDescription: "A tab id."
+                    ),
+                    "icon": stringEnum(
+                        "SF Symbol for the folder. Defaults to a plain folder.",
+                        values: Self.folderSymbolNames
                     )
                 ],
                 required: ["name", "tab_ids"]
@@ -257,9 +262,15 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
         guard !known.isEmpty else {
             throw AIToolBridgeError.invalidArguments
         }
-        model.createNamedFolder(name, containing: known)
+        // Ignore an unknown symbol rather than failing the call over an icon.
+        let icon = arguments["icon"]?.stringValue
+            .flatMap { Self.folderSymbolNames.contains($0) ? $0 : nil }
+        model.createNamedFolder(name, symbolName: icon, containing: known)
         return AIToolOutput(text: "Moved \(known.count) tab(s) into “\(name)”.")
     }
+
+    /// The same icons the sidebar's own folder menu offers.
+    private static let folderSymbolNames = FolderSymbolOption.popular.map(\.symbolName)
 
     // MARK: - Memory
 
@@ -322,6 +333,14 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
 
     private func boolean(_ description: String) -> AIJSONValue {
         .object(["type": .string("boolean"), "description": .string(description)])
+    }
+
+    private func stringEnum(_ description: String, values: [String]) -> AIJSONValue {
+        .object([
+            "type": .string("string"),
+            "description": .string(description),
+            "enum": .array(values.map(AIJSONValue.string))
+        ])
     }
 
     private func number(_ description: String) -> AIJSONValue {

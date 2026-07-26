@@ -1411,13 +1411,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
     /// Creates a folder with a given name without starting an inline rename,
     /// used when the chat organizes tabs.
     @discardableResult
-    func createNamedFolder(_ name: String, containing tabIDs: Set<TabID>) -> TabFolderID {
+    func createNamedFolder(
+        _ name: String,
+        symbolName: String? = nil,
+        containing tabIDs: Set<TabID>
+    ) -> TabFolderID {
         let id = TabFolderID()
         folders.append(
             TabFolder(
                 snapshot: PersistedTabFolder(
                     id: id,
                     name: name,
+                    symbolName: symbolName ?? "folder.fill",
                     position: nextPosition(in: nil)
                 )
             )
