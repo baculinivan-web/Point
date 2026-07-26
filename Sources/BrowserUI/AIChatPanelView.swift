@@ -655,6 +655,9 @@ private struct AIChatToolActivityGroup: View {
     let activities: [AIChatToolActivity]
 
     @State private var isExpanded = false
+    @State private var showsChildren = false
+    @State private var visibleCount = 0
+    @State private var revealTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -681,17 +684,59 @@ private struct AIChatToolActivityGroup: View {
             .accessibilityLabel(title)
             .accessibilityHint(BrowserLocalization.string("ai_chat_tools_expand"))
 
-            if isExpanded {
+            if showsChildren {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(activities) { activity in
+                    ForEach(Array(activities.prefix(visibleCount))) { activity in
                         AIChatToolActivityView(activity: activity)
+                            .transition(.staggeredListItem)
                     }
                 }
                 .padding(.leading, 10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isExpanded)
+        .onChange(of: isExpanded) { _, expanded in
+            revealChildren(expanding: expanded)
+        }
+        .onDisappear { revealTask?.cancel() }
+    }
+
+    /// Reveals the chips one after another instead of dropping the whole list
+    /// in at once, matching how sidebar folders open.
+    private func revealChildren(expanding: Bool) {
+        revealTask?.cancel()
+        guard !reduceMotion else {
+            showsChildren = expanding
+            visibleCount = expanding ? activities.count : 0
+            return
+        }
+
+        let total = activities.count
+        if expanding {
+            showsChildren = true
+            visibleCount = 0
+            guard total > 0 else { return }
+            revealTask = Task { @MainActor in
+                for count in 1...total {
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                        visibleCount = count
+                    }
+                    try? await Task.sleep(for: .milliseconds(38))
+                }
+            }
+        } else {
+            revealTask = Task { @MainActor in
+                for count in stride(from: min(visibleCount, total), to: 0, by: -1) {
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        visibleCount = count - 1
+                    }
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.12)) { showsChildren = false }
+            }
+        }
     }
 
     @ViewBuilder

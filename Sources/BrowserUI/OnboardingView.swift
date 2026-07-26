@@ -9,7 +9,9 @@ import SwiftUI
 @MainActor
 public enum BrowserOnboarding {
     private static let completedVersionKey = "CompletedOnboardingVersion"
-    private static let currentVersion = 1
+    /// Raised for 0.2.0 so people who finished the earlier tour are shown the
+    /// chat once, rather than having to discover it on their own.
+    private static let currentVersion = 2
 
     /// Posted when Settings asks for the tour again. The first standard window
     /// to claim the request presents it, so it never opens twice.
@@ -47,6 +49,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
     case welcome
     case split
     case search
+    case chatTools
     case assistant
     case folders
     case defaultBrowser
@@ -58,6 +61,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .welcome: BrowserLocalization.string("onboarding_welcome_title")
         case .split: BrowserLocalization.string("onboarding_split_title")
         case .search: BrowserLocalization.string("onboarding_search_title")
+        case .chatTools: BrowserLocalization.string("onboarding_chat_tools_title")
         case .assistant: BrowserLocalization.string("onboarding_assistant_title")
         case .folders: BrowserLocalization.string("onboarding_folders_title")
         case .defaultBrowser: BrowserLocalization.string("onboarding_default_title")
@@ -69,6 +73,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .welcome: BrowserLocalization.string("onboarding_welcome_detail")
         case .split: BrowserLocalization.string("onboarding_split_detail")
         case .search: BrowserLocalization.string("onboarding_search_detail")
+        case .chatTools: BrowserLocalization.string("onboarding_chat_tools_detail")
         case .assistant: BrowserLocalization.string("onboarding_assistant_detail")
         case .folders: BrowserLocalization.string("onboarding_folders_detail")
         case .defaultBrowser: BrowserLocalization.string("default_browser_detail")
@@ -83,6 +88,8 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
             [Color(red: 0.43, green: 0.36, blue: 0.94), Color(red: 0.69, green: 0.31, blue: 0.88)]
         case .search:
             [Color(red: 1.00, green: 0.48, blue: 0.35), Color(red: 0.96, green: 0.24, blue: 0.55)]
+        case .chatTools:
+            [Color(red: 0.36, green: 0.31, blue: 0.86), Color(red: 0.14, green: 0.56, blue: 0.90)]
         case .assistant:
             [Color(red: 0.98, green: 0.62, blue: 0.15), Color(red: 0.91, green: 0.32, blue: 0.45)]
         case .folders:
@@ -406,6 +413,7 @@ private struct OnboardingArtwork: View {
         case .welcome: WelcomeArtwork()
         case .split: SplitArtwork()
         case .search: SearchArtwork()
+        case .chatTools: ChatToolsArtwork()
         case .assistant: AssistantArtwork()
         case .folders: FoldersArtwork()
         case .defaultBrowser: DefaultBrowserArtwork()
@@ -414,6 +422,80 @@ private struct OnboardingArtwork: View {
 }
 
 /// A mock chat panel beside a mock page: the assistant answers about the page.
+/// What the chat can reach for, as a grid of capability cards.
+private struct ChatToolsArtwork: View {
+    private struct Capability: Identifiable {
+        let symbol: String
+        let title: String
+        var id: String { symbol }
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var highlighted = 0
+
+    private let capabilities = [
+        Capability(
+            symbol: "magnifyingglass",
+            title: BrowserLocalization.string("onboarding_capability_search")
+        ),
+        Capability(
+            symbol: "camera.viewfinder",
+            title: BrowserLocalization.string("onboarding_capability_screenshot")
+        ),
+        Capability(
+            symbol: "chevron.left.forwardslash.chevron.right",
+            title: BrowserLocalization.string("onboarding_capability_python")
+        ),
+        Capability(
+            symbol: "brain",
+            title: BrowserLocalization.string("onboarding_capability_memory")
+        ),
+        Capability(
+            symbol: "folder.badge.plus",
+            title: BrowserLocalization.string("onboarding_capability_folders")
+        ),
+        Capability(
+            symbol: "paperclip",
+            title: BrowserLocalization.string("onboarding_capability_attachments")
+        )
+    ]
+
+    private let columns = Array(
+        repeating: GridItem(.fixed(132), spacing: 10),
+        count: 3
+    )
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(Array(capabilities.enumerated()), id: \.element.id) { index, capability in
+                VStack(spacing: 6) {
+                    Image(systemName: capability.symbol)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    Text(capability.title)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(width: 132, height: 66)
+                .background(MockSurface(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+                .scaleEffect(index == highlighted ? 1.05 : 1)
+            }
+        }
+        .task {
+            guard !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(900))
+                guard !Task.isCancelled else { return }
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    highlighted = (highlighted + 1) % capabilities.count
+                }
+            }
+        }
+    }
+}
+
 private struct AssistantArtwork: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsReply = false

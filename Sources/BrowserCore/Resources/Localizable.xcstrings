@@ -3377,6 +3377,134 @@
         }
       }
     },
+    "onboarding_capability_attachments": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachments"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вложения"
+          }
+        }
+      }
+    },
+    "onboarding_capability_folders": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab folders"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Папки вкладок"
+          }
+        }
+      }
+    },
+    "onboarding_capability_memory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Память"
+          }
+        }
+      }
+    },
+    "onboarding_capability_python": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Python"
+          }
+        }
+      }
+    },
+    "onboarding_capability_screenshot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снимки страниц"
+          }
+        }
+      }
+    },
+    "onboarding_capability_search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Web search"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск в вебе"
+          }
+        }
+      }
+    },
+    "onboarding_chat_tools_detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It searches the web, reads and screenshots pages, runs Python, files your tabs into folders, and remembers what matters between conversations. Attach images or files, and answers come back with tables and formatting."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он ищет в интернете, читает страницы и делает их снимки, выполняет Python, раскладывает вкладки по папкам и помнит важное между диалогами. Можно прикреплять изображения и файлы, а ответы приходят с таблицами и форматированием."
+          }
+        }
+      }
+    },
+    "onboarding_chat_tools_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat can act, not just answer"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чат не только отвечает, но и действует"
+          }
+        }
+      }
+    },
     "onboarding_continue": {
       "localizations": {
         "en": {

@@ -1094,7 +1094,7 @@ private struct FolderTree: View {
                     depth: depth
                 )
                     .padding(.leading, CGFloat(depth) * 15)
-                    .transition(.staggeredFolderItem)
+                    .transition(.staggeredListItem)
             case let .folder(folder):
                 FolderRow(
                     model: model,
@@ -1102,14 +1102,15 @@ private struct FolderTree: View {
                     reorderState: reorderState,
                     depth: depth
                 )
-                    .transition(.staggeredFolderItem)
+                    .transition(.staggeredListItem)
             }
         }
     }
 }
 
-private extension AnyTransition {
-    static var staggeredFolderItem: AnyTransition {
+extension AnyTransition {
+    /// Used where a list reveals its rows one after another.
+    static var staggeredListItem: AnyTransition {
         .asymmetric(
             insertion: .opacity
                 .combined(with: .offset(y: -6))
