@@ -7,20 +7,15 @@ import Foundation
 /// directory and whatever the app's entitlements already allow. A timeout and
 /// an output cap keep a runaway script from hanging the chat.
 enum PythonToolRunner {
-    private static let timeout: TimeInterval = 20
+    private static let timeout: TimeInterval = 15
+    private static let probeTimeout: TimeInterval = 5
     private static let outputLimit = 12000
 
     enum Failure: LocalizedError {
         case interpreterMissing
-        case timedOut(TimeInterval)
 
         var errorDescription: String? {
-            switch self {
-            case .interpreterMissing:
-                BrowserLocalization.string("ai_python_missing")
-            case let .timedOut(seconds):
-                BrowserLocalization.string("ai_python_timeout", Int(seconds))
-            }
+            BrowserLocalization.string("ai_python_missing")
         }
     }
 
@@ -40,67 +35,154 @@ enum PythonToolRunner {
         let scriptURL = workingDirectory.appending(path: "script.py")
         try Data(code.utf8).write(to: scriptURL)
 
-        let process = Process()
-        process.executableURL = interpreter
-        process.arguments = [scriptURL.path]
-        process.currentDirectoryURL = workingDirectory
-        process.environment = [
-            // Unbuffered output means a timeout still yields partial results.
-            "PYTHONUNBUFFERED": "1",
-            "HOME": workingDirectory.path,
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
-        ]
-
-        let output = Pipe()
-        let errors = Pipe()
-        process.standardOutput = output
-        process.standardError = errors
-
-        try process.run()
-
-        let collector = Task.detached(priority: .utility) {
-            let out = output.fileHandleForReading.readDataToEndOfFile()
-            let err = errors.fileHandleForReading.readDataToEndOfFile()
-            return (out, err)
-        }
-
-        let watchdog = Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(timeout))
-            guard !Task.isCancelled, process.isRunning else { return false }
-            process.terminate()
-            try? await Task.sleep(for: .milliseconds(300))
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            return true
-        }
-
-        let (outData, errData) = await collector.value
-        process.waitUntilExit()
-        let didTimeOut = await watchdog.value
-        watchdog.cancel()
-
-        if didTimeOut { throw Failure.timedOut(timeout) }
-
-        return format(
-            stdout: String(decoding: outData, as: UTF8.self),
-            stderr: String(decoding: errData, as: UTF8.self),
-            exitCode: process.terminationStatus
+        let result = await execute(
+            interpreter: interpreter,
+            arguments: [scriptURL.path],
+            workingDirectory: workingDirectory,
+            timeout: timeout
         )
+        return format(result)
     }
 
-    private static func format(
-        stdout: String,
-        stderr: String,
-        exitCode: Int32
-    ) -> String {
+    // MARK: - Process execution
+
+    private struct ProcessResult {
+        var stdout = ""
+        var stderr = ""
+        var exitCode: Int32 = 0
+        var timedOut = false
+        var launchError: String?
+    }
+
+    /// Collects pipe output as it arrives, from the reader callbacks.
+    private final class OutputBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var standardOutput = Data()
+        private var standardError = Data()
+
+        func appendOutput(_ data: Data) {
+            guard !data.isEmpty else { return }
+            lock.lock(); standardOutput.append(data); lock.unlock()
+        }
+
+        func appendError(_ data: Data) {
+            guard !data.isEmpty else { return }
+            lock.lock(); standardError.append(data); lock.unlock()
+        }
+
+        var text: (out: String, err: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            return (
+                String(decoding: standardOutput, as: UTF8.self),
+                String(decoding: standardError, as: UTF8.self)
+            )
+        }
+    }
+
+    private static func execute(
+        interpreter: URL,
+        arguments: [String],
+        workingDirectory: URL?,
+        timeout: TimeInterval
+    ) async -> ProcessResult {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = interpreter
+                process.arguments = arguments
+                if let workingDirectory {
+                    process.currentDirectoryURL = workingDirectory
+                }
+                process.environment = [
+                    // Unbuffered output means a timeout still yields results.
+                    "PYTHONUNBUFFERED": "1",
+                    "HOME": workingDirectory?.path ?? NSTemporaryDirectory(),
+                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+                ]
+
+                let outPipe = Pipe()
+                let errPipe = Pipe()
+                process.standardOutput = outPipe
+                process.standardError = errPipe
+                // Without this, a script that calls input() inherits the app's
+                // stdin and blocks forever.
+                process.standardInput = FileHandle.nullDevice
+
+                // Reading both pipes as data arrives avoids the classic
+                // deadlock where a full stderr buffer stops the process from
+                // ever closing stdout.
+                let buffer = OutputBuffer()
+                outPipe.fileHandleForReading.readabilityHandler = { handle in
+                    buffer.appendOutput(handle.availableData)
+                }
+                errPipe.fileHandleForReading.readabilityHandler = { handle in
+                    buffer.appendError(handle.availableData)
+                }
+
+                let finished = DispatchSemaphore(value: 0)
+                process.terminationHandler = { _ in finished.signal() }
+
+                do {
+                    try process.run()
+                } catch {
+                    outPipe.fileHandleForReading.readabilityHandler = nil
+                    errPipe.fileHandleForReading.readabilityHandler = nil
+                    continuation.resume(
+                        returning: ProcessResult(launchError: error.localizedDescription)
+                    )
+                    return
+                }
+
+                var timedOut = false
+                if finished.wait(timeout: .now() + timeout) == .timedOut {
+                    timedOut = true
+                    process.terminate()
+                    if finished.wait(timeout: .now() + 2) == .timedOut {
+                        kill(process.processIdentifier, SIGKILL)
+                        _ = finished.wait(timeout: .now() + 2)
+                    }
+                }
+
+                outPipe.fileHandleForReading.readabilityHandler = nil
+                errPipe.fileHandleForReading.readabilityHandler = nil
+                buffer.appendOutput(outPipe.fileHandleForReading.availableData)
+                buffer.appendError(errPipe.fileHandleForReading.availableData)
+
+                let text = buffer.text
+                continuation.resume(
+                    returning: ProcessResult(
+                        stdout: text.out,
+                        stderr: text.err,
+                        exitCode: process.terminationStatus,
+                        timedOut: timedOut
+                    )
+                )
+            }
+        }
+    }
+
+    private static func format(_ result: ProcessResult) -> String {
+        if let launchError = result.launchError {
+            return "Failed to start Python: \(launchError)"
+        }
+
         var parts: [String] = []
-        let out = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        let err = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let err = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if !out.isEmpty { parts.append("stdout:\n\(String(out.prefix(outputLimit)))") }
         if !err.isEmpty { parts.append("stderr:\n\(String(err.prefix(outputLimit)))") }
-        if exitCode != 0 { parts.append("exit code: \(exitCode)") }
+        if result.timedOut {
+            // Partial output is more useful to the model than a bare failure.
+            parts.append(BrowserLocalization.string("ai_python_timeout", Int(timeout)))
+        } else if result.exitCode != 0 {
+            parts.append("exit code: \(result.exitCode)")
+        }
         if parts.isEmpty { parts.append("The script produced no output.") }
         return parts.joined(separator: "\n\n")
     }
+
+    // MARK: - Interpreter discovery
 
     /// Interpreters in preference order.
     ///
@@ -127,30 +209,22 @@ enum PythonToolRunner {
             return cached
         }
         for path in candidatePaths {
-            let url = URL(fileURLWithPath: path)
             guard FileManager.default.isExecutableFile(atPath: path) else { continue }
-            guard await probe(url) else { continue }
+            let url = URL(fileURLWithPath: path)
+            let result = await execute(
+                interpreter: url,
+                arguments: ["-c", "print('ok')"],
+                workingDirectory: nil,
+                timeout: probeTimeout
+            )
+            guard result.launchError == nil,
+                  !result.timedOut,
+                  result.exitCode == 0,
+                  result.stdout.contains("ok")
+            else { continue }
             await MainActor.run { cachedInterpreter = url }
             return url
         }
         return nil
-    }
-
-    private static func probe(_ interpreter: URL) async -> Bool {
-        await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            process.executableURL = interpreter
-            process.arguments = ["-c", "print('ok')"]
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            process.environment = ["PATH": "/usr/bin:/bin"]
-            do {
-                try process.run()
-            } catch {
-                return false
-            }
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        }.value
     }
 }
