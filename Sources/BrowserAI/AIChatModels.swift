@@ -104,7 +104,7 @@ public struct AIToolSpec: Sendable {
 }
 
 /// A single tool invocation requested by the model.
-public struct AIToolCall: Sendable, Equatable, Identifiable {
+public struct AIToolCall: Sendable, Equatable, Identifiable, Codable {
     public let id: String
     public let name: String
     public let arguments: AIJSONValue
@@ -116,7 +116,7 @@ public struct AIToolCall: Sendable, Equatable, Identifiable {
     }
 }
 
-public struct AIToolResult: Sendable, Equatable {
+public struct AIToolResult: Sendable, Equatable, Codable {
     public let callID: String
     public let content: String
     public let isError: Bool
@@ -129,7 +129,7 @@ public struct AIToolResult: Sendable, Equatable {
 }
 
 /// One message in the provider conversation, assembled by the harness.
-public enum AIConversationMessage: Sendable {
+public enum AIConversationMessage: Sendable, Codable {
     case user(String)
     case assistant(text: String, toolCalls: [AIToolCall])
     case toolResults([AIToolResult])

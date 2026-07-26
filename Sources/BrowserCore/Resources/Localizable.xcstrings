@@ -81,22 +81,6 @@
         }
       }
     },
-    "ai_chat_clear": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New conversation"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Новый диалог"
-          }
-        }
-      }
-    },
     "ai_chat_close": {
       "localizations": {
         "en": {
@@ -109,22 +93,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Скрыть чат"
-          }
-        }
-      }
-    },
-    "ai_chat_context_badge": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Page: %@"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Страница: %@"
           }
         }
       }
@@ -161,18 +129,34 @@
         }
       }
     },
-    "ai_chat_empty_message": {
+    "ai_chat_dismiss_error": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "It sees the page you are reading, can search the web, and can open tabs for you."
+            "value": "Dismiss"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Он видит открытую страницу, умеет искать в интернете и открывать вкладки за вас."
+            "value": "Скрыть"
+          }
+        }
+      }
+    },
+    "ai_chat_empty_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat sees the page you are reading, can search the web, and can open tabs for you."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чат видит открытую страницу, умеет искать в интернете и открывать вкладки за вас."
           }
         }
       }
@@ -182,13 +166,61 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ask the assistant"
+            "value": "Ask anything"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Спросите ассистента"
+            "value": "Спросите о чём угодно"
+          }
+        }
+      }
+    },
+    "ai_chat_history": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Past chats"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошлые чаты"
+          }
+        }
+      }
+    },
+    "ai_chat_history_clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete all chats"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить все чаты"
+          }
+        }
+      }
+    },
+    "ai_chat_history_empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No past chats yet"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошлых чатов пока нет"
           }
         }
       }
@@ -209,6 +241,22 @@
         }
       }
     },
+    "ai_chat_new": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый чат"
+          }
+        }
+      }
+    },
     "ai_chat_reattach": {
       "localizations": {
         "en": {
@@ -225,6 +273,22 @@
         }
       }
     },
+    "ai_chat_resize": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resize the chat panel"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить ширину панели чата"
+          }
+        }
+      }
+    },
     "ai_chat_send": {
       "localizations": {
         "en": {
@@ -237,22 +301,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Отправить"
-          }
-        }
-      }
-    },
-    "ai_chat_share_page": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share the current page"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Передавать текущую страницу"
           }
         }
       }
@@ -278,13 +326,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Assistant"
+            "value": "Chat"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ассистент"
+            "value": "Чат"
           }
         }
       }
@@ -294,13 +342,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Assistant"
+            "value": "Chat"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "ИИ-ассистент"
+            "value": "Чат"
           }
         }
       }
@@ -310,13 +358,29 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Assistant (⇧⌘A)"
+            "value": "Chat (⇧⌘A)"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "ИИ-ассистент (⇧⌘A)"
+            "value": "Чат (⇧⌘A)"
+          }
+        }
+      }
+    },
+    "ai_chat_untitled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled chat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чат без названия"
           }
         }
       }
@@ -326,13 +390,29 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Point Assistant"
+            "value": "Point Chat"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ассистент Point"
+            "value": "Чат Point"
+          }
+        }
+      }
+    },
+    "ai_error_empty_response": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model “%@” returned an empty response. Check the model name and server URL."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Модель «%@» вернула пустой ответ. Проверьте имя модели и адрес сервера."
           }
         }
       }
@@ -502,13 +582,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The assistant opens beside the page (⇧⌘A), sees what you are reading, and can search the web and open tabs."
+            "value": "The chat opens beside the page (⇧⌘A), sees what you are reading, and can search the web and open tabs."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ассистент открывается рядом со страницей (⇧⌘A), видит, что вы читаете, умеет искать в интернете и открывать вкладки."
+            "value": "Чат открывается рядом со страницей (⇧⌘A), видит, что вы читаете, умеет искать в интернете и открывать вкладки."
           }
         }
       }
@@ -742,13 +822,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "AI Assistant"
+            "value": "Chat"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "ИИ-ассистент"
+            "value": "Чат"
           }
         }
       }
@@ -822,13 +902,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opened by the assistant"
+            "value": "Opened from chat"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Открыто ассистентом"
+            "value": "Открыто из чата"
           }
         }
       }
@@ -2822,13 +2902,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press ⇧⌘A or tap the sparkle in the sidebar. The assistant sees the page you are reading, searches the web, and opens tabs for you — tabs it opens are marked with a sparkle."
+            "value": "Press ⇧⌘A to open it. It sees the page you are reading, searches the web, and opens tabs for you. Connect a provider now or skip and do it later in Settings."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Нажмите ⇧⌘A или значок с искрой в сайдбаре. Ассистент видит открытую страницу, ищет в интернете и открывает вкладки за вас — такие вкладки помечаются искрой."
+            "value": "Откройте его по ⇧⌘A. Он видит открытую страницу, ищет в интернете и открывает вкладки за вас. Подключите провайдера сейчас или пропустите и сделайте это позже в настройках."
           }
         }
       }
@@ -2838,13 +2918,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An assistant right beside the page"
+            "value": "Chat, right beside the page"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ассистент прямо рядом со страницей"
+            "value": "Чат прямо рядом со страницей"
           }
         }
       }

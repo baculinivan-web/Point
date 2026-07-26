@@ -104,7 +104,11 @@ struct OnboardingOverlay: View {
     @State private var defaultBrowserError: String?
 
     private let cardWidth: CGFloat = 660
-    private let artworkHeight: CGFloat = 250
+
+    /// The setup page trades artwork height for room to enter credentials.
+    private var artworkHeight: CGFloat {
+        page == .assistant ? 140 : 250
+    }
 
     var body: some View {
         ZStack {
@@ -185,6 +189,11 @@ struct OnboardingOverlay: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if page == .assistant {
+                AIProviderSetupControls()
+                    .padding(.top, 6)
+            }
 
             if page == .defaultBrowser {
                 defaultBrowserStatus
@@ -410,62 +419,46 @@ private struct AssistantArtwork: View {
     @State private var showsReply = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             MockPage(accent: Color(red: 0.24, green: 0.51, blue: 0.96))
-                .frame(width: 170, height: 170)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+                .frame(width: 110, height: 104)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                    Capsule()
-                        .fill(Color.primary.opacity(0.2))
-                        .frame(width: 64, height: 7)
-                    Spacer(minLength: 0)
-                }
-
+            VStack(alignment: .leading, spacing: 7) {
                 HStack {
-                    Spacer(minLength: 18)
+                    Spacer(minLength: 16)
                     Capsule()
-                        .fill(Color.accentColor.opacity(0.30))
-                        .frame(width: 96, height: 12)
+                        .fill(Color.accentColor.opacity(0.32))
+                        .frame(width: 82, height: 11)
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 5) {
-                        ProgressStandIn()
-                        Capsule()
-                            .fill(Color.primary.opacity(0.18))
-                            .frame(width: 74, height: 7)
-                    }
+                VStack(alignment: .leading, spacing: 4) {
                     Capsule().fill(Color.primary.opacity(0.16)).frame(height: 6)
                     Capsule().fill(Color.primary.opacity(0.16)).frame(height: 6)
                     Capsule()
                         .fill(Color.primary.opacity(0.16))
-                        .frame(width: 88, height: 6)
+                        .frame(width: 76, height: 6)
                 }
-                .opacity(showsReply ? 1 : 0.25)
+                .opacity(showsReply ? 1 : 0.2)
                 .offset(y: showsReply ? 0 : 4)
 
                 Spacer(minLength: 0)
 
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(Color.primary.opacity(0.08))
-                    .frame(height: 26)
+                    .frame(height: 22)
                     .overlay(alignment: .trailing) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.trailing, 6)
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 14, height: 14)
+                            .padding(.trailing, 5)
                     }
             }
-            .padding(12)
-            .frame(width: 178, height: 170)
-            .background(MockSurface(cornerRadius: 14))
-            .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+            .padding(10)
+            .frame(width: 150, height: 104)
+            .background(MockSurface(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
         }
         .task {
             guard !reduceMotion else {
@@ -473,27 +466,13 @@ private struct AssistantArtwork: View {
                 return
             }
             while !Task.isCancelled {
-                withAnimation(.easeOut(duration: 0.6)) {
-                    showsReply = true
-                }
+                withAnimation(.easeOut(duration: 0.6)) { showsReply = true }
                 try? await Task.sleep(for: .milliseconds(2600))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.3)) {
-                    showsReply = false
-                }
+                withAnimation(.easeIn(duration: 0.3)) { showsReply = false }
                 try? await Task.sleep(for: .milliseconds(700))
             }
         }
-    }
-}
-
-private struct ProgressStandIn: View {
-    var body: some View {
-        Image(systemName: "magnifyingglass")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(Color.accentColor)
-            .frame(width: 14, height: 14)
-            .background(Color.accentColor.opacity(0.16), in: Circle())
     }
 }
 

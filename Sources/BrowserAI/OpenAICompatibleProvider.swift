@@ -59,11 +59,20 @@ public struct OpenAICompatibleProvider: AIProvider {
 
         var parser = SSEParser()
         var assembler = OpenAIStreamAssembler()
-        for try await line in bytes.lines {
+        var sawDone = false
+        for try await line in bytes.sseLines {
             try Task.checkCancellation()
             guard let event = parser.consume(line: line) else { continue }
-            if event.data == "[DONE]" { break }
+            if event.data == "[DONE]" {
+                sawDone = true
+                break
+            }
             for streamEvent in assembler.handle(dataPayload: event.data) {
+                continuation.yield(streamEvent)
+            }
+        }
+        if !sawDone, let trailing = parser.flush(), trailing.data != "[DONE]" {
+            for streamEvent in assembler.handle(dataPayload: trailing.data) {
                 continuation.yield(streamEvent)
             }
         }

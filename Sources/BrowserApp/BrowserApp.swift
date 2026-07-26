@@ -1,4 +1,5 @@
 import AppKit
+import BrowserAI
 import BrowserCore
 import BrowserEngine
 import BrowserPersistence
@@ -305,6 +306,7 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
         isTerminationReplyPending = true
         Task { @MainActor [weak self] in
             await runtime.downloadManager.flushHistory()
+            await AIChatStore.shared.flush()
             self?.isTerminationReplyPending = false
             sender.reply(toApplicationShouldTerminate: true)
         }

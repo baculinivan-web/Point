@@ -11,6 +11,53 @@ struct SSEEvent {
     var data: String
 }
 
+/// Splits a byte stream into lines while **preserving empty lines**.
+///
+/// SSE terminates every event with a blank line, but Foundation's
+/// `AsyncLineSequence` silently drops empty lines — using it here means no
+/// event ever dispatches and the whole response reads as empty.
+struct SSELineSequence<Base: AsyncSequence>: AsyncSequence where Base.Element == UInt8 {
+    typealias Element = String
+
+    let base: Base
+
+    struct AsyncIterator: AsyncIteratorProtocol {
+        private static var lineFeed: UInt8 { 0x0A }
+        private static var carriageReturn: UInt8 { 0x0D }
+
+        var base: Base.AsyncIterator
+        var buffer: [UInt8] = []
+
+        mutating func next() async throws -> String? {
+            while let byte = try await base.next() {
+                switch byte {
+                case Self.lineFeed:
+                    return takeLine()
+                case Self.carriageReturn:
+                    continue
+                default:
+                    buffer.append(byte)
+                }
+            }
+            // A stream that ends without a trailing newline still has a line.
+            return buffer.isEmpty ? nil : takeLine()
+        }
+
+        private mutating func takeLine() -> String {
+            defer { buffer.removeAll(keepingCapacity: true) }
+            return String(decoding: buffer, as: UTF8.self)
+        }
+    }
+
+    func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(base: base.makeAsyncIterator())
+    }
+}
+
+extension AsyncSequence where Element == UInt8 {
+    var sseLines: SSELineSequence<Self> { SSELineSequence(base: self) }
+}
+
 /// Incremental line-based SSE assembler shared by the streaming providers.
 struct SSEParser {
     private var currentEvent: String?
@@ -37,6 +84,17 @@ struct SSEParser {
             currentData.append(value)
         }
         return nil
+    }
+
+    /// Emits a trailing event for servers that close the stream without the
+    /// final blank line.
+    mutating func flush() -> SSEEvent? {
+        guard !currentData.isEmpty else { return nil }
+        defer {
+            currentEvent = nil
+            currentData = []
+        }
+        return SSEEvent(event: currentEvent, data: currentData.joined(separator: "\n"))
     }
 }
 
@@ -66,8 +124,8 @@ enum AIProviderHTTP {
         }
         guard (200..<300).contains(http.statusCode) else {
             var body = ""
-            for try await line in bytes.lines {
-                body += line
+            for try await line in bytes.sseLines {
+                body += body.isEmpty ? line : "\n" + line
                 if body.count > 4000 { break }
             }
             throw AIProviderError.http(

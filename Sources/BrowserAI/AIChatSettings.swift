@@ -15,7 +15,10 @@ public final class AIChatSettings {
         static let openAIBaseURL = "AIChatOpenAIBaseURL"
         static let ollamaModel = "AIChatOllamaModel"
         static let includesPageContext = "AIChatIncludesPageContext"
+        static let panelWidth = "AIChatPanelWidth"
     }
+
+    public static let panelWidthRange: ClosedRange<Double> = 300...760
 
     private enum KeychainAccount {
         static let anthropic = "anthropic-api-key"
@@ -49,6 +52,19 @@ public final class AIChatSettings {
     public var ollamaModel: String {
         didSet {
             UserDefaults.standard.set(ollamaModel, forKey: DefaultsKey.ollamaModel)
+        }
+    }
+
+    /// Width of the docked chat panel, adjustable by dragging its edge.
+    public var panelWidth: Double {
+        didSet {
+            let clamped = min(max(panelWidth, Self.panelWidthRange.lowerBound),
+                              Self.panelWidthRange.upperBound)
+            if clamped != panelWidth {
+                panelWidth = clamped
+                return
+            }
+            UserDefaults.standard.set(panelWidth, forKey: DefaultsKey.panelWidth)
         }
     }
 
@@ -88,6 +104,11 @@ public final class AIChatSettings {
         includesPageContext = defaults.object(
             forKey: DefaultsKey.includesPageContext
         ) as? Bool ?? true
+        let storedWidth = defaults.object(forKey: DefaultsKey.panelWidth) as? Double ?? 380
+        panelWidth = min(
+            max(storedWidth, Self.panelWidthRange.lowerBound),
+            Self.panelWidthRange.upperBound
+        )
         anthropicAPIKey = KeychainStore.string(for: KeychainAccount.anthropic) ?? ""
         openAIAPIKey = KeychainStore.string(for: KeychainAccount.openAI) ?? ""
     }

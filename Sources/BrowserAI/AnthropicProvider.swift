@@ -57,10 +57,15 @@ public struct AnthropicProvider: AIProvider {
 
         var parser = SSEParser()
         var assembler = AnthropicStreamAssembler()
-        for try await line in bytes.lines {
+        for try await line in bytes.sseLines {
             try Task.checkCancellation()
             guard let event = parser.consume(line: line) else { continue }
             for streamEvent in assembler.handle(event) {
+                continuation.yield(streamEvent)
+            }
+        }
+        if let trailing = parser.flush() {
+            for streamEvent in assembler.handle(trailing) {
                 continuation.yield(streamEvent)
             }
         }

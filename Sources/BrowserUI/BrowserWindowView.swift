@@ -1,4 +1,5 @@
 import AppKit
+import BrowserAI
 import BrowserCore
 import BrowserEngine
 import SwiftUI
@@ -25,10 +26,7 @@ public struct BrowserWindowView: View {
         ZStack(alignment: .leading) {
             WebSurface(model: model)
                 .padding(.leading, model.sidebarMode == .pinned ? 300 : 0)
-                .padding(
-                    .trailing,
-                    model.isAIChatPanelVisible ? AIChatLayout.panelWidth : 0
-                )
+                .padding(.trailing, aiChatPanelWidth)
                 .clipShape(
                     LeadingRoundedRectangle(
                         radius: model.sidebarMode == .pinned ? 18 : 0
@@ -131,10 +129,7 @@ public struct BrowserWindowView: View {
                 FindOverlay(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.top, 14)
-                    .padding(
-                        .trailing,
-                        14 + (model.isAIChatPanelVisible ? AIChatLayout.panelWidth : 0)
-                    )
+                    .padding(.trailing, 14 + aiChatPanelWidth)
             }
 
             if model.isSitePermissionsPresented {
@@ -226,6 +221,12 @@ public struct BrowserWindowView: View {
         .onDisappear {
             model.stopLifecycleMonitoring()
         }
+    }
+
+    /// Reading the observable width here keeps the page inset in sync while
+    /// the panel edge is dragged.
+    private var aiChatPanelWidth: CGFloat {
+        model.isAIChatPanelVisible ? CGFloat(AIChatSettings.shared.panelWidth) : 0
     }
 
     private var indicatorDownload: DownloadItem? {
@@ -875,6 +876,10 @@ private struct WindowAccessor: NSViewRepresentable {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
+            // Glass surfaces sample what is behind the window, so the desktop
+            // shows through the chat panel and the sidebar's floating edges.
+            window.isOpaque = false
+            window.backgroundColor = .clear
             window.minSize = NSSize(width: 760, height: 520)
             window.title = isPrivate
                 ? BrowserLocalization.string("private_window_title")

@@ -3,54 +3,76 @@ import BrowserAI
 import BrowserCore
 import SwiftUI
 
-/// The assistant panel docked to the trailing edge of a browser window.
+enum AIChatLayout {
+    /// Width of the drag strip along the panel's leading edge.
+    static let resizeHandleWidth: CGFloat = 8
+}
+
+/// The chat panel docked to the trailing edge of a browser window.
+///
+/// The whole panel is a pane of tinted glass, so the desktop shows through it,
+/// and the transcript scrolls beneath a floating glass composer.
 struct AIChatPanelView: View {
     let model: BrowserWindowModel
 
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Bindable private var settings = AIChatSettings.shared
+    @State private var widthAtDragStart: Double?
 
     var body: some View {
-        VStack(spacing: 0) {
-            AIChatHeaderView(
-                title: BrowserLocalization.string("ai_chat_title"),
-                subtitle: AIChatSettings.shared.isConfigured
-                    ? AIChatSettings.shared.activeModelName
-                    : nil,
-                onClear: model.aiChat.isEmpty ? nil : { model.aiChat.clear() },
-                onDetach: { model.detachAIChat() },
-                onClose: { model.dismissAIChat() }
-            )
-            Divider()
-            AIChatConversationView(session: model.aiChat)
+        HStack(spacing: 0) {
+            resizeHandle
+
+            VStack(spacing: 0) {
+                AIChatHeaderView(
+                    session: model.aiChat,
+                    onDetach: { model.detachAIChat() },
+                    onClose: { model.dismissAIChat() }
+                )
+                AIChatConversationView(session: model.aiChat)
+            }
         }
-        .frame(width: AIChatLayout.panelWidth)
-        .background { panelBackground }
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(.separator.opacity(0.6))
-                .frame(width: 1)
-        }
+        .frame(width: settings.panelWidth)
+        .browserTintedGlass(tint: Color.accentColor.opacity(0.05))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(BrowserLocalization.string("ai_chat_title"))
     }
 
-    @ViewBuilder
-    private var panelBackground: some View {
-        if reduceTransparency {
-            Color(nsColor: .windowBackgroundColor)
-        } else {
-            Rectangle().fill(.ultraThinMaterial)
-        }
+    /// Dragging the leading edge resizes the panel; the width persists.
+    private var resizeHandle: some View {
+        Rectangle()
+            .fill(.clear)
+            .frame(width: AIChatLayout.resizeHandleWidth)
+            .frame(maxHeight: .infinity)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(.separator.opacity(0.5))
+                    .frame(width: 1)
+            }
+            .contentShape(Rectangle())
+            .onHover { isHovering in
+                if isHovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let start = widthAtDragStart ?? settings.panelWidth
+                        widthAtDragStart = start
+                        // Dragging left (negative) widens the trailing panel.
+                        settings.panelWidth = start - value.translation.width
+                    }
+                    .onEnded { _ in widthAtDragStart = nil }
+            )
+            .accessibilityLabel(BrowserLocalization.string("ai_chat_resize"))
     }
-}
-
-enum AIChatLayout {
-    static let panelWidth: CGFloat = 360
 }
 
 // MARK: - Detached window
 
-/// The assistant conversation living in its own window after a detach.
+/// The chat living in its own window after a detach.
 public struct AIChatWindowView: View {
     @State private var session: AIChatSession?
 
@@ -65,17 +87,12 @@ public struct AIChatWindowView: View {
             if let session {
                 VStack(spacing: 0) {
                     AIChatHeaderView(
-                        title: BrowserLocalization.string("ai_chat_window_title"),
-                        subtitle: AIChatSettings.shared.isConfigured
-                            ? AIChatSettings.shared.activeModelName
-                            : nil,
-                        onClear: session.isEmpty ? nil : { session.clear() },
+                        session: session,
                         onReattach: {
                             session.isDetached = false
                             session.onReattachRequest?()
                         }
                     )
-                    Divider()
                     AIChatConversationView(session: session)
                 }
                 .onDisappear {
@@ -88,16 +105,14 @@ public struct AIChatWindowView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 380, idealWidth: 440, minHeight: 460, idealHeight: 640)
+        .frame(minWidth: 380, idealWidth: 460, minHeight: 460, idealHeight: 660)
     }
 }
 
 // MARK: - Header
 
 private struct AIChatHeaderView: View {
-    let title: String
-    let subtitle: String?
-    var onClear: (() -> Void)?
+    @Bindable var session: AIChatSession
     var onDetach: (() -> Void)?
     var onReattach: (() -> Void)?
     var onClose: (() -> Void)?
@@ -105,41 +120,32 @@ private struct AIChatHeaderView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
+        HStack(spacing: 6) {
+            Text(BrowserLocalization.string("ai_chat_title"))
+                .font(.callout.weight(.semibold))
 
             Spacer(minLength: 8)
 
-            if let onClear {
-                headerButton(
-                    symbol: "square.and.pencil",
-                    help: BrowserLocalization.string("ai_chat_clear"),
-                    action: onClear
-                )
+            historyMenu
+
+            headerButton(
+                symbol: "square.and.pencil",
+                help: BrowserLocalization.string("ai_chat_new")
+            ) {
+                session.startNewConversation()
             }
+            .disabled(session.isEmpty)
+
             if let onDetach {
                 headerButton(
-                    symbol: "rectangle.portrait.and.arrow.right",
+                    symbol: "macwindow",
                     help: BrowserLocalization.string("ai_chat_detach"),
                     action: onDetach
                 )
             }
             if let onReattach {
                 headerButton(
-                    symbol: "rectangle.trailinghalf.inset.filled.arrow.trailing",
+                    symbol: "sidebar.trailing",
                     help: BrowserLocalization.string("ai_chat_reattach")
                 ) {
                     onReattach()
@@ -155,7 +161,35 @@ private struct AIChatHeaderView: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 46)
+        .frame(height: 44)
+    }
+
+    private var historyMenu: some View {
+        Menu {
+            let history = session.history
+            if history.isEmpty {
+                Text(BrowserLocalization.string("ai_chat_history_empty"))
+            } else {
+                ForEach(history) { conversation in
+                    Button(conversation.title) {
+                        session.open(conversationID: conversation.id)
+                    }
+                }
+                Divider()
+                Button(BrowserLocalization.string("ai_chat_history_clear"), role: .destructive) {
+                    session.clearHistory()
+                }
+            }
+        } label: {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: 24, height: 24)
+        .help(BrowserLocalization.string("ai_chat_history"))
+        .accessibilityLabel(BrowserLocalization.string("ai_chat_history"))
     }
 
     private func headerButton(
@@ -183,11 +217,12 @@ struct AIChatConversationView: View {
     @Bindable private var settings = AIChatSettings.shared
 
     @State private var draft = ""
+    @State private var composerHeight: CGFloat = 56
     @FocusState private var isInputFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             if !settings.isConfigured {
                 AIChatSetupView()
             } else if session.isEmpty {
@@ -196,18 +231,14 @@ struct AIChatConversationView: View {
                 transcript
             }
 
-            if let error = session.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .textSelection(.enabled)
-            }
-
-            composer
+            composerLayer
         }
+        .environment(\.openURL, OpenURLAction { url in
+            // Links belong in a browser tab, not an external window.
+            guard let handler = session.onOpenURL else { return .systemAction }
+            handler(url)
+            return .handled
+        })
         .task {
             await Task.yield()
             isInputFocused = true
@@ -215,10 +246,7 @@ struct AIChatConversationView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 30, weight: .medium))
-                .foregroundStyle(Color.accentColor.opacity(0.85))
+        VStack(spacing: 8) {
             Text(BrowserLocalization.string("ai_chat_empty_title"))
                 .font(.headline)
             Text(BrowserLocalization.string("ai_chat_empty_message"))
@@ -228,7 +256,8 @@ struct AIChatConversationView: View {
                 .frame(maxWidth: 260)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
+        .padding(.horizontal, 24)
+        .padding(.bottom, composerHeight)
     }
 
     private var transcript: some View {
@@ -241,19 +270,18 @@ struct AIChatConversationView: View {
                     }
                     if session.isStreaming {
                         AIChatTypingIndicator()
-                            .id("typing")
                     }
-                    Color.clear.frame(height: 1).id("bottom")
+                    // Keeps the last message clear of the floating composer.
+                    Color.clear
+                        .frame(height: composerHeight + 8)
+                        .id("bottom")
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.top, 8)
             }
-            .onChange(of: session.messages.count) {
-                scrollToBottom(proxy)
-            }
-            .onChange(of: session.messages.last?.text) {
-                scrollToBottom(proxy)
-            }
+            .scrollIndicators(.never)
+            .onChange(of: session.messages.count) { scrollToBottom(proxy) }
+            .onChange(of: session.messages.last?.text) { scrollToBottom(proxy) }
         }
     }
 
@@ -267,60 +295,91 @@ struct AIChatConversationView: View {
         }
     }
 
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField(
-                    BrowserLocalization.string("ai_chat_input_placeholder"),
-                    text: $draft,
-                    axis: .vertical
-                )
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .focused($isInputFocused)
-                .onSubmit(sendDraft)
-
-                if session.isStreaming {
-                    Button(action: session.cancelStreaming) {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.system(size: 21))
-                            .foregroundStyle(.red.opacity(0.85))
-                    }
-                    .buttonStyle(.plain)
-                    .help(BrowserLocalization.string("ai_chat_stop"))
-                    .accessibilityLabel(BrowserLocalization.string("ai_chat_stop"))
-                } else {
-                    Button(action: sendDraft) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 21))
-                            .foregroundStyle(
-                                canSend ? Color.accentColor : Color.secondary.opacity(0.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .help(BrowserLocalization.string("ai_chat_send"))
-                    .accessibilityLabel(BrowserLocalization.string("ai_chat_send"))
+    /// The composer floats above the transcript so content passes under the
+    /// glass, which is what the material is for.
+    private var composerLayer: some View {
+        VStack(spacing: 6) {
+            if let error = session.errorMessage {
+                AIChatErrorBanner(message: error) {
+                    session.errorMessage = nil
                 }
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 9)
-            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
-
-            Toggle(isOn: $settings.includesPageContext) {
-                Label(
-                    BrowserLocalization.string("ai_chat_share_page"),
-                    systemImage: "doc.text.magnifyingglass"
-                )
-                .font(.caption)
-            }
-            .toggleStyle(.checkbox)
-            .controlSize(.small)
-            .foregroundStyle(.secondary)
+            composer
         }
         .padding(.horizontal, 12)
-        .padding(.top, 10)
         .padding(.bottom, 12)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onChange(of: proxy.size.height, initial: true) {
+                        composerHeight = proxy.size.height
+                    }
+            }
+        }
+    }
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            inputField
+            actionButton
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 7)
+        .padding(.vertical, 7)
+        .browserTintedGlass(cornerRadius: 20, isInteractive: true)
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(.primary.opacity(0.07), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+
+    private var inputField: some View {
+        TextField(
+            BrowserLocalization.string("ai_chat_input_placeholder"),
+            text: $draft,
+            axis: .vertical
+        )
+        .textFieldStyle(.plain)
+        .font(.callout)
+        .lineLimit(1...7)
+        .focused($isInputFocused)
+        .onSubmit(sendDraft)
+    }
+
+    private var actionButton: some View {
+        let isStreaming = session.isStreaming
+        let label = isStreaming
+            ? BrowserLocalization.string("ai_chat_stop")
+            : BrowserLocalization.string("ai_chat_send")
+
+        return Button {
+            if isStreaming {
+                session.cancelStreaming()
+            } else {
+                sendDraft()
+            }
+        } label: {
+            Image(systemName: isStreaming ? "stop.fill" : "arrow.up")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(actionForeground)
+                .frame(width: 26, height: 26)
+                .background(actionBackground, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isStreaming && !canSend)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
+    private var actionForeground: Color {
+        if session.isStreaming { return Color(nsColor: .windowBackgroundColor) }
+        return canSend ? Color(nsColor: .windowBackgroundColor) : .secondary
+    }
+
+    private var actionBackground: Color {
+        if session.isStreaming { return .red.opacity(0.9) }
+        return canSend ? Color.accentColor : Color.secondary.opacity(0.18)
     }
 
     private var canSend: Bool {
@@ -336,6 +395,34 @@ struct AIChatConversationView: View {
     }
 }
 
+private struct AIChatErrorBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(BrowserLocalization.string("ai_chat_dismiss_error"))
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .browserTintedGlass(cornerRadius: 13, tint: .orange.opacity(0.10))
+    }
+}
+
 // MARK: - Messages
 
 private struct AIChatMessageView: View {
@@ -344,30 +431,16 @@ private struct AIChatMessageView: View {
     var body: some View {
         switch message.role {
         case .user:
-            VStack(alignment: .trailing, spacing: 4) {
-                if let context = message.pageContext {
-                    Label(
-                        BrowserLocalization.string(
-                            "ai_chat_context_badge",
-                            context.url.host ?? context.title
-                        ),
-                        systemImage: "doc.text"
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-                Text(message.text)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
-                    .background(
-                        Color.accentColor.opacity(0.16),
-                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    )
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.leading, 32)
+            Text(message.text)
+                .textSelection(.enabled)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(
+                    Color.accentColor.opacity(0.16),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.leading, 32)
         case .assistant:
             VStack(alignment: .leading, spacing: 7) {
                 ForEach(message.toolActivities) { activity in
@@ -424,7 +497,7 @@ private struct AIChatToolActivityView: View {
         }
         .padding(.horizontal, 9)
         .frame(height: 26)
-        .background(.quaternary.opacity(0.55), in: Capsule())
+        .background(.quaternary.opacity(0.5), in: Capsule())
         .help(helpText)
     }
 
@@ -474,83 +547,31 @@ private struct AIChatTypingIndicator: View {
             }
         }
         .frame(height: 16)
-        .task {
-            phase = true
-        }
+        .task { phase = true }
         .accessibilityHidden(true)
     }
 }
 
 // MARK: - Setup
 
-/// Shown inside the panel until a provider is configured. Mirrors the
-/// Settings section so people can finish setup without leaving the chat.
+/// Shown inside the panel until a provider is configured, so setup can be
+/// finished without leaving the chat.
 struct AIChatSetupView: View {
     @Bindable private var settings = AIChatSettings.shared
-    private let ollama = OllamaRuntime.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label(
-                        BrowserLocalization.string("ai_setup_title"),
-                        systemImage: "sparkles"
-                    )
-                    .font(.headline)
+                    Text(BrowserLocalization.string("ai_setup_title"))
+                        .font(.headline)
                     Text(BrowserLocalization.string("ai_setup_message"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Picker(
-                    BrowserLocalization.string("ai_settings_provider"),
-                    selection: $settings.provider
-                ) {
-                    ForEach(AIProviderKind.allCases) { kind in
-                        Text(kind.displayName).tag(kind)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-
-                switch settings.provider {
-                case .anthropic:
-                    SecureField(
-                        BrowserLocalization.string("ai_settings_api_key"),
-                        text: $settings.anthropicAPIKey,
-                        prompt: Text(verbatim: "sk-ant-…")
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    Picker(
-                        BrowserLocalization.string("ai_settings_model"),
-                        selection: $settings.anthropicModel
-                    ) {
-                        ForEach(AnthropicProvider.availableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
-                    }
-                case .openAICompatible:
-                    SecureField(
-                        BrowserLocalization.string("ai_settings_api_key"),
-                        text: $settings.openAIAPIKey,
-                        prompt: Text(verbatim: "sk-…")
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    TextField(
-                        BrowserLocalization.string("ai_settings_base_url"),
-                        text: $settings.openAIBaseURLText
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    TextField(
-                        BrowserLocalization.string("ai_settings_model"),
-                        text: $settings.openAIModel
-                    )
-                    .textFieldStyle(.roundedBorder)
-                case .ollama:
-                    AIOllamaStatusView()
-                }
+                AIProviderSetupControls()
 
                 SettingsLink {
                     Text(BrowserLocalization.string("ai_setup_open_settings"))
@@ -558,17 +579,73 @@ struct AIChatSetupView: View {
                 .controlSize(.small)
             }
             .padding(16)
+            .padding(.bottom, 60)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            if settings.provider == .ollama {
-                ollama.refresh()
+    }
+}
+
+/// Provider picker plus the credential field or Ollama installer.
+/// Shared by the panel setup card, Settings, and the welcome tour.
+struct AIProviderSetupControls: View {
+    @Bindable private var settings = AIChatSettings.shared
+    private let ollama = OllamaRuntime.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker(
+                BrowserLocalization.string("ai_settings_provider"),
+                selection: $settings.provider
+            ) {
+                ForEach(AIProviderKind.allCases) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            switch settings.provider {
+            case .anthropic:
+                SecureField(
+                    BrowserLocalization.string("ai_settings_api_key"),
+                    text: $settings.anthropicAPIKey,
+                    prompt: Text(verbatim: "sk-ant-…")
+                )
+                .textFieldStyle(.roundedBorder)
+                Picker(
+                    BrowserLocalization.string("ai_settings_model"),
+                    selection: $settings.anthropicModel
+                ) {
+                    ForEach(AnthropicProvider.availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+            case .openAICompatible:
+                SecureField(
+                    BrowserLocalization.string("ai_settings_api_key"),
+                    text: $settings.openAIAPIKey,
+                    prompt: Text(verbatim: "sk-…")
+                )
+                .textFieldStyle(.roundedBorder)
+                TextField(
+                    BrowserLocalization.string("ai_settings_base_url"),
+                    text: $settings.openAIBaseURLText
+                )
+                .textFieldStyle(.roundedBorder)
+                TextField(
+                    BrowserLocalization.string("ai_settings_model"),
+                    text: $settings.openAIModel
+                )
+                .textFieldStyle(.roundedBorder)
+            case .ollama:
+                AIOllamaStatusView()
             }
         }
+        .task {
+            if settings.provider == .ollama { ollama.refresh() }
+        }
         .onChange(of: settings.provider) { _, provider in
-            if provider == .ollama {
-                ollama.refresh()
-            }
+            if provider == .ollama { ollama.refresh() }
         }
     }
 }
@@ -584,7 +661,6 @@ extension AIProviderKind {
 }
 
 /// Ollama detection, one-click install, and model provisioning.
-/// Shared by the panel setup card and the Settings pane.
 struct AIOllamaStatusView: View {
     @Bindable private var settings = AIChatSettings.shared
     private var ollama: OllamaRuntime { OllamaRuntime.shared }

@@ -1399,6 +1399,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
         aiChat.onReattachRequest = { [weak self] in
             self?.isAIChatPresented = true
         }
+        aiChat.onOpenURL = { [weak self] url in
+            // A link in the chat belongs in this browser, not another app.
+            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+                return
+            }
+            self?.openAssistantTab(url: url, inBackground: false)
+        }
     }
 
     /// Opens a tab on behalf of the assistant, marked with the sparkle badge.
