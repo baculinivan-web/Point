@@ -694,13 +694,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Python 3 was not found. Install the Xcode Command Line Tools with: xcode-select --install"
+            "value": "No working Python 3 was found. Install one with: brew install python — the system /usr/bin/python3 is a stub that cannot run inside the app sandbox."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Python 3 не найден. Установите Command Line Tools: xcode-select --install"
+            "value": "Рабочий Python 3 не найден. Установите его: brew install python — системный /usr/bin/python3 это заглушка, которая не работает в песочнице приложения."
           }
         }
       }

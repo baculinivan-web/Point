@@ -25,7 +25,7 @@ enum PythonToolRunner {
     }
 
     static func run(code: String) async throws -> String {
-        guard let interpreter = locateInterpreter() else {
+        guard let interpreter = await resolveInterpreter() else {
             throw Failure.interpreterMissing
         }
 
@@ -44,8 +44,12 @@ enum PythonToolRunner {
         process.executableURL = interpreter
         process.arguments = [scriptURL.path]
         process.currentDirectoryURL = workingDirectory
-        // -u keeps output unbuffered so a timeout still yields partial output.
-        process.environment = ["PYTHONUNBUFFERED": "1", "HOME": workingDirectory.path]
+        process.environment = [
+            // Unbuffered output means a timeout still yields partial results.
+            "PYTHONUNBUFFERED": "1",
+            "HOME": workingDirectory.path,
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+        ]
 
         let output = Pipe()
         let errors = Pipe()
@@ -98,16 +102,55 @@ enum PythonToolRunner {
         return parts.joined(separator: "\n\n")
     }
 
-    private static func locateInterpreter() -> URL? {
-        // /usr/bin/python3 is a stub that fails without Command Line Tools, so
-        // check that it actually runs before handing it a script.
-        let candidates = [
-            "/usr/bin/python3",
-            "/opt/homebrew/bin/python3",
-            "/usr/local/bin/python3"
-        ]
-        return candidates
-            .map(URL.init(fileURLWithPath:))
-            .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    /// Interpreters in preference order.
+    ///
+    /// `/usr/bin/python3` is deliberately last: it is a shim that forwards to
+    /// `xcrun`, and `xcrun` refuses to run inside an App Sandbox
+    /// ("cannot be used within an App Sandbox"). The real interpreters below
+    /// are ordinary binaries and run fine under the sandbox.
+    private static let candidatePaths = [
+        "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "/usr/bin/python3"
+    ]
+
+    /// Caches the probe result so repeated tool calls do not re-test binaries.
+    @MainActor
+    private static var cachedInterpreter: URL?
+
+    /// Probes candidates once and remembers the first that actually runs, so a
+    /// shim that only fails at execution time is skipped rather than trusted.
+    private static func resolveInterpreter() async -> URL? {
+        if let cached = await MainActor.run(body: { cachedInterpreter }) {
+            return cached
+        }
+        for path in candidatePaths {
+            let url = URL(fileURLWithPath: path)
+            guard FileManager.default.isExecutableFile(atPath: path) else { continue }
+            guard await probe(url) else { continue }
+            await MainActor.run { cachedInterpreter = url }
+            return url
+        }
+        return nil
+    }
+
+    private static func probe(_ interpreter: URL) async -> Bool {
+        await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = interpreter
+            process.arguments = ["-c", "print('ok')"]
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            process.environment = ["PATH": "/usr/bin:/bin"]
+            do {
+                try process.run()
+            } catch {
+                return false
+            }
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        }.value
     }
 }
