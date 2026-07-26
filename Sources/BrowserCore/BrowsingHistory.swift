@@ -30,6 +30,7 @@ public protocol BrowsingHistoryRepository: Sendable {
     ) async throws -> BrowsingHistoryEntry
 
     func updateTitle(_ title: String, for id: UUID) async throws
+    func remove(_ id: UUID) async throws
     func removeVisits(before date: Date) async throws
     func removeAll() async throws
 }

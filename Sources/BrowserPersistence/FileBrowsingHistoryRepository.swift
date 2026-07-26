@@ -95,6 +95,11 @@ public actor FileBrowsingHistoryRepository: BrowsingHistoryRepository {
         try persist(entries)
     }
 
+    public func remove(_ id: UUID) async throws {
+        let entries = try loadIfNeeded().filter { $0.id != id }
+        try persist(entries)
+    }
+
     public func removeAll() async throws {
         _ = try loadIfNeeded()
         try persist([])

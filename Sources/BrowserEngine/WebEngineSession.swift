@@ -408,7 +408,9 @@ extension WebEngineSession: WKNavigationDelegate {
 
         switch disposition {
         case .allowInWebView where ["http", "https", "blob"].contains(scheme):
-            decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
+            let shouldDownload = navigationAction.shouldPerformDownload
+                && navigationAction.navigationType == .linkActivated
+            decisionHandler(shouldDownload ? .download : .allow)
         case .allowInWebView:
             decisionHandler(.allow)
         case .confirmExternalApplication:

@@ -319,6 +319,26 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public var selectedTabCount: Int { selectedTabIDs.count }
 
+    public func closeAllTabsForTermination() async {
+        stopLifecycleMonitoring()
+        dismissOmnibox()
+        dismissPreview()
+        closedTabs.removeAll()
+        selectedTabID = nil
+        selectedTabIDs.removeAll()
+        draggingTabIDs.removeAll()
+        draggingFolderID = nil
+        selectionAnchorID = nil
+
+        for tab in tabs {
+            cancelMediaPermissionRequests(for: tab.id)
+            dispose(tab: tab)
+        }
+        tabs.removeAll()
+        persist()
+        await persistenceTask?.value
+    }
+
     public var matchingTabs: [BrowserTab] {
         let query = omniboxText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return [] }
@@ -517,6 +537,26 @@ public final class BrowserWindowModel: WebEngineEventSink {
         navigate(to: entry.url)
     }
 
+    public func removeBrowsingHistoryEntry(_ entry: BrowsingHistoryEntry) {
+        browsingHistoryManagementTask?.cancel()
+        browsingHistory.removeAll { $0.id == entry.id }
+        browsingHistoryFavicons[entry.id] = nil
+        browsingHistoryError = nil
+        let repository = browsingHistoryRepository
+        browsingHistoryManagementTask = Task { @MainActor [weak self] in
+            do {
+                try await repository.remove(entry.id)
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                browsingHistoryError = BrowserLocalization.string(
+                    "clear_history_failed",
+                    error.localizedDescription
+                )
+                reloadBrowsingHistory()
+            }
+        }
+    }
+
     public func clearBrowsingHistory() {
         browsingHistoryManagementTask?.cancel()
         isLoadingBrowsingHistory = true
@@ -649,6 +689,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             newTab(background: background)
         case let .closeTab(id):
             closeTab(id)
+        case .closeAllTabs:
+            closeAllTabs()
         case .reopenClosedTab:
             reopenClosedTab()
         case let .selectTab(id):
@@ -734,10 +776,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let removedFolderID = tabs[index].folderID
         let wasSelected = selectedTabID == id
-        closedTabs.insert(tabs[index].snapshot, at: 0)
-        closedTabs = Array(closedTabs.prefix(50))
-        cancelMediaPermissionRequests(for: id)
-        dispose(tab: tabs[index])
+        rememberClosedTab(tabs[index])
         tabs.remove(at: index)
         selectedTabIDs.remove(id)
         if selectionAnchorID == id {
@@ -758,6 +797,24 @@ public final class BrowserWindowModel: WebEngineEventSink {
             selectTab(tabs[nextIndex].id)
         }
         normalizeSiblingPositions(in: removedFolderID)
+        reconcileLifecycle()
+        persist()
+    }
+
+    public func closeAllTabs() {
+        guard !tabs.isEmpty else { return }
+        dismissOmnibox()
+        dismissPreview()
+        for tab in tabs {
+            rememberClosedTab(tab)
+        }
+        tabs.removeAll()
+        selectedTabID = nil
+        selectedTabIDs.removeAll()
+        draggingTabIDs.removeAll()
+        draggingFolderID = nil
+        selectionAnchorID = nil
+        newTab()
         reconcileLifecycle()
         persist()
     }
@@ -978,11 +1035,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             tabs.firstIndex { $0.id == selected }
         }
         for tab in removedTabs {
-            closedTabs.insert(tab.snapshot, at: 0)
-            cancelMediaPermissionRequests(for: tab.id)
-            dispose(tab: tab)
+            rememberClosedTab(tab)
         }
-        closedTabs = Array(closedTabs.prefix(50))
         tabs.removeAll { removedTabIDs.contains($0.id) }
         selectedTabIDs.subtract(removedTabIDs)
         if selectionAnchorID.map(removedTabIDs.contains) == true {
@@ -1889,6 +1943,21 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 size: NSSize(width: image.width, height: image.height)
             )
         }
+    }
+
+    private func rememberClosedTab(_ tab: BrowserTab) {
+        recordCurrentPageBeforeClosingIfNeeded(tab)
+        closedTabs.insert(tab.snapshot, at: 0)
+        closedTabs = Array(closedTabs.prefix(50))
+        cancelMediaPermissionRequests(for: tab.id)
+        dispose(tab: tab)
+    }
+
+    private func recordCurrentPageBeforeClosingIfNeeded(_ tab: BrowserTab) {
+        guard tab.browsingHistoryRecordTask == nil,
+              let url = tab.url
+        else { return }
+        recordBrowsingHistoryVisit(for: tab, url: url, title: tab.title)
     }
 
     private func recordBrowsingHistoryVisit(

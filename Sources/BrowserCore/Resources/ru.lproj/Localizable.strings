@@ -80,15 +80,10 @@
 	<string>Закрыть поиск</string>
 	<key>close_tab</key>
 	<string>Закрыть вкладку</string>
-<<<<<<< HEAD
-	<key>close_window</key>
-	<string>Закрыть окно</string>
-=======
 	<key>close_preview</key>
 	<string>Закрыть предпросмотр</string>
 	<key>dismiss_preview_tip</key>
 	<string>Скрыть подсказку о предпросмотре</string>
->>>>>>> 0784c851f51baef0a0d53cd9d32252a0ff35116f
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>

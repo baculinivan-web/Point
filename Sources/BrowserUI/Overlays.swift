@@ -618,23 +618,33 @@ struct BrowsingHistoryOverlay: View {
                 description: Text(error)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.browsingHistory.isEmpty, !model.isLoadingBrowsingHistory {
-            ContentUnavailableView(
-                BrowserLocalization.string("history_empty"),
-                systemImage: "clock.arrow.circlepath",
-                description: Text(BrowserLocalization.string("history_empty_info"))
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.browsingHistory.isEmpty {
+            if model.isLoadingBrowsingHistory {
+                ProgressView()
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView(
+                    BrowserLocalization.string("history_empty"),
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text(BrowserLocalization.string("history_empty_info"))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(model.browsingHistory) { entry in
                         BrowsingHistoryRow(
                             entry: entry,
-                            favicon: model.browsingHistoryFavicons[entry.id]
-                        ) {
-                            model.openBrowsingHistoryEntry(entry)
-                        }
+                            favicon: model.browsingHistoryFavicons[entry.id],
+                            onOpen: {
+                                model.openBrowsingHistoryEntry(entry)
+                            },
+                            onRemove: {
+                                model.removeBrowsingHistoryEntry(entry)
+                            }
+                        )
                         Divider()
                             .padding(.leading, 58)
                     }
@@ -664,33 +674,47 @@ private struct BrowsingHistoryRow: View {
     let entry: BrowsingHistoryEntry
     let favicon: NSImage?
     let onOpen: () -> Void
+    let onRemove: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 12) {
-                faviconView
+        HStack(spacing: 10) {
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    faviconView
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(displayTitle)
-                        .lineLimit(1)
-                    Text(entry.url.absoluteString)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(displayTitle)
+                            .lineLimit(1)
+                        Text(entry.url.absoluteString)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Text(entry.visitedAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer(minLength: 12)
-
-                Text(entry.visitedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 58)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("\(displayTitle), \(entry.url.absoluteString)")
+
+            Button(action: onRemove) {
+                Image(systemName: "trash")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(BrowserLocalization.string("remove_from_list"))
+            .accessibilityLabel(BrowserLocalization.string("remove_from_list"))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(displayTitle), \(entry.url.absoluteString)")
+        .padding(.horizontal, 16)
+        .frame(minHeight: 58)
     }
 
     @ViewBuilder

@@ -80,15 +80,10 @@
 	<string>Close Search</string>
 	<key>close_tab</key>
 	<string>Close Tab</string>
-<<<<<<< HEAD
-	<key>close_window</key>
-	<string>Close Window</string>
-=======
 	<key>close_preview</key>
 	<string>Close Preview</string>
 	<key>dismiss_preview_tip</key>
 	<string>Dismiss preview tip</string>
->>>>>>> 0784c851f51baef0a0d53cd9d32252a0ff35116f
 	<key>cookies</key>
 	<string>Cookies</string>
 	<key>cookies_detail</key>

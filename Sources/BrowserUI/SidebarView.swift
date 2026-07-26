@@ -152,6 +152,11 @@ struct SidebarView: View {
                     Button(BrowserLocalization.string("new_folder")) {
                         model.createFolder()
                     }
+                    Button(BrowserLocalization.string("close_all_tabs")) {
+                        model.dispatch(.closeAllTabs)
+                    }
+                    .keyboardShortcut("w", modifiers: [.command, .shift])
+                    .disabled(model.tabs.isEmpty)
                     if model.selectedTabCount > 0 {
                         Button(BrowserLocalization.string("new_folder_from_selection")) {
                             model.createFolderFromSelection()
@@ -818,6 +823,10 @@ private struct PinnedTabCard: View {
         }
         Button(BrowserLocalization.string("unpin")) { model.setPinned(false, for: tab.id) }
         Button(BrowserLocalization.string("close")) { model.closeTab(tab.id) }
+        Button(BrowserLocalization.string("close_all_tabs")) {
+            model.dispatch(.closeAllTabs)
+        }
+        .keyboardShortcut("w", modifiers: [.command, .shift])
     }
 
     private var sortedFolders: [TabFolder] {
@@ -961,6 +970,10 @@ private struct TabRow: View {
             model.setPinned(!tab.isPinned, for: tab.id)
         }
         Button(BrowserLocalization.string("close")) { model.closeTab(tab.id) }
+        Button(BrowserLocalization.string("close_all_tabs")) {
+            model.dispatch(.closeAllTabs)
+        }
+        .keyboardShortcut("w", modifiers: [.command, .shift])
     }
 
     private var accessibilityLabel: String {

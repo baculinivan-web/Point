@@ -44,6 +44,9 @@ struct BrowserApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 760)
+        .commands {
+            BrowserCommands()
+        }
 
         Settings {
             BrowserSettingsView()
@@ -61,6 +64,7 @@ private final class BrowserRuntime {
         browsingHistoryRepository: browsingHistoryRepository
     )
     private var privateDownloadManagers: [WeakDownloadManager] = []
+    private var windowModels: [WeakBrowserWindowModel] = []
     private var standardWindowCount = 0
 
     init() {
@@ -80,14 +84,16 @@ private final class BrowserRuntime {
             privateDownloadManagers.append(
                 WeakDownloadManager(privateDownloadManager)
             )
-            return BrowserWindowModel(
-                repository: InMemorySessionRepository(),
-                sitePermissionRepository: InMemorySitePermissionRepository(),
-                browsingHistoryRepository: InMemoryBrowsingHistoryRepository(),
-                downloadManager: privateDownloadManager,
-                faviconRepository: FaviconRepository(persistsToDisk: false),
-                isPrivate: true,
-                websiteDataStore: .nonPersistent()
+            return register(
+                BrowserWindowModel(
+                    repository: InMemorySessionRepository(),
+                    sitePermissionRepository: InMemorySitePermissionRepository(),
+                    browsingHistoryRepository: InMemoryBrowsingHistoryRepository(),
+                    downloadManager: privateDownloadManager,
+                    faviconRepository: FaviconRepository(persistsToDisk: false),
+                    isPrivate: true,
+                    websiteDataStore: .nonPersistent()
+                )
             )
         }
 
@@ -110,18 +116,44 @@ private final class BrowserRuntime {
             )
         }
 
-        return BrowserWindowModel(
-            repository: sessionRepository,
-            sitePermissionRepository: FileSitePermissionRepository(),
-            browsingHistoryRepository: browsingHistoryRepository,
-            downloadManager: downloadManager,
-            isPrivate: false,
-            websiteDataStore: .default()
+        return register(
+            BrowserWindowModel(
+                repository: sessionRepository,
+                sitePermissionRepository: FileSitePermissionRepository(),
+                browsingHistoryRepository: browsingHistoryRepository,
+                downloadManager: downloadManager,
+                isPrivate: false,
+                websiteDataStore: .default()
+            )
         )
+    }
+
+    private func register(_ model: BrowserWindowModel) -> BrowserWindowModel {
+        windowModels.removeAll { $0.value == nil }
+        windowModels.append(WeakBrowserWindowModel(model))
+        return model
     }
 
     func performMaintenanceIfNeeded() async {
         await maintenance.start()
+    }
+
+    func prepareForTermination() async {
+        privateDownloadManagers.removeAll { $0.value == nil }
+        windowModels.removeAll { $0.value == nil }
+
+        for model in windowModels.compactMap(\.value) {
+            await model.closeAllTabsForTermination()
+        }
+
+        await downloadManager.flushHistory()
+        for manager in privateDownloadManagers.compactMap(\.value) {
+            await manager.flushHistory()
+        }
+
+        for window in NSApp.windows where window.isVisible {
+            window.close()
+        }
     }
 
     var activeDownloadCount: Int {
@@ -137,6 +169,15 @@ private final class WeakDownloadManager {
     weak var value: DownloadManager?
 
     init(_ value: DownloadManager) {
+        self.value = value
+    }
+}
+
+@MainActor
+private final class WeakBrowserWindowModel {
+    weak var value: BrowserWindowModel?
+
+    init(_ value: BrowserWindowModel) {
         self.value = value
     }
 }
@@ -243,6 +284,13 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
     weak var runtime: BrowserRuntime?
     private var isTerminationReplyPending = false
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        normalizeCloseWindowShortcut()
+        DispatchQueue.main.async { [weak self] in
+            self?.normalizeCloseWindowShortcut()
+        }
+    }
+
     func applicationShouldTerminate(
         _ sender: NSApplication
     ) -> NSApplication.TerminateReply {
@@ -267,10 +315,22 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
 
         isTerminationReplyPending = true
         Task { @MainActor [weak self] in
-            await runtime.downloadManager.flushHistory()
+            await runtime.prepareForTermination()
             self?.isTerminationReplyPending = false
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+
+    private func normalizeCloseWindowShortcut(in menu: NSMenu? = NSApp.mainMenu) {
+        guard let menu else { return }
+
+        for item in menu.items {
+            if item.action == #selector(NSWindow.performClose(_:)) {
+                item.keyEquivalent = "w"
+                item.keyEquivalentModifierMask = [.control]
+            }
+            normalizeCloseWindowShortcut(in: item.submenu)
+        }
     }
 }

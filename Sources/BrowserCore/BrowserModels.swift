@@ -255,6 +255,7 @@ public protocol SessionRepository: Sendable {
 public enum BrowserCommand: Sendable {
     case newTab(background: Bool)
     case closeTab(TabID)
+    case closeAllTabs
     case reopenClosedTab
     case selectTab(TabID)
     case moveTab(TabID, before: TabID?)

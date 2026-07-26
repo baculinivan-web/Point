@@ -243,6 +243,14 @@ public actor SwiftDataBrowsingHistoryRepository: BrowsingHistoryRepository {
         try context.save()
     }
 
+    public func remove(_ id: UUID) async throws {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<BrowsingHistoryRecord>())
+        guard let record = records.first(where: { $0.id == id }) else { return }
+        context.delete(record)
+        try context.save()
+    }
+
     public func removeVisits(before date: Date) async throws {
         let context = ModelContext(container)
         let records = try context.fetch(FetchDescriptor<BrowsingHistoryRecord>())

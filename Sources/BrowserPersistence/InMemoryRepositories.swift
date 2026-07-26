@@ -48,6 +48,10 @@ public actor InMemoryBrowsingHistoryRepository: BrowsingHistoryRepository {
         entries[index].title = title
     }
 
+    public func remove(_ id: UUID) async throws {
+        entries.removeAll { $0.id == id }
+    }
+
     public func removeVisits(before date: Date) async throws {
         entries.removeAll { $0.visitedAt < date }
     }

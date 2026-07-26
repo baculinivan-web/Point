@@ -263,6 +263,31 @@ struct FileBrowsingHistoryRepositoryTests {
         try await repository.removeAll()
         #expect(try await repository.recent(limit: 10).isEmpty)
     }
+
+    @Test("A single persisted visit can be deleted")
+    func removeSingleVisit() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserHistoryDeleteTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let repository = FileBrowsingHistoryRepository(
+            fileURL: directory.appending(path: "history.json")
+        )
+        let first = try await repository.recordVisit(
+            url: URL(string: "https://example.com")!,
+            title: "First",
+            visitedAt: Date(timeIntervalSince1970: 100)
+        )
+        let second = try await repository.recordVisit(
+            url: URL(string: "https://example.org")!,
+            title: "Second",
+            visitedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        try await repository.remove(first.id)
+
+        #expect(try await repository.recent(limit: 10) == [second])
+    }
 }
 
 @Suite("SwiftData persistence and migration")
@@ -365,6 +390,33 @@ struct SwiftDataRepositoryTests {
         )
         let remaining = try await repository.recent(limit: 10)
         #expect(remaining.map(\.title) == ["Recent"])
+    }
+
+    @Test("SwiftData history can delete one visit")
+    func swiftDataRemoveSingleVisit() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserSwiftDataHistoryDelete-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let controller = try BrowserPersistenceController(
+            storeURL: directory.appending(path: "Browser.store"),
+            legacyDirectoryURL: directory
+        )
+        let repository = controller.browsingHistoryRepository()
+        let first = try await repository.recordVisit(
+            url: URL(string: "https://example.com")!,
+            title: "First",
+            visitedAt: Date(timeIntervalSince1970: 100)
+        )
+        let second = try await repository.recordVisit(
+            url: URL(string: "https://example.org")!,
+            title: "Second",
+            visitedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        try await repository.remove(first.id)
+
+        #expect(try await repository.recent(limit: 10) == [second])
     }
 
     @Test("Private repositories do not retain data")

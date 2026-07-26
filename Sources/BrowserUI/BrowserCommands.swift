@@ -48,7 +48,7 @@ public struct BrowserCommands: Commands {
             Button(BrowserLocalization.string("close_window")) {
                 NSApp.keyWindow?.performClose(nil)
             }
-            .keyboardShortcut("w", modifiers: [.command, .shift])ite
+            .keyboardShortcut("w", modifiers: [.control])
         }
 
         CommandGroup(replacing: .newItem) {
@@ -81,7 +81,13 @@ public struct BrowserCommands: Commands {
                 guard let id = model?.selectedTabID else { return }
                 model?.closeTab(id)
             }
-            .keyboardShortcut("w", modifiers: [.control])
+            .keyboardShortcut("w", modifiers: [.command])
+
+            Button(BrowserLocalization.string("close_all_tabs")) {
+                model?.dispatch(.closeAllTabs)
+            }
+            .keyboardShortcut("w", modifiers: [.command, .shift])
+            .disabled(model?.tabs.isEmpty ?? true)
 
             Button(BrowserLocalization.string("reopen_closed_tab")) {
                 model?.reopenClosedTab()
