@@ -5,14 +5,19 @@ import SwiftUI
 
 public struct BrowserWindowView: View {
     @Bindable private var model: BrowserWindowModel
+    @Binding private var isOnboardingPresented: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
 
-    public init(model: BrowserWindowModel) {
+    public init(
+        model: BrowserWindowModel,
+        isOnboardingPresented: Binding<Bool> = .constant(false)
+    ) {
         self.model = model
+        _isOnboardingPresented = isOnboardingPresented
     }
 
     public var body: some View {
@@ -148,6 +153,16 @@ public struct BrowserWindowView: View {
                     .zIndex(13)
             }
 
+            if isOnboardingPresented {
+                OnboardingOverlay {
+                    isOnboardingPresented = false
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .zIndex(60)
+            }
+
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(
@@ -169,8 +184,16 @@ public struct BrowserWindowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isBrowsingHistoryPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isClearBrowsingDataPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.toastMessage)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: isOnboardingPresented)
         .onChange(of: scenePhase) { _, phase in
             model.setApplicationActive(phase == .active)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: BrowserOnboarding.replayRequest)
+        ) { _ in
+            guard !model.isPrivate, !isOnboardingPresented else { return }
+            guard BrowserOnboarding.claimReplay() else { return }
+            isOnboardingPresented = true
         }
         .onDisappear {
             model.stopLifecycleMonitoring()

@@ -208,6 +208,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     /// Frame of the page area in window coordinates, published by the web surface.
     /// Read only while a drag is in flight, so it must not invalidate the view.
     @ObservationIgnored public var webSurfaceFrame: CGRect = .zero
+    /// True once `restoreSession()` has found a stored session for this window.
+    /// A first-run window never has one, which is what gates the welcome tour.
+    public private(set) var didRestorePersistedSession = false
     public var renamingFolderID: TabFolderID?
     public var sidebarMode: SidebarMode = .pinned
     public var isSidebarVisible = true
@@ -371,6 +374,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         do {
             if let snapshot = try await repository.load() {
+                didRestorePersistedSession = true
                 folders = snapshot.folders.map(TabFolder.init(snapshot:))
                 tabs = snapshot.tabs
                     .filter { $0.url != nil }

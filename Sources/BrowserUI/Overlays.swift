@@ -177,8 +177,9 @@ struct OmniboxOverlay: View {
     }
 }
 
-private struct SearchEngineIcon: View {
+struct SearchEngineIcon: View {
     let searchEngine: SearchEngine
+    var size: CGFloat = 22
 
     var body: some View {
         Group {
@@ -192,12 +193,12 @@ private struct SearchEngineIcon: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(searchEngine.fallbackColor)
                     Text(searchEngine.monogram)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: size * 0.5, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                 }
             }
         }
-        .frame(width: 22, height: 22)
+        .frame(width: size, height: size)
         .clipped()
         .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }

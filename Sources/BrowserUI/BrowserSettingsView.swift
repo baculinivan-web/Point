@@ -45,6 +45,17 @@ public struct BrowserSettingsView: View {
                 }
             }
 
+            Section(BrowserLocalization.string("onboarding_section_title")) {
+                Text(BrowserLocalization.string("onboarding_section_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(BrowserLocalization.string("onboarding_replay")) {
+                    BrowserOnboarding.requestReplay()
+                }
+            }
+
             Section(BrowserLocalization.string("memory_management")) {
                 LabeledContent(BrowserLocalization.string("memory_limit")) {
                     Text(memoryLimitFraction, format: .percent.precision(.fractionLength(0)))
@@ -75,7 +86,7 @@ public struct BrowserSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 340)
+        .frame(width: 480, height: 430)
         .onAppear(perform: refreshDefaultBrowserStatus)
         .onReceive(
             NotificationCenter.default.publisher(
