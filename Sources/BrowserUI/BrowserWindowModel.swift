@@ -84,6 +84,8 @@ public final class TabFolder: Identifiable {
     public var parentID: TabFolderID?
     public var position: Int64
     public var isExpanded: Bool
+    public var isSplit: Bool
+    public var splitRatio: Double?
 
     public init(snapshot: PersistedTabFolder) {
         id = snapshot.id
@@ -92,6 +94,8 @@ public final class TabFolder: Identifiable {
         parentID = snapshot.parentID
         position = snapshot.position
         isExpanded = snapshot.isExpanded
+        isSplit = snapshot.isSplit
+        splitRatio = snapshot.splitRatio
     }
 
     public var snapshot: PersistedTabFolder {
@@ -101,7 +105,9 @@ public final class TabFolder: Identifiable {
             symbolName: symbolName,
             parentID: parentID,
             position: position,
-            isExpanded: isExpanded
+            isExpanded: isExpanded,
+            isSplit: isSplit,
+            splitRatio: splitRatio
         )
     }
 }
@@ -122,6 +128,11 @@ enum SidebarTreeItem: Identifiable {
         }
     }
 
+}
+
+public enum SplitPaneSide: Sendable {
+    case left
+    case right
 }
 
 public struct MediaPermissionPrompt: Identifiable, Equatable, Sendable {
@@ -192,6 +203,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var selectedTabIDs: Set<TabID> = []
     public private(set) var draggingTabIDs: Set<TabID> = []
     public private(set) var draggingFolderID: TabFolderID?
+    /// The pane a sidebar tab drag would land in, while it hovers the page area.
+    public private(set) var splitDropSide: SplitPaneSide?
+    /// Frame of the page area in window coordinates, published by the web surface.
+    /// Read only while a drag is in flight, so it must not invalidate the view.
+    @ObservationIgnored public var webSurfaceFrame: CGRect = .zero
     public var renamingFolderID: TabFolderID?
     public var sidebarMode: SidebarMode = .pinned
     public var isSidebarVisible = true
@@ -303,6 +319,24 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public var activeTab: BrowserTab? {
         tabs.first { $0.id == selectedTabID }
+    }
+
+    /// The two tabs currently visible in the split workspace, ordered left to right.
+    public var activeSplitTabs: [BrowserTab] {
+        guard let selectedTabID,
+              let split = splitFolder(containing: selectedTabID)
+        else { return [] }
+        return splitTabs(in: split.id)
+    }
+
+    public var activeSplitFolderID: TabFolderID? {
+        guard let selectedTabID else { return nil }
+        return splitFolder(containing: selectedTabID)?.id
+    }
+
+    public var activeSplitRatio: Double {
+        guard let activeSplitFolderID else { return 0.5 }
+        return folder(activeSplitFolderID)?.splitRatio ?? 0.5
     }
 
     public var isComposingNewTab: Bool {
@@ -714,6 +748,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func closeTab(_ id: TabID) {
+        dissolveSplitContaining(id)
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let removedFolderID = tabs[index].folderID
         let wasSelected = selectedTabID == id
@@ -752,6 +787,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             : selectedTabIDs
         let movingTabs = orderedTabs(in: ids)
         guard !movingTabs.isEmpty else { return }
+
+        dissolveSplits(containing: ids)
 
         let movingIDs = Set(movingTabs.map(\.id))
         tabs.removeAll { movingIDs.contains($0.id) }
@@ -843,6 +880,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func setPinned(_ isPinned: Bool, for id: TabID) {
         guard let tab = tab(id) else { return }
+        dissolveSplitContaining(id)
         tab.isPinned = isPinned
         if isPinned {
             tab.folderID = nil
@@ -858,7 +896,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         inside parentID: TabFolderID? = nil,
         containing tabIDs: Set<TabID> = []
     ) -> TabFolderID {
-        let validParentID = parentID.flatMap(folder) == nil ? nil : parentID
+        let validParentID = parentID.flatMap(folder).flatMap { $0.isSplit ? nil : $0.id }
         if let validParentID {
             folder(validParentID)?.isExpanded = true
         }
@@ -903,9 +941,84 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func setFolderSymbol(_ symbolName: String, for id: TabFolderID) {
-        guard let folder = folder(id), !symbolName.isEmpty else { return }
+        guard let folder = folder(id), !folder.isSplit, !symbolName.isEmpty else { return }
         folder.symbolName = symbolName
         persist()
+    }
+
+    /// Whether `draggedID` can be paired with the active page in a two-pane workspace.
+    public func canCreateSplit(with draggedID: TabID) -> Bool {
+        guard let target = activeTab, target.id != draggedID else { return false }
+        return tab(draggedID) != nil && activeSplitFolderID == nil
+    }
+
+    /// The pane a drag ending at `point` would land in, or `nil` when it misses the
+    /// page area. Both rects are in window coordinates; `sidebarFrame` is subtracted
+    /// because in auto-hide mode the sidebar floats above the full-width page.
+    public func splitDropSide(
+        at point: CGPoint,
+        excludingSidebar sidebarFrame: CGRect
+    ) -> SplitPaneSide? {
+        let minX = max(webSurfaceFrame.minX, sidebarFrame.maxX)
+        let region = CGRect(
+            x: minX,
+            y: webSurfaceFrame.minY,
+            width: webSurfaceFrame.maxX - minX,
+            height: webSurfaceFrame.height
+        )
+        guard region.width > 0, region.height > 0, region.contains(point) else { return nil }
+        return point.x < region.midX ? .left : .right
+    }
+
+    func updateSplitDropSide(_ side: SplitPaneSide?) {
+        guard side != splitDropSide else { return }
+        splitDropSide = side
+    }
+
+    /// Creates a two-pane workspace by placing a sidebar tab beside the active page.
+    public func createSplit(with draggedID: TabID, placingOn side: SplitPaneSide) {
+        guard canCreateSplit(with: draggedID), let target = activeTab else { return }
+
+        dissolveSplitContaining(draggedID)
+
+        let parentID = target.folderID
+        let position = target.isPinned ? nextPosition(in: nil) : target.position
+        let splitID = TabFolderID()
+        let split = TabFolder(
+            snapshot: PersistedTabFolder(
+                id: splitID,
+                name: "",
+                symbolName: "rectangle.split.2x1",
+                parentID: target.isPinned ? nil : parentID,
+                position: position,
+                isExpanded: true,
+                isSplit: true,
+                splitRatio: 0.5
+            )
+        )
+        folders.append(split)
+
+        guard let dragged = tab(draggedID) else { return }
+        let orderedTabs = side == .left ? [dragged, target] : [target, dragged]
+        for (index, tab) in orderedTabs.enumerated() {
+            tab.isPinned = false
+            tab.folderID = splitID
+            tab.position = Int64(index + 1) * 1024
+        }
+        split.name = splitDisplayName(for: splitID)
+        selectTab(draggedID)
+        reconcileLifecycle()
+        persist()
+    }
+
+    public func setSplitRatio(
+        _ ratio: Double,
+        for folderID: TabFolderID,
+        persistChange: Bool = true
+    ) {
+        guard let folder = folder(folderID), folder.isSplit else { return }
+        folder.splitRatio = min(max(ratio, 0.2), 0.8)
+        if persistChange { persist() }
     }
 
     public func moveSelectedTabs(to folderID: TabFolderID?) {
@@ -919,6 +1032,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func moveFolder(_ id: TabFolderID, inside parentID: TabFolderID?) {
         guard let moving = folder(id), id != parentID else { return }
+        guard parentID.flatMap(folder)?.isSplit != true else { return }
         if let parentID, isFolder(parentID, descendantOf: id) { return }
         moving.parentID = parentID
         moving.position = nextPosition(in: parentID, excludingFolderID: id)
@@ -1025,7 +1139,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         var current = folder(id)
         var visited: Set<TabFolderID> = []
         while let value = current, visited.insert(value.id).inserted {
-            parts.insert(value.name, at: 0)
+            parts.insert(displayName(for: value), at: 0)
             current = value.parentID.flatMap(folder)
         }
         return parts.joined(separator: " / ")
@@ -1038,8 +1152,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }.count
     }
 
+    func displayName(for folder: TabFolder) -> String {
+        guard folder.isSplit else { return folder.name }
+        return splitDisplayName(for: folder.id)
+    }
+
     func canMoveFolder(_ id: TabFolderID, inside parentID: TabFolderID) -> Bool {
-        id != parentID && !isFolder(parentID, descendantOf: id)
+        id != parentID
+            && !isFolder(parentID, descendantOf: id)
+            && folder(parentID)?.isSplit != true
     }
 
     public func presentOmnibox(clearText: Bool = false) {
@@ -1352,7 +1473,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineIsActive(_ session: WebEngineSession) -> Bool {
-        session.tabID == selectedTabID || previewTab?.engine === session
+        isVisibleSplitTab(session.tabID) || previewTab?.engine === session
     }
 
     public func webEngine(
@@ -1617,6 +1738,59 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tabs.first { $0.id == id }
     }
 
+    private func splitFolder(containing tabID: TabID) -> TabFolder? {
+        guard let folderID = tab(tabID)?.folderID,
+              let folder = folder(folderID),
+              folder.isSplit
+        else { return nil }
+        return folder
+    }
+
+    private func splitTabs(in folderID: TabFolderID) -> [BrowserTab] {
+        tabs
+            .filter { $0.folderID == folderID }
+            .sorted { $0.position < $1.position }
+            .prefix(2)
+            .map { $0 }
+    }
+
+    private func splitDisplayName(for folderID: TabFolderID) -> String {
+        let names = splitTabs(in: folderID).map(\.displayTitle)
+        return names.isEmpty ? BrowserLocalization.string("new_tab") : names.joined(separator: " and ")
+    }
+
+    private func dissolveSplitContaining(
+        _ tabID: TabID
+    ) {
+        dissolveSplits(containing: [tabID])
+    }
+
+    private func dissolveSplits(
+        containing movingIDs: Set<TabID>,
+        preserveCompleteSplits: Bool = false
+    ) {
+        let splitIDs = Set(movingIDs.compactMap { splitFolder(containing: $0)?.id })
+        for splitID in splitIDs {
+            let members = splitTabs(in: splitID)
+            let movingMembers = members.filter { movingIDs.contains($0.id) }
+            guard !movingMembers.isEmpty,
+                  !(preserveCompleteSplits && movingMembers.count == members.count),
+                  let split = folder(splitID)
+            else { continue }
+
+            let survivors = members.filter { !movingIDs.contains($0.id) }
+            for survivor in survivors {
+                survivor.isPinned = false
+                survivor.folderID = split.parentID
+                survivor.position = split.position
+            }
+            for moving in movingMembers {
+                moving.folderID = split.parentID
+            }
+            folders.removeAll { $0.id == splitID }
+        }
+    }
+
     private func tab(for session: WebEngineSession) -> BrowserTab? {
         if previewTab?.engine === session {
             return previewTab
@@ -1672,6 +1846,19 @@ public final class BrowserWindowModel: WebEngineEventSink {
             engine.load(url)
         }
         engine.refreshMediaPlaybackState()
+
+        for companion in activeSplitTabs where companion.id != tab.id {
+            let companionEngine = ensureEngine(for: companion)
+            companionEngine.setMediaPlaybackSuspended(false)
+            companion.lifecycleState = .active
+            companion.lastInteractionAt = tab.lastInteractionAt
+            companion.evictionGraceUntil = tab.evictionGraceUntil
+            if !companion.hasLoadedInitialURL, let url = companion.url {
+                companion.hasLoadedInitialURL = true
+                companionEngine.load(url)
+            }
+            companionEngine.refreshMediaPlaybackState()
+        }
     }
 
     public func setApplicationActive(_ isActive: Bool) {
@@ -2135,7 +2322,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func suspend(tabID: TabID) {
         guard let tab = tab(tabID),
-              tab.id != selectedTabID,
+              !isVisibleSplitTab(tab.id),
               tab.lifecycleState == .liveBackground,
               let engine = tab.engine
         else { return }
@@ -2150,13 +2337,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     private func evict(tabID: TabID) {
-        guard let tab = tab(tabID), tab.id != selectedTabID else { return }
+        guard let tab = tab(tabID), !isVisibleSplitTab(tab.id) else { return }
         guard canEvict(tab) else { return }
         finalizeEviction(tab)
     }
 
     private func finalizeEviction(_ tab: BrowserTab) {
-        guard tab.id != selectedTabID,
+        guard !isVisibleSplitTab(tab.id),
               canEvict(tab)
         else { return }
         let interval = lifecycleSignposter.beginInterval("Tab eviction")
@@ -2199,13 +2386,17 @@ public final class BrowserWindowModel: WebEngineEventSink {
         now: Date
     ) -> TabProtectionReason {
         var reasons = tab.engineProtectionReasons
-        if tab.id == selectedTabID {
+        if isVisibleSplitTab(tab.id) {
             reasons.insert(.active)
         }
         if now < tab.evictionGraceUntil {
             reasons.insert(.gracePeriod)
         }
         return reasons
+    }
+
+    private func isVisibleSplitTab(_ tabID: TabID) -> Bool {
+        tabID == selectedTabID || activeSplitTabs.contains { $0.id == tabID }
     }
 
     private func engineProtectionReasons(
@@ -2299,7 +2490,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
         to proposedFolderID: TabFolderID?,
         persistChange: Bool = true
     ) {
-        guard !ids.isEmpty else { return }
+        guard !ids.isEmpty,
+              proposedFolderID.flatMap(folder)?.isSplit != true
+        else { return }
+        dissolveSplits(containing: ids)
         let destinationID = proposedFolderID.flatMap(folder) == nil ? nil : proposedFolderID
         if let destinationID {
             folder(destinationID)?.isExpanded = true
@@ -2331,8 +2525,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
     ) {
         guard !ids.isEmpty,
               let target = tab(targetID),
-              !ids.contains(targetID)
+              !ids.contains(targetID),
+              target.folderID.flatMap(folder)?.isSplit != true
         else { return }
+        dissolveSplits(containing: ids)
         let movingTabs = orderedTabs(in: ids)
         guard !movingTabs.isEmpty else { return }
 
@@ -2371,7 +2567,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         insertAfter: Bool,
         persistChange: Bool = true
     ) {
-        guard !ids.isEmpty, let targetFolder = folder(folderID) else { return }
+        guard !ids.isEmpty,
+              let targetFolder = folder(folderID),
+              !targetFolder.isSplit
+        else { return }
+        dissolveSplits(containing: ids)
         let movingTabs = orderedTabs(in: ids)
         guard !movingTabs.isEmpty else { return }
         for tab in movingTabs {
@@ -2402,7 +2602,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     ) -> Bool {
         guard let moving = folder(id),
               let target = folder(targetID),
-              id != targetID
+              id != targetID,
+              !target.isSplit
         else { return false }
         let parentID = target.parentID
         if parentID == id || parentID.map({ isFolder($0, descendantOf: id) }) == true {
@@ -2432,9 +2633,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     func beginDraggingFolder(_ id: TabFolderID) {
         draggingTabIDs = []
         draggingFolderID = id
+        splitDropSide = nil
     }
 
     func finishDragReordering() {
+        splitDropSide = nil
         draggingTabIDs = []
         draggingFolderID = nil
         persist()
@@ -2488,6 +2691,22 @@ public final class BrowserWindowModel: WebEngineEventSink {
             if tab.isPinned || tab.folderID.map({ !validIDs.contains($0) }) == true {
                 tab.folderID = nil
             }
+        }
+
+        let invalidSplits = folders.filter { folder in
+            folder.isSplit && splitTabs(in: folder.id).count != 2
+        }
+        for split in invalidSplits {
+            for tab in splitTabs(in: split.id) {
+                tab.folderID = split.parentID
+                tab.position = split.position
+            }
+            folders.removeAll { $0.id == split.id }
+        }
+        for split in folders where split.isSplit {
+            split.symbolName = "rectangle.split.2x1"
+            split.splitRatio = min(max(split.splitRatio ?? 0.5, 0.2), 0.8)
+            split.name = splitDisplayName(for: split.id)
         }
     }
 

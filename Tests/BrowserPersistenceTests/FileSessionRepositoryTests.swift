@@ -64,7 +64,9 @@ struct FileSessionRepositoryTests {
                     name: "Исследование",
                     parentID: workFolderID,
                     position: 1024,
-                    isExpanded: false
+                    isExpanded: false,
+                    isSplit: true,
+                    splitRatio: 0.62
                 )
             ]
         )

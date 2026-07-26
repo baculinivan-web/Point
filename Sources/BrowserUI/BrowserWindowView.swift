@@ -392,32 +392,204 @@ private struct WebSurface: View {
 
     var body: some View {
         ZStack {
-            if let tab = model.activeTab,
-               let engine = tab.engine {
-                WKWebViewHost(
-                    webView: engine.webView,
-                    blockedLeadingWidth: blockedWebInteractionWidth,
-                    onSwipeBack: { [weak model] in
-                        model?.handleNavigationSwipe(.back) ?? false
-                    },
-                    onSwipeForward: { [weak model] in
-                        model?.handleNavigationSwipe(.forward) ?? false
-                    }
+            if let folderID = model.activeSplitFolderID,
+               model.activeSplitTabs.count == 2 {
+                SplitWebSurface(
+                    model: model,
+                    folderID: folderID,
+                    tabs: model.activeSplitTabs,
+                    ratio: model.activeSplitRatio,
+                    blockedLeadingWidth: blockedWebInteractionWidth
                 )
-
-                if tab.isShowingRestorationPlaceholder {
-                    RestoringTabPlaceholder()
-                        .transition(.opacity)
-                }
             } else {
-                Color(nsColor: .textBackgroundColor)
+                singlePage
+            }
+
+            if let side = model.splitDropSide {
+                SplitDropPreview(side: side)
+                    .padding(.leading, blockedWebInteractionWidth)
+            }
+        }
+        .background {
+            // The sidebar drag runs as a SwiftUI gesture rather than an AppKit drag
+            // session, because the WKWebView swallows drops before they reach us.
+            // It needs this frame to tell which pane the pointer is over.
+            GeometryReader { proxy in
+                Color.clear.onChange(of: proxy.frame(in: .global), initial: true) {
+                    model.webSurfaceFrame = proxy.frame(in: .global)
+                }
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
     }
 
+    @ViewBuilder
+    private var singlePage: some View {
+        if let tab = model.activeTab,
+           let engine = tab.engine {
+            WKWebViewHost(
+                webView: engine.webView,
+                blockedLeadingWidth: blockedWebInteractionWidth,
+                onSwipeBack: { [weak model] in
+                    model?.handleNavigationSwipe(.back) ?? false
+                },
+                onSwipeForward: { [weak model] in
+                    model?.handleNavigationSwipe(.forward) ?? false
+                }
+            )
+
+            if tab.isShowingRestorationPlaceholder {
+                RestoringTabPlaceholder()
+                    .transition(.opacity)
+            }
+        } else {
+            Color(nsColor: .textBackgroundColor)
+        }
+    }
+
     private var blockedWebInteractionWidth: CGFloat {
         model.sidebarMode == .autoHide && model.isSidebarVisible ? 300 : 0
+    }
+}
+
+private struct SplitWebSurface: View {
+    let model: BrowserWindowModel
+    let folderID: TabFolderID
+    let tabs: [BrowserTab]
+    let ratio: Double
+    let blockedLeadingWidth: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            let dividerWidth: CGFloat = 10
+            let contentWidth = max(0, geometry.size.width - dividerWidth)
+            let leftWidth = contentWidth * ratio
+
+            HStack(spacing: 0) {
+                SplitWebPane(
+                    tab: tabs[0],
+                    blockedLeadingWidth: blockedLeadingWidth
+                )
+                .frame(width: leftWidth)
+
+                SplitResizeHandle(
+                    ratio: ratio,
+                    availableWidth: contentWidth,
+                    onChange: { value in
+                        model.setSplitRatio(value, for: folderID, persistChange: false)
+                    },
+                    onCommit: { value in
+                        model.setSplitRatio(value, for: folderID)
+                    }
+                )
+                .frame(width: dividerWidth)
+
+                SplitWebPane(tab: tabs[1], blockedLeadingWidth: 0)
+                    .frame(width: max(0, contentWidth - leftWidth))
+            }
+        }
+    }
+}
+
+private struct SplitWebPane: View {
+    let tab: BrowserTab
+    let blockedLeadingWidth: CGFloat
+
+    var body: some View {
+        ZStack {
+            if let engine = tab.engine {
+                WKWebViewHost(
+                    webView: engine.webView,
+                    blockedLeadingWidth: blockedLeadingWidth,
+                    onSwipeBack: { false },
+                    onSwipeForward: { false }
+                )
+            } else {
+                Color(nsColor: .textBackgroundColor)
+            }
+
+            if tab.isShowingRestorationPlaceholder {
+                RestoringTabPlaceholder()
+                    .transition(.opacity)
+            }
+        }
+        .clipped()
+    }
+}
+
+private struct SplitResizeHandle: View {
+    let ratio: Double
+    let availableWidth: CGFloat
+    let onChange: (Double) -> Void
+    let onCommit: (Double) -> Void
+
+    @State private var startRatio: Double?
+    @State private var isDragging = false
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.separator.opacity(isDragging ? 0.95 : 0.55))
+                .frame(width: isDragging ? 2 : 1)
+            Capsule()
+                .fill(.secondary.opacity(isDragging ? 0.7 : 0.32))
+                .frame(width: 3, height: 34)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if !hovering && !isDragging { isDragging = false }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if startRatio == nil { startRatio = ratio }
+                    isDragging = true
+                    guard let startRatio, availableWidth > 0 else { return }
+                    onChange(startRatio + value.translation.width / availableWidth)
+                }
+                .onEnded { value in
+                    let resolved = (startRatio ?? ratio)
+                        + value.translation.width / max(availableWidth, 1)
+                    onCommit(resolved)
+                    startRatio = nil
+                    isDragging = false
+                }
+        )
+        .accessibilityLabel("Resize split view")
+        .accessibilityHint("Drag left or right to change the page widths")
+    }
+}
+
+private struct SplitDropPreview: View {
+    let side: SplitPaneSide
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 6) {
+                SplitDropZone(isHighlighted: side == .left)
+                SplitDropZone(isHighlighted: side == .right)
+            }
+            .padding(18)
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background(Color.black.opacity(0.16))
+        }
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+}
+
+private struct SplitDropZone: View {
+    let isHighlighted: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(isHighlighted ? Color.accentColor.opacity(0.28) : .black.opacity(0.16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        isHighlighted ? Color.accentColor.opacity(0.95) : .white.opacity(0.24),
+                        lineWidth: isHighlighted ? 2 : 1
+                    )
+            }
     }
 }
 

@@ -40,11 +40,22 @@ struct SidebarView: View {
     private var sidebarBase: some View {
         sidebarContent
             .coordinateSpace(name: SidebarCoordinateSpace.name)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: SidebarWindowFramePreferenceKey.self,
+                        value: proxy.frame(in: .global)
+                    )
+                }
+            }
             .onPreferenceChange(SidebarItemLayoutPreferenceKey.self) { layouts in
                 reorderState.updateLayouts(layouts, model: model)
             }
             .onPreferenceChange(SidebarListBoundsPreferenceKey.self) { bounds in
                 reorderState.updateListBounds(bounds)
+            }
+            .onPreferenceChange(SidebarWindowFramePreferenceKey.self) { frame in
+                reorderState.updateWindowFrame(frame)
             }
             .overlay(alignment: .topLeading) {
                 sidebarDragOverlay
@@ -436,6 +447,17 @@ private struct SidebarListBoundsPreferenceKey: PreferenceKey {
     }
 }
 
+/// The sidebar's own frame in window coordinates, used to translate drag
+/// locations out of the sidebar's coordinate space and onto the page area.
+private struct SidebarWindowFramePreferenceKey: PreferenceKey {
+    static let defaultValue = CGRect.zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isEmpty { value = next }
+    }
+}
+
 private struct SidebarItemLayoutReader: View {
     let layout: SidebarItemLayout
 
@@ -460,6 +482,7 @@ private struct SidebarItemLayoutReader: View {
 @Observable
 private final class SidebarReorderState {
     @ObservationIgnored private(set) var listBounds = CGRect.zero
+    @ObservationIgnored private(set) var windowFrame = CGRect.zero
     private(set) var anchorTab: BrowserTab?
     private(set) var draggedTabIDs: Set<TabID> = []
     private(set) var sourceVisual: SidebarDragVisual = .regular
@@ -518,6 +541,11 @@ private final class SidebarReorderState {
         listBounds = bounds
     }
 
+    func updateWindowFrame(_ frame: CGRect) {
+        guard frame != windowFrame else { return }
+        windowFrame = frame
+    }
+
     func dragFromSidebar(
         startLocation: CGPoint,
         location: CGPoint,
@@ -545,15 +573,27 @@ private final class SidebarReorderState {
                 model: model
             )
         }
-        guard anchorTab != nil else { return }
+        guard let anchorTab else { return }
         currentLocation = location
+
+        if let side = splitDropSide(at: location, for: anchorTab, model: model) {
+            model.updateSplitDropSide(side)
+            target = nil
+            lastAppliedTarget = nil
+            return
+        }
+        model.updateSplitDropSide(nil)
         updateTarget(at: location, model: model)
     }
 
     func finish(model: BrowserWindowModel) {
-        guard anchorTab != nil else { return }
+        guard let anchorTab else { return }
+        let side = model.splitDropSide
         model.finishDragReordering()
-        anchorTab = nil
+        if let side {
+            model.createSplit(with: anchorTab.id, placingOn: side)
+        }
+        self.anchorTab = nil
         draggedTabIDs = []
         target = nil
         lastAppliedTarget = nil
@@ -577,6 +617,24 @@ private final class SidebarReorderState {
         currentLocation = startLocation
         grabOffsetY = min(max(startLocation.y - frame.minY, 0), frame.height)
         model.beginDraggingTabs(ids)
+    }
+
+    /// Splitting is offered once a single dragged tab leaves the sidebar and hovers
+    /// one half of the page area. `location` is in the sidebar's coordinate space.
+    private func splitDropSide(
+        at location: CGPoint,
+        for anchorTab: BrowserTab,
+        model: BrowserWindowModel
+    ) -> SplitPaneSide? {
+        guard draggedTabIDs.count == 1,
+              !windowFrame.isEmpty,
+              model.canCreateSplit(with: anchorTab.id)
+        else { return nil }
+        let inWindow = CGPoint(
+            x: location.x + windowFrame.minX,
+            y: location.y + windowFrame.minY
+        )
+        return model.splitDropSide(at: inWindow, excludingSidebar: windowFrame)
     }
 
     private func updateTarget(at location: CGPoint, model: BrowserWindowModel) {
@@ -803,7 +861,7 @@ private struct PinnedTabCard: View {
             }
         }
         Menu(BrowserLocalization.string("move_to_folder")) {
-            ForEach(sortedFolders) { folder in
+            ForEach(sortedFolders.filter { !$0.isSplit }) { folder in
                 Button(model.folderPath(folder.id)) {
                     model.moveTab(tab.id, to: folder.id)
                 }
@@ -942,7 +1000,7 @@ private struct TabRow: View {
         Menu(BrowserLocalization.string("move_to_folder")) {
             Button(BrowserLocalization.string("no_folder")) { model.moveTab(tab.id, to: nil) }
             Divider()
-            ForEach(sortedFolders) { folder in
+            ForEach(sortedFolders.filter { !$0.isSplit }) { folder in
                 Button(model.folderPath(folder.id)) {
                     model.moveTab(tab.id, to: folder.id)
                 }
@@ -1093,7 +1151,7 @@ private struct FolderRow: View {
                         value: folder.isExpanded
                     )
 
-                if model.renamingFolderID == folder.id {
+                if !folder.isSplit, model.renamingFolderID == folder.id {
                     TextField(
                         BrowserLocalization.string("folder_name_placeholder"),
                         text: $draftName
@@ -1113,7 +1171,7 @@ private struct FolderRow: View {
                             isRenameFocused = true
                         }
                 } else {
-                    Text(folder.name)
+                    Text(model.displayName(for: folder))
                         .font(.callout.weight(.medium))
                         .lineLimit(1)
                 }
@@ -1156,13 +1214,16 @@ private struct FolderRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
-                beginRenaming()
+                if !folder.isSplit { beginRenaming() }
             }
             .onDrag {
                 model.beginDraggingFolder(folder.id)
                 return .sidebarItem(.folder(folder.id))
             } preview: {
-                FolderDragPreview(folder: folder)
+                FolderDragPreview(
+                    title: model.displayName(for: folder),
+                    symbolName: folder.symbolName
+                )
             }
             .onDrop(
                 of: [.browserSidebarItem],
@@ -1174,22 +1235,26 @@ private struct FolderRow: View {
                 )
             )
             .contextMenu {
-                Button(BrowserLocalization.string("rename")) {
-                    beginRenaming()
-                }
-                Menu(BrowserLocalization.string("folder_icon")) {
-                    ForEach(FolderSymbolOption.popular) { option in
-                        Button {
-                            model.setFolderSymbol(option.symbolName, for: folder.id)
-                        } label: {
-                            Label(option.title, systemImage: option.symbolName)
+                if !folder.isSplit {
+                    Button(BrowserLocalization.string("rename")) {
+                        beginRenaming()
+                    }
+                    Menu(BrowserLocalization.string("folder_icon")) {
+                        ForEach(FolderSymbolOption.popular) { option in
+                            Button {
+                                model.setFolderSymbol(option.symbolName, for: folder.id)
+                            } label: {
+                                Label(option.title, systemImage: option.symbolName)
+                            }
                         }
                     }
                 }
-                Button(BrowserLocalization.string("new_nested_folder")) {
-                    model.createFolder(inside: folder.id)
+                if !folder.isSplit {
+                    Button(BrowserLocalization.string("new_nested_folder")) {
+                        model.createFolder(inside: folder.id)
+                    }
                 }
-                if model.selectedTabCount > 0 {
+                if model.selectedTabCount > 0, !folder.isSplit {
                     Button(BrowserLocalization.string("move_selected_here")) {
                         model.moveSelectedTabs(to: folder.id)
                     }
@@ -1603,10 +1668,11 @@ private struct FloatingPinnedTabCard: View {
 }
 
 private struct FolderDragPreview: View {
-    let folder: TabFolder
+    let title: String
+    let symbolName: String
 
     var body: some View {
-        Label(folder.name, systemImage: folder.symbolName)
+        Label(title, systemImage: symbolName)
             .lineLimit(1)
             .padding(.horizontal, 11)
             .frame(height: 38)

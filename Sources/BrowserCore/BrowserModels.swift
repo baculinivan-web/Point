@@ -184,6 +184,10 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
     public var parentID: TabFolderID?
     public var position: Int64
     public var isExpanded: Bool
+    /// A two-pane workspace. Its children are the left and right tabs, in order.
+    public var isSplit: Bool
+    /// The fraction of the workspace occupied by the left pane.
+    public var splitRatio: Double?
 
     public init(
         id: TabFolderID = TabFolderID(),
@@ -191,7 +195,9 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         symbolName: String? = "folder.fill",
         parentID: TabFolderID? = nil,
         position: Int64,
-        isExpanded: Bool = true
+        isExpanded: Bool = true,
+        isSplit: Bool = false,
+        splitRatio: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -199,6 +205,31 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         self.parentID = parentID
         self.position = position
         self.isExpanded = isExpanded
+        self.isSplit = isSplit
+        self.splitRatio = splitRatio
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case symbolName
+        case parentID
+        case position
+        case isExpanded
+        case isSplit
+        case splitRatio
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(TabFolderID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        symbolName = try container.decodeIfPresent(String.self, forKey: .symbolName)
+        parentID = try container.decodeIfPresent(TabFolderID.self, forKey: .parentID)
+        position = try container.decode(Int64.self, forKey: .position)
+        isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? true
+        isSplit = try container.decodeIfPresent(Bool.self, forKey: .isSplit) ?? false
+        splitRatio = try container.decodeIfPresent(Double.self, forKey: .splitRatio)
     }
 }
 
