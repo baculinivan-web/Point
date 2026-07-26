@@ -529,6 +529,54 @@
         }
       }
     },
+    "ai_chat_tools_collapsed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used %d tools"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вызвано инструментов: %d"
+          }
+        }
+      }
+    },
+    "ai_chat_tools_expand": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the tool calls"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать вызовы инструментов"
+          }
+        }
+      }
+    },
+    "ai_chat_tools_running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools: %1$d of %2$d"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Инструменты: %1$d из %2$d"
+          }
+        }
+      }
+    },
     "ai_chat_untitled": {
       "localizations": {
         "en": {

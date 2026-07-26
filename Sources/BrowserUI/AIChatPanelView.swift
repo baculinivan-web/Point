@@ -555,8 +555,12 @@ private struct AIChatMessageView: View {
             .padding(.leading, 32)
         case .assistant:
             VStack(alignment: .leading, spacing: 7) {
-                ForEach(message.toolActivities) { activity in
-                    AIChatToolActivityView(activity: activity)
+                if message.toolActivities.count == 1 {
+                    AIChatToolActivityView(activity: message.toolActivities[0])
+                } else if message.toolActivities.count > 1 {
+                    // A turn can fire many tools at once; collapse them so the
+                    // answer stays the thing you read first.
+                    AIChatToolActivityGroup(activities: message.toolActivities)
                 }
                 if !message.text.isEmpty {
                     ChatMarkdownView(text: message.text)
@@ -643,6 +647,91 @@ private struct AIChatAttachmentStrip: View {
             }
         }
         .help(attachment.name)
+    }
+}
+
+/// Several tool calls from one turn, shown as a single expandable row.
+private struct AIChatToolActivityGroup: View {
+    let activities: [AIChatToolActivity]
+
+    @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: 7) {
+                    leadingIcon
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 26)
+                .background(.quaternary.opacity(0.5), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(BrowserLocalization.string("ai_chat_tools_expand"))
+            .accessibilityLabel(title)
+            .accessibilityHint(BrowserLocalization.string("ai_chat_tools_expand"))
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(activities) { activity in
+                        AIChatToolActivityView(activity: activity)
+                    }
+                }
+                .padding(.leading, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isExpanded)
+    }
+
+    @ViewBuilder
+    private var leadingIcon: some View {
+        if runningCount > 0 {
+            ProgressView().controlSize(.mini)
+        } else if failureCount > 0 {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        } else {
+            Image(systemName: "wrench.and.screwdriver")
+                .font(.caption)
+                .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    private var title: String {
+        guard runningCount > 0 else {
+            return BrowserLocalization.string(
+                "ai_chat_tools_collapsed",
+                activities.count
+            )
+        }
+        return BrowserLocalization.string(
+            "ai_chat_tools_running",
+            activities.count - runningCount,
+            activities.count
+        )
+    }
+
+    private var runningCount: Int {
+        activities.filter { $0.state == .running }.count
+    }
+
+    private var failureCount: Int {
+        activities.filter {
+            if case .failed = $0.state { return true }
+            return false
+        }.count
     }
 }
 
