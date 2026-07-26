@@ -15,6 +15,9 @@ public enum BrowserOnboarding {
     /// to claim the request presents it, so it never opens twice.
     public static let replayRequest = Notification.Name("PointOnboardingReplayRequest")
 
+    /// Set when a replay is asked for and cleared by the window that takes it.
+    /// The flag outlives the post so delivery does not have to be synchronous;
+    /// a request nobody takes simply sits here until the next one replaces it.
     private static var isReplayPending = false
 
     public static var isComplete: Bool {
@@ -25,21 +28,12 @@ public enum BrowserOnboarding {
         UserDefaults.standard.set(currentVersion, forKey: completedVersionKey)
     }
 
-    /// Brings a browsing window forward and asks it to show the tour again.
-    /// Returns `false` when no window took the request, which only happens if
-    /// every browsing window is closed.
-    @discardableResult
-    public static func requestReplay() -> Bool {
-        if let window = NSApp.windows.first(where: {
-            $0.identifier?.rawValue.hasPrefix("browser-window") == true
-        }) {
-            window.makeKeyAndOrderFront(nil)
-        }
+    /// Asks a browsing window to show the tour again. The window that takes the
+    /// request also brings itself forward, so the tour is never left behind the
+    /// Settings window it was started from.
+    public static func requestReplay() {
         isReplayPending = true
         NotificationCenter.default.post(name: replayRequest, object: nil)
-        let wasClaimed = !isReplayPending
-        isReplayPending = false
-        return wasClaimed
     }
 
     static func claimReplay() -> Bool {

@@ -11,6 +11,7 @@ public struct BrowserWindowView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
+    @State private var hostWindow: NSWindow?
 
     public init(
         model: BrowserWindowModel,
@@ -169,7 +170,8 @@ public struct BrowserWindowView: View {
             WindowAccessor(
                 showsTrafficLights: model.isSidebarVisible,
                 isPrivate: model.isPrivate,
-                isFullScreen: $isFullScreen
+                isFullScreen: $isFullScreen,
+                hostWindow: $hostWindow
             )
         )
         .focusedSceneValue(\.browserWindowModel, model)
@@ -194,6 +196,9 @@ public struct BrowserWindowView: View {
             guard !model.isPrivate, !isOnboardingPresented else { return }
             guard BrowserOnboarding.claimReplay() else { return }
             isOnboardingPresented = true
+            // The request comes from Settings, which is in front of this window.
+            NSApp.activate()
+            hostWindow?.makeKeyAndOrderFront(nil)
         }
         .onDisappear {
             model.stopLifecycleMonitoring()
@@ -777,6 +782,7 @@ private struct WindowAccessor: NSViewRepresentable {
     let showsTrafficLights: Bool
     let isPrivate: Bool
     @Binding var isFullScreen: Bool
+    @Binding var hostWindow: NSWindow?
 
     @MainActor
     final class Coordinator: NSObject {
@@ -895,6 +901,9 @@ private struct WindowAccessor: NSViewRepresentable {
                 isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
+            if hostWindow !== view.window {
+                hostWindow = view.window
+            }
         }
         return view
     }
@@ -907,6 +916,9 @@ private struct WindowAccessor: NSViewRepresentable {
                 isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
+            if hostWindow !== nsView.window {
+                hostWindow = nsView.window
+            }
         }
     }
 }
