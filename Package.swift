@@ -48,6 +48,10 @@ let package = Package(
         .testTarget(
             name: "BrowserAITests",
             dependencies: ["BrowserAI"]
+        ),
+        .testTarget(
+            name: "BrowserUITests",
+            dependencies: ["BrowserUI"]
         )
     ],
     swiftLanguageModes: [.v6]

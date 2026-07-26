@@ -153,6 +153,32 @@ public final class AIChatSettings {
         }
     }
 
+    /// Whether the selected model can read attached images.
+    public var supportsImageAttachments: Bool {
+        Self.supportsImages(provider: provider, model: ollamaModel)
+    }
+
+    /// Anthropic and mainstream OpenAI-compatible models are multimodal; local
+    /// Ollama models mostly are not, so the model name has to say so.
+    public nonisolated static func supportsImages(
+        provider: AIProviderKind,
+        model: String
+    ) -> Bool {
+        switch provider {
+        case .anthropic, .openAICompatible:
+            return true
+        case .ollama:
+            let name = model.lowercased()
+            let visionFamilies = [
+                "llava", "vision", "vl:", "-vl", "vl-", "minicpm-v", "moondream",
+                "gemma3", "mistral-small3", "granite3.2-vision"
+            ]
+            // A bare `…vl` tag such as "qwen2.5vl" carries no separator.
+            return visionFamilies.contains { name.contains($0) }
+                || name.hasSuffix("vl")
+        }
+    }
+
     public var maxTokens: Int {
         switch provider {
         case .anthropic: 64000

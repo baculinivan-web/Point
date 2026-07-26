@@ -128,9 +128,48 @@ public struct AIToolResult: Sendable, Equatable, Codable {
     }
 }
 
+/// A file the person attached to a message.
+///
+/// Images travel to the model as image blocks; everything else is reduced to
+/// text on the browser side so it works with any provider.
+public struct AIAttachment: Identifiable, Sendable, Codable, Equatable {
+    public enum Kind: String, Sendable, Codable {
+        case image
+        case text
+    }
+
+    public let id: UUID
+    public let kind: Kind
+    public let name: String
+    /// IANA media type, e.g. `image/png`. Empty for text attachments.
+    public let mediaType: String
+    /// Image bytes, already downscaled. Empty for text attachments.
+    public let data: Data
+    /// Extracted text. Empty for image attachments.
+    public let text: String
+
+    public init(
+        id: UUID = UUID(),
+        kind: Kind,
+        name: String,
+        mediaType: String = "",
+        data: Data = Data(),
+        text: String = ""
+    ) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.mediaType = mediaType
+        self.data = data
+        self.text = text
+    }
+
+    public var base64Data: String { data.base64EncodedString() }
+}
+
 /// One message in the provider conversation, assembled by the harness.
 public enum AIConversationMessage: Sendable, Codable {
-    case user(String)
+    case user(text: String, attachments: [AIAttachment] = [])
     case assistant(text: String, toolCalls: [AIToolCall])
     case toolResults([AIToolResult])
 }

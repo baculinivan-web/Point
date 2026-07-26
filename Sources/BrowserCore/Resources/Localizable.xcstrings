@@ -81,6 +81,70 @@
         }
       }
     },
+    "ai_chat_attach": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach images or files"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прикрепить изображения или файлы"
+          }
+        }
+      }
+    },
+    "ai_chat_attach_prompt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose images or files to attach"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите изображения или файлы"
+          }
+        }
+      }
+    },
+    "ai_chat_attach_prompt_text_only": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose files to attach"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите файлы"
+          }
+        }
+      }
+    },
+    "ai_chat_attach_text_only": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach files. The selected model cannot read images."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прикрепить файлы. Выбранная модель не умеет читать изображения."
+          }
+        }
+      }
+    },
     "ai_chat_close": {
       "localizations": {
         "en": {
@@ -269,6 +333,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Вернуть в окно браузера"
+          }
+        }
+      }
+    },
+    "ai_chat_remove_attachment": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Убрать %@"
           }
         }
       }

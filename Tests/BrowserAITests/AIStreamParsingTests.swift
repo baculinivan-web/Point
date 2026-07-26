@@ -163,7 +163,7 @@ struct RequestBodyTests {
         model: "claude-opus-5",
         system: "sys",
         messages: [
-            .user("hello"),
+            .user(text: "hello"),
             .assistant(text: "hi", toolCalls: [
                 AIToolCall(id: "t1", name: "web_search", arguments: .object([
                     "query": .string("swift")

@@ -41,7 +41,9 @@ public struct AIChatToolActivity: Identifiable, Sendable, Equatable, Codable {
 /// One transcript entry. Assistant turns interleave text and tool activity in
 /// the order they streamed.
 public struct AIChatMessage: Identifiable, Sendable, Codable {
-    public enum Role: Sendable, Codable {
+    /// Stored as a plain string so the on-disk history stays readable and
+    /// tolerant of future cases.
+    public enum Role: String, Sendable, Codable {
         case user
         case assistant
     }
@@ -50,17 +52,39 @@ public struct AIChatMessage: Identifiable, Sendable, Codable {
     public let role: Role
     public var text: String
     public var toolActivities: [AIChatToolActivity]
+    public var attachments: [AIAttachment]
 
     public init(
         id: UUID = UUID(),
         role: Role,
         text: String,
-        toolActivities: [AIChatToolActivity] = []
+        toolActivities: [AIChatToolActivity] = [],
+        attachments: [AIAttachment] = []
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.toolActivities = toolActivities
+        self.attachments = attachments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, role, text, toolActivities, attachments
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        role = try container.decode(Role.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        toolActivities = try container.decodeIfPresent(
+            [AIChatToolActivity].self,
+            forKey: .toolActivities
+        ) ?? []
+        attachments = try container.decodeIfPresent(
+            [AIAttachment].self,
+            forKey: .attachments
+        ) ?? []
     }
 }
 
@@ -171,9 +195,13 @@ public final class AIChatSession {
         isStreaming = false
     }
 
-    public func send(_ text: String, includePageContext: Bool) {
+    public func send(
+        _ text: String,
+        attachments: [AIAttachment] = [],
+        includePageContext: Bool
+    ) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isStreaming else { return }
+        guard !trimmed.isEmpty || !attachments.isEmpty, !isStreaming else { return }
         guard let provider = settings.makeProvider() else {
             errorMessage = BrowserLocalization.string("ai_error_not_configured")
             return
@@ -190,8 +218,10 @@ public final class AIChatSession {
                let context = await toolExecutor?.currentPageContext() {
                 promptText = Self.prompt(for: trimmed, context: context)
             }
-            messages.append(AIChatMessage(role: .user, text: trimmed))
-            conversation.append(.user(promptText))
+            messages.append(
+                AIChatMessage(role: .user, text: trimmed, attachments: attachments)
+            )
+            conversation.append(.user(text: promptText, attachments: attachments))
             await runAgentLoop(provider: provider)
             isStreaming = false
             streamTask = nil

@@ -1,12 +1,16 @@
 # Changelog
 
-## 0.2.0 — AI Assistant
+## 0.2.0 — Chat
 
-- Added a built-in AI chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, or detached into its own window.
+- Added a built-in chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, resized by dragging its edge, or detached into its own window.
 - Supported providers: Anthropic (Claude), any OpenAI-compatible server, and local models through Ollama — with in-app Ollama detection, one-click install, and model download.
-- The assistant receives the current page as context by default (toggleable), searches the web through the browser, reads pages, and opens tabs; assistant-opened tabs carry a sparkle badge in the sidebar.
+- The chat receives the current page as context by default (toggleable in Settings), searches the web through the browser, reads pages, and opens tabs; chat-opened tabs carry a sparkle badge in the sidebar.
+- Added image and file attachments: images go to multimodal models directly, while PDFs and text files are extracted to text so they work on every provider. The attach control reflects whether the selected model can read images.
+- Answers render Markdown blocks natively, including tables, lists, headings, quotes, and code.
+- Past chats are stored on disk and reachable from the chat menu; links in a reply open in a browser tab.
+- The panel is tinted Liquid Glass with a floating composer that the transcript scrolls beneath.
 - API keys are stored in the keychain; responses stream live with visible tool activity.
-- Added an assistant page to the welcome tour and an AI section in Settings.
+- Added a chat setup step to the welcome tour and a Chat section in Settings.
 - Updated the bundle version to `0.2.0` (`28`).
 
 ## 0.1.5 — Split View and Default Browser

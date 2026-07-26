@@ -88,8 +88,23 @@ public struct OpenAICompatibleProvider: AIProvider {
         }
         for message in request.messages {
             switch message {
-            case let .user(text):
-                messages.append(["role": "user", "content": text])
+            case let .user(text, attachments):
+                let combinedText = AnthropicProvider.textWithFileAttachments(text, attachments)
+                let images = attachments.filter { $0.kind == .image }
+                if images.isEmpty {
+                    messages.append(["role": "user", "content": combinedText])
+                } else {
+                    var parts: [[String: Any]] = [["type": "text", "text": combinedText]]
+                    for image in images {
+                        parts.append([
+                            "type": "image_url",
+                            "image_url": [
+                                "url": "data:\(image.mediaType);base64,\(image.base64Data)"
+                            ]
+                        ])
+                    }
+                    messages.append(["role": "user", "content": parts])
+                }
             case let .assistant(text, toolCalls):
                 var payload: [String: Any] = ["role": "assistant"]
                 payload["content"] = text.isEmpty && !toolCalls.isEmpty ? NSNull() : text

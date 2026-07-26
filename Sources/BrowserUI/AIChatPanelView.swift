@@ -181,7 +181,7 @@ private struct AIChatHeaderView: View {
                 }
             }
         } label: {
-            Image(systemName: "clock.arrow.circlepath")
+            Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 12, weight: .semibold))
         }
         .menuStyle(.borderlessButton)
@@ -217,6 +217,7 @@ struct AIChatConversationView: View {
     @Bindable private var settings = AIChatSettings.shared
 
     @State private var draft = ""
+    @State private var attachments: [AIAttachment] = []
     @State private var composerHeight: CGFloat = 56
     @FocusState private var isInputFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -319,11 +320,22 @@ struct AIChatConversationView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            inputField
-            actionButton
+        VStack(alignment: .leading, spacing: 7) {
+            if !attachments.isEmpty {
+                AIChatAttachmentStrip(attachments: attachments) { id in
+                    attachments.removeAll { $0.id == id }
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 6) {
+                attachButton
+                inputField
+                    // Matches the action button so a single line sits centred.
+                    .frame(minHeight: 26)
+                actionButton
+            }
         }
-        .padding(.leading, 14)
+        .padding(.leading, 7)
         .padding(.trailing, 7)
         .padding(.vertical, 7)
         .browserTintedGlass(cornerRadius: 20, isInteractive: true)
@@ -332,6 +344,28 @@ struct AIChatConversationView: View {
                 .stroke(.primary.opacity(0.07), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+
+    private var attachButton: some View {
+        Button {
+            let picked = AIChatAttachmentPicker.present(
+                allowsImages: settings.supportsImageAttachments
+            )
+            attachments.append(contentsOf: picked)
+        } label: {
+            Image(systemName: "paperclip")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(
+            settings.supportsImageAttachments
+                ? BrowserLocalization.string("ai_chat_attach")
+                : BrowserLocalization.string("ai_chat_attach_text_only")
+        )
+        .accessibilityLabel(BrowserLocalization.string("ai_chat_attach"))
     }
 
     private var inputField: some View {
@@ -383,15 +417,22 @@ struct AIChatConversationView: View {
     }
 
     private var canSend: Bool {
-        settings.isConfigured
-            && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard settings.isConfigured else { return false }
+        return !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !attachments.isEmpty
     }
 
     private func sendDraft() {
         guard canSend, !session.isStreaming else { return }
         let text = draft
+        let files = attachments
         draft = ""
-        session.send(text, includePageContext: settings.includesPageContext)
+        attachments = []
+        session.send(
+            text,
+            attachments: files,
+            includePageContext: settings.includesPageContext
+        )
     }
 }
 
@@ -431,38 +472,100 @@ private struct AIChatMessageView: View {
     var body: some View {
         switch message.role {
         case .user:
-            Text(message.text)
-                .textSelection(.enabled)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 8)
-                .background(
-                    Color.accentColor.opacity(0.16),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.leading, 32)
+            VStack(alignment: .trailing, spacing: 6) {
+                if !message.attachments.isEmpty {
+                    AIChatAttachmentStrip(attachments: message.attachments)
+                }
+                if !message.text.isEmpty {
+                    Text(message.text)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .background(
+                            Color.accentColor.opacity(0.16),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.leading, 32)
         case .assistant:
             VStack(alignment: .leading, spacing: 7) {
                 ForEach(message.toolActivities) { activity in
                     AIChatToolActivityView(activity: activity)
                 }
                 if !message.text.isEmpty {
-                    Text(Self.render(message.text))
-                        .textSelection(.enabled)
+                    ChatMarkdownView(text: message.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+}
 
-    private static func render(_ text: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: text,
-            options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace
-            )
-        )) ?? AttributedString(text)
+/// Attachment chips: thumbnails for images, a labelled chip for files.
+/// Shown in the composer (removable) and above the sent message.
+private struct AIChatAttachmentStrip: View {
+    let attachments: [AIAttachment]
+    var onRemove: ((UUID) -> Void)?
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { attachment in
+                    chip(for: attachment)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func chip(for attachment: AIAttachment) -> some View {
+        Group {
+            if attachment.kind == .image, let image = NSImage(data: attachment.data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.text")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(attachment.name)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 120)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .background(.quaternary.opacity(0.6), in: Capsule())
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let onRemove {
+                Button {
+                    onRemove(attachment.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .offset(x: 4, y: -4)
+                .accessibilityLabel(
+                    BrowserLocalization.string("ai_chat_remove_attachment", attachment.name)
+                )
+            }
+        }
+        .help(attachment.name)
     }
 }
 

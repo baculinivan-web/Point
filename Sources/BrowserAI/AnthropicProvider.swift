@@ -98,8 +98,23 @@ public struct AnthropicProvider: AIProvider {
 
     private static func messagePayload(for message: AIConversationMessage) -> [String: Any] {
         switch message {
-        case let .user(text):
-            return ["role": "user", "content": text]
+        case let .user(text, attachments):
+            guard !attachments.isEmpty else {
+                return ["role": "user", "content": text]
+            }
+            var blocks: [[String: Any]] = attachments.compactMap { attachment in
+                guard attachment.kind == .image else { return nil }
+                return [
+                    "type": "image",
+                    "source": [
+                        "type": "base64",
+                        "media_type": attachment.mediaType,
+                        "data": attachment.base64Data
+                    ]
+                ]
+            }
+            blocks.append(["type": "text", "text": textWithFileAttachments(text, attachments)])
+            return ["role": "user", "content": blocks]
         case let .assistant(text, toolCalls):
             var blocks: [[String: Any]] = []
             if !text.isEmpty {
@@ -128,6 +143,24 @@ public struct AnthropicProvider: AIProvider {
             }
             return ["role": "user", "content": blocks]
         }
+    }
+
+    /// Text attachments are inlined so they work on every provider, tagged so
+    /// the model can tell them apart from the person's own words.
+    static func textWithFileAttachments(
+        _ text: String,
+        _ attachments: [AIAttachment]
+    ) -> String {
+        let files = attachments.filter { $0.kind == .text && !$0.text.isEmpty }
+        guard !files.isEmpty else { return text }
+        let rendered = files.map { file in
+            """
+            <attached_file name="\(file.name)">
+            \(file.text)
+            </attached_file>
+            """
+        }.joined(separator: "\n\n")
+        return text.isEmpty ? rendered : rendered + "\n\n" + text
     }
 
     private static func jsonObject(from value: AIJSONValue) -> Any {
