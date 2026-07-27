@@ -1,30 +1,50 @@
 import AppKit
+import BrowserAI
 import BrowserCore
 import BrowserEngine
 import SwiftUI
 
 public struct BrowserWindowView: View {
     @Bindable private var model: BrowserWindowModel
+    @Binding private var isOnboardingPresented: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
+    @State private var hostWindow: NSWindow?
 
-    public init(model: BrowserWindowModel) {
+    public init(
+        model: BrowserWindowModel,
+        isOnboardingPresented: Binding<Bool> = .constant(false)
+    ) {
         self.model = model
+        _isOnboardingPresented = isOnboardingPresented
     }
 
     public var body: some View {
         ZStack(alignment: .leading) {
             WebSurface(model: model)
                 .padding(.leading, model.sidebarMode == .pinned ? 300 : 0)
+                .padding(.trailing, aiChatPanelWidth)
                 .clipShape(
                     LeadingRoundedRectangle(
                         radius: model.sidebarMode == .pinned ? 18 : 0
                     )
                 )
                 .ignoresSafeArea()
+
+            if model.isAIChatPanelVisible {
+                AIChatPanelView(model: model)
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: .infinity,
+                        alignment: .trailing
+                    )
+                    .ignoresSafeArea()
+                    .transition(.move(edge: .trailing))
+                    .zIndex(6)
+            }
 
             if model.sidebarMode == .autoHide, model.previewTab == nil {
                 edgeSensor
@@ -107,7 +127,7 @@ public struct BrowserWindowView: View {
                 FindOverlay(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.top, 14)
-                    .padding(.trailing, 14)
+                    .padding(.trailing, 14 + aiChatPanelWidth)
             }
 
             if model.isSitePermissionsPresented {
@@ -146,19 +166,34 @@ public struct BrowserWindowView: View {
                     .zIndex(13)
             }
 
+            if isOnboardingPresented {
+                OnboardingOverlay {
+                    isOnboardingPresented = false
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .zIndex(60)
+            }
+
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(
             WindowAccessor(
                 showsTrafficLights: model.isSidebarVisible,
                 isPrivate: model.isPrivate,
-                isFullScreen: $isFullScreen
+                isFullScreen: $isFullScreen,
+                hostWindow: $hostWindow
             )
         )
         .focusedSceneValue(\.browserWindowModel, model)
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.22),
             value: model.isSidebarVisible
+        )
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: model.isAIChatPanelVisible
         )
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isOmniboxPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: indicatorDownload?.id)
@@ -167,12 +202,29 @@ public struct BrowserWindowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isBrowsingHistoryPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isClearBrowsingDataPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.toastMessage)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: isOnboardingPresented)
         .onChange(of: scenePhase) { _, phase in
             model.setApplicationActive(phase == .active)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: BrowserOnboarding.replayRequest)
+        ) { _ in
+            guard !model.isPrivate, !isOnboardingPresented else { return }
+            guard BrowserOnboarding.claimReplay() else { return }
+            isOnboardingPresented = true
+            // The request comes from Settings, which is in front of this window.
+            NSApp.activate()
+            hostWindow?.makeKeyAndOrderFront(nil)
         }
         .onDisappear {
             model.stopLifecycleMonitoring()
         }
+    }
+
+    /// Reading the observable width here keeps the page inset in sync while
+    /// the panel edge is dragged.
+    private var aiChatPanelWidth: CGFloat {
+        model.isAIChatPanelVisible ? CGFloat(AIChatSettings.shared.panelWidth) : 0
     }
 
     private var indicatorDownload: DownloadItem? {
@@ -752,6 +804,7 @@ private struct WindowAccessor: NSViewRepresentable {
     let showsTrafficLights: Bool
     let isPrivate: Bool
     @Binding var isFullScreen: Bool
+    @Binding var hostWindow: NSWindow?
 
     @MainActor
     final class Coordinator: NSObject {
@@ -821,6 +874,10 @@ private struct WindowAccessor: NSViewRepresentable {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
+            // Glass surfaces sample what is behind the window, so the desktop
+            // shows through the chat panel and the sidebar's floating edges.
+            window.isOpaque = false
+            window.backgroundColor = .clear
             window.tabbingMode = .disallowed
             window.minSize = NSSize(width: 760, height: 520)
             window.title = isPrivate
@@ -870,6 +927,9 @@ private struct WindowAccessor: NSViewRepresentable {
                 isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
+            if hostWindow !== view.window {
+                hostWindow = view.window
+            }
         }
         return view
     }
@@ -882,6 +942,9 @@ private struct WindowAccessor: NSViewRepresentable {
                 isPrivate: isPrivate,
                 onFullScreenChange: { isFullScreen = $0 }
             )
+            if hostWindow !== nsView.window {
+                hostWindow = nsView.window
+            }
         }
     }
 }

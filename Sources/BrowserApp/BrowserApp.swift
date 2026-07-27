@@ -1,4 +1,5 @@
 import AppKit
+import BrowserAI
 import BrowserCore
 import BrowserEngine
 import BrowserPersistence
@@ -9,6 +10,7 @@ import WebKit
 private enum BrowserSceneID {
     static let standard = "browser-window"
     static let privateBrowsing = "private-browser-window"
+    static let aiChat = "ai-chat-window"
 }
 
 @main
@@ -45,6 +47,16 @@ struct BrowserApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 760)
 
+        WindowGroup(
+            BrowserLocalization.string("ai_chat_window_title"),
+            id: BrowserSceneID.aiChat,
+            for: UUID.self
+        ) { $token in
+            AIChatWindowView(token: token)
+        }
+        .defaultSize(width: 440, height: 640)
+        .windowResizability(.contentMinSize)
+
         Settings {
             BrowserSettingsView()
         }
@@ -63,6 +75,7 @@ private final class BrowserRuntime {
     private var privateDownloadManagers: [WeakDownloadManager] = []
     private var windowModels: [WeakBrowserWindowModel] = []
     private var standardWindowCount = 0
+    private var hasClaimedOnboarding = false
 
     init() {
         downloadManager = DownloadManager(
@@ -131,6 +144,21 @@ private final class BrowserRuntime {
         return model
     }
 
+    /// Decides whether this window presents the welcome tour.
+    ///
+    /// Only one standard window may claim it per launch, and only when the
+    /// person is genuinely new: a window that restored a stored session belongs
+    /// to an existing install, so the tour is marked as seen instead of shown.
+    func claimOnboardingPresentation(hasRestoredSession: Bool) -> Bool {
+        guard !hasClaimedOnboarding, !BrowserOnboarding.isComplete else { return false }
+        hasClaimedOnboarding = true
+        guard !hasRestoredSession else {
+            BrowserOnboarding.markComplete()
+            return false
+        }
+        return true
+    }
+
     func performMaintenanceIfNeeded() async {
         await maintenance.start()
     }
@@ -182,6 +210,7 @@ private final class WeakBrowserWindowModel {
 private struct BrowserWindowScene: View {
     @Environment(\.openWindow) private var openWindow
     @State private var model: BrowserWindowModel
+    @State private var isOnboardingPresented = false
     private let runtime: BrowserRuntime
     private let isPrivate: Bool
 
@@ -194,7 +223,10 @@ private struct BrowserWindowScene: View {
     }
 
     var body: some View {
-        BrowserWindowView(model: model)
+        BrowserWindowView(
+            model: model,
+            isOnboardingPresented: $isOnboardingPresented
+        )
             .task {
                 model.openWindowRequest = { shouldOpenPrivateWindow in
                     openWindow(
@@ -202,6 +234,9 @@ private struct BrowserWindowScene: View {
                             ? BrowserSceneID.privateBrowsing
                             : BrowserSceneID.standard
                     )
+                }
+                model.openAIChatWindowRequest = { token in
+                    openWindow(id: BrowserSceneID.aiChat, value: token)
                 }
                 if !isPrivate {
                     await runtime.performMaintenanceIfNeeded()
@@ -211,6 +246,11 @@ private struct BrowserWindowScene: View {
                    let transferredTabs = BrowserWindowTransferCenter.shared
                     .claimNextBatch() {
                     model.adoptTransferredTabs(transferredTabs)
+                }
+                if !isPrivate, runtime.claimOnboardingPresentation(
+                    hasRestoredSession: model.didRestorePersistedSession
+                ) {
+                    isOnboardingPresented = true
                 }
             }
             .onOpenURL { url in
@@ -313,6 +353,8 @@ private final class BrowserApplicationDelegate: NSObject, NSApplicationDelegate 
         isTerminationReplyPending = true
         Task { @MainActor [weak self] in
             await runtime.prepareForTermination()
+            await AIChatStore.shared.flush()
+            await AIMemoryStore.shared.flush()
             self?.isTerminationReplyPending = false
             sender.reply(toApplicationShouldTerminate: true)
         }

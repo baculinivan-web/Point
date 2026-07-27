@@ -49,14 +49,16 @@ public final class WebContainerView: NSView {
         attachedWebView?.removeFromSuperview()
         attachedWebView = webView
         webView.removeFromSuperview()
-        webView.translatesAutoresizingMaskIntoConstraints = false
+        // The web view must be laid out with autoresizing, not Auto Layout
+        // constraints: WebKit's element-fullscreen controller snapshots and
+        // restores the web view's frame, and pinned anchor constraints can
+        // zero out the fullscreen video layer's bounds when playback pauses
+        // (video disappears while audio keeps going, and every following
+        // fullscreen presentation stays blank).
+        webView.translatesAutoresizingMaskIntoConstraints = true
+        webView.autoresizingMask = [.width, .height]
+        webView.frame = bounds
         addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            webView.topAnchor.constraint(equalTo: topAnchor),
-            webView.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
         installInteractionShield(above: webView)
     }
 
@@ -104,6 +106,19 @@ public final class WebContainerView: NSView {
         self.onSwipeBack = onSwipeBack
         self.onSwipeForward = onSwipeForward
         installSwipeMonitorIfNeeded()
+    }
+
+    public override func layout() {
+        super.layout()
+        // Autoresizing cannot track container resizes that happen while
+        // WebKit hosts the web view in its fullscreen window, so realign
+        // the frame once the web view is back in our hierarchy.
+        if let attachedWebView,
+           attachedWebView.superview === self,
+           attachedWebView.fullscreenState == .notInFullscreen,
+           attachedWebView.frame != bounds {
+            attachedWebView.frame = bounds
+        }
     }
 
     public override func viewDidMoveToWindow() {

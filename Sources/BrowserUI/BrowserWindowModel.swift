@@ -1,4 +1,5 @@
 import AppKit
+import BrowserAI
 import BrowserCore
 import BrowserEngine
 import Foundation
@@ -16,6 +17,8 @@ public final class BrowserTab: Identifiable {
     public var isPinned: Bool
     public var folderID: TabFolderID?
     public var position: Int64
+    /// True when the AI assistant opened this tab; shown with a sparkle badge.
+    public var isAICreated: Bool
     public var lifecycleState: TabLifecycleState
     public var progress: Double = 0
     public var isLoading = false
@@ -48,6 +51,7 @@ public final class BrowserTab: Identifiable {
         isPinned = snapshot.isPinned
         folderID = snapshot.folderID
         position = snapshot.position
+        isAICreated = snapshot.isAICreated
         lifecycleState = .evicted
         canGoBack = navigationHistory.backIndex != nil
         canGoForward = navigationHistory.forwardIndex != nil
@@ -62,7 +66,8 @@ public final class BrowserTab: Identifiable {
             isPinned: isPinned,
             folderID: folderID,
             position: position,
-            navigationHistory: navigationHistory
+            navigationHistory: navigationHistory,
+            isAICreated: isAICreated
         )
     }
 
@@ -208,6 +213,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     /// Frame of the page area in window coordinates, published by the web surface.
     /// Read only while a drag is in flight, so it must not invalidate the view.
     @ObservationIgnored public var webSurfaceFrame: CGRect = .zero
+    /// True once `restoreSession()` has found a stored session for this window.
+    /// A first-run window never has one, which is what gates the welcome tour.
+    public private(set) var didRestorePersistedSession = false
     public var renamingFolderID: TabFolderID?
     public var sidebarMode: SidebarMode = .pinned
     public var isSidebarVisible = true
@@ -241,6 +249,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public let passkeyAccessManager: PasskeyAccessManager
     public let faviconRepository: FaviconRepository
     public var openWindowRequest: (@MainActor (_ isPrivate: Bool) -> Void)?
+
+    /// One assistant conversation per browsing window.
+    public let aiChat = AIChatSession()
+    public private(set) var isAIChatPresented = false
+    public var openAIChatWindowRequest: (@MainActor (_ token: UUID) -> Void)?
+    @ObservationIgnored private var aiToolBridge: BrowserAIToolBridge?
 
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
@@ -391,6 +405,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         do {
             if let snapshot = try await repository.load() {
+                didRestorePersistedSession = true
                 folders = snapshot.folders.map(TabFolder.init(snapshot:))
                 tabs = snapshot.tabs
                     .filter { $0.url != nil }
@@ -1392,6 +1407,115 @@ public final class BrowserWindowModel: WebEngineEventSink {
         isSidebarVisible = false
     }
 
+    // MARK: - AI assistant
+
+    /// Whether the chat should occupy the trailing panel of this window.
+    public var isAIChatPanelVisible: Bool {
+        isAIChatPresented && !aiChat.isDetached
+    }
+
+    public func toggleAIChat() {
+        if isAIChatPanelVisible {
+            dismissAIChat()
+        } else {
+            presentAIChat()
+        }
+    }
+
+    public func presentAIChat() {
+        guard previewTab == nil else { return }
+        prepareAIChatIfNeeded()
+        aiChat.isDetached = false
+        isAIChatPresented = true
+    }
+
+    public func dismissAIChat() {
+        isAIChatPresented = false
+    }
+
+    /// Moves the conversation into its own window; the panel collapses and the
+    /// same session object keeps streaming there.
+    public func detachAIChat() {
+        prepareAIChatIfNeeded()
+        guard let openAIChatWindowRequest else { return }
+        let token = UUID()
+        aiChat.isDetached = true
+        isAIChatPresented = false
+        AIChatWindowBridge.shared.stage(aiChat, token: token)
+        openAIChatWindowRequest(token)
+    }
+
+    private func prepareAIChatIfNeeded() {
+        guard aiToolBridge == nil else { return }
+        let bridge = BrowserAIToolBridge(model: self)
+        aiToolBridge = bridge
+        aiChat.toolExecutor = bridge
+        aiChat.onReattachRequest = { [weak self] in
+            self?.isAIChatPresented = true
+        }
+        aiChat.onOpenURL = { [weak self] url in
+            // A link in the chat belongs in this browser, not another app.
+            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+                return
+            }
+            self?.openAssistantTab(url: url, inBackground: false)
+        }
+    }
+
+    /// Creates a folder with a given name without starting an inline rename,
+    /// used when the chat organizes tabs.
+    @discardableResult
+    func createNamedFolder(
+        _ name: String,
+        symbolName: String? = nil,
+        containing tabIDs: Set<TabID>
+    ) -> TabFolderID {
+        let id = TabFolderID()
+        folders.append(
+            TabFolder(
+                snapshot: PersistedTabFolder(
+                    id: id,
+                    name: name,
+                    symbolName: symbolName ?? "folder.fill",
+                    position: nextPosition(in: nil)
+                )
+            )
+        )
+        if tabIDs.isEmpty {
+            persist()
+        } else {
+            moveTabs(tabIDs, to: id)
+        }
+        return id
+    }
+
+    /// Opens a tab on behalf of the assistant, marked with the sparkle badge.
+    @discardableResult
+    func openAssistantTab(url: URL, inBackground: Bool) -> BrowserTab {
+        let tab = BrowserTab(
+            snapshot: PersistedTab(
+                id: TabID(),
+                title: BrowserLocalization.string("new_tab"),
+                url: url,
+                isPinned: false,
+                position: nextPosition(in: nil),
+                isAICreated: true
+            )
+        )
+        tabs.append(tab)
+        if inBackground {
+            let engine = ensureEngine(for: tab)
+            tab.lifecycleState = .liveBackground
+            tab.hasLoadedInitialURL = true
+            engine.load(url)
+            reconcileLifecycle()
+            persist()
+        } else {
+            selectTab(tab.id)
+        }
+        return tab
+    }
+
     public func webEngineDidChange(_ session: WebEngineSession) {
         guard let tab = tab(for: session) else { return }
         tab.title = session.title
@@ -1926,6 +2050,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func stopLifecycleMonitoring() {
         acceptsMediaPermissionRequests = false
+        aiChat.cancelStreaming()
         pressureSequence += 1
         sitePermissionManagementTask?.cancel()
         sitePermissionManagementTask = nil

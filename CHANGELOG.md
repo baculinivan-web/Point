@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0 — Chat
+
+- Added a built-in chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, resized by dragging its edge, or detached into its own window.
+- Supported providers: Anthropic (Claude), any OpenAI-compatible server, and local models through Ollama — with in-app Ollama detection, one-click install, and model download.
+- The chat receives the current page as context by default (toggleable in Settings), searches the web through the browser, reads pages, and opens tabs; chat-opened tabs carry a sparkle badge in the sidebar.
+- Added image and file attachments: images go to multimodal models directly, while PDFs and text files are extracted to text so they work on every provider. The attach control reflects whether the selected model can read images.
+- Answers render Markdown blocks natively, including tables, lists, headings, quotes, and code.
+- Past chats are stored on disk and reachable from the chat menu; links in a reply open in a browser tab.
+- Added a context meter that warns as the conversation fills the model's window, with manual and automatic compaction that summarizes older turns and keeps recent ones.
+- Added memory that persists across chats: the model can remember, recall, search, and forget notes, and recent memories are carried into every conversation. Clearable from Settings.
+- Added tools for capturing a page screenshot, running Python in the app sandbox, listing open tabs, and filing tabs into a named folder.
+- The panel is tinted Liquid Glass with a floating composer that the transcript scrolls beneath.
+- API keys are stored in the keychain; responses stream live with visible tool activity.
+- Added a chat setup step to the welcome tour and a Chat section in Settings.
+- Updated the bundle version to `0.2.0` (`28`).
+
 ## 0.1.5 — Split View and Default Browser
 
 - Added two-pane split workspaces: drag a sidebar tab onto either half of the page to pair it with the active tab.

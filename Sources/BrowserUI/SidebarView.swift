@@ -284,6 +284,19 @@ struct SidebarView: View {
             .help(BrowserLocalization.string("copy_page_address"))
             .accessibilityLabel(BrowserLocalization.string("copy_page_address"))
 
+            Button {
+                model.toggleAIChat()
+            } label: {
+                Image(
+                    systemName: model.isAIChatPanelVisible
+                        ? "sparkles.rectangle.stack.fill"
+                        : "sparkles"
+                )
+                .frame(width: 24, height: 24)
+            }
+            .help(BrowserLocalization.string("ai_chat_toggle_shortcut"))
+            .accessibilityLabel(BrowserLocalization.string("ai_chat_toggle"))
+
             Spacer()
 
             Button {
@@ -1092,7 +1105,7 @@ private struct FolderTree: View {
                     depth: depth
                 )
                     .padding(.leading, CGFloat(depth) * 15)
-                    .transition(.staggeredFolderItem)
+                    .transition(.staggeredListItem)
             case let .folder(folder):
                 FolderRow(
                     model: model,
@@ -1100,14 +1113,15 @@ private struct FolderTree: View {
                     reorderState: reorderState,
                     depth: depth
                 )
-                    .transition(.staggeredFolderItem)
+                    .transition(.staggeredListItem)
             }
         }
     }
 }
 
-private extension AnyTransition {
-    static var staggeredFolderItem: AnyTransition {
+extension AnyTransition {
+    /// Used where a list reveals its rows one after another.
+    static var staggeredListItem: AnyTransition {
         .asymmetric(
             insertion: .opacity
                 .combined(with: .offset(y: -6))
@@ -1389,7 +1403,7 @@ private struct FolderRow: View {
     }
 }
 
-private struct FolderSymbolOption: Identifiable {
+struct FolderSymbolOption: Identifiable {
     let symbolName: String
     let title: String
 
@@ -1794,6 +1808,18 @@ struct TabFavicon: View {
             }
         }
         .frame(width: size, height: size)
+        .overlay(alignment: .bottomTrailing) {
+            if tab.isAICreated {
+                Image(systemName: "sparkle")
+                    .font(.system(size: size * 0.34, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(1.5)
+                    .background(.background, in: Circle())
+                    .offset(x: size * 0.16, y: size * 0.16)
+                    .help(BrowserLocalization.string("ai_tab_badge"))
+                    .accessibilityLabel(BrowserLocalization.string("ai_tab_badge"))
+            }
+        }
     }
 }
 

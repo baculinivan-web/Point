@@ -111,6 +111,12 @@ public struct BrowserCommands: Commands {
             }
             .keyboardShortcut("f")
 
+            Button(BrowserLocalization.string("ai_chat_toggle")) {
+                model?.toggleAIChat()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(model == nil)
+
             Button(BrowserLocalization.string("copy_page_address")) {
                 model?.copyActivePageURL()
             }

@@ -1,9 +1,12 @@
+import BrowserAI
 import BrowserCore
 import SwiftUI
 
 public struct BrowserSettingsView: View {
     @AppStorage(BrowserMemoryLimitSettings.defaultsKey)
     private var memoryLimitFraction = BrowserMemoryLimitSettings.defaultFraction
+    @Bindable private var aiSettings = AIChatSettings.shared
+    @Bindable private var memories = AIMemoryStore.shared
 
     @State private var isDefaultBrowser = false
     @State private var isDefaultBrowserUpdateInProgress = false
@@ -45,6 +48,109 @@ public struct BrowserSettingsView: View {
                 }
             }
 
+            Section(BrowserLocalization.string("onboarding_section_title")) {
+                Text(BrowserLocalization.string("onboarding_section_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(BrowserLocalization.string("onboarding_replay")) {
+                    BrowserOnboarding.requestReplay()
+                }
+            }
+
+            Section(BrowserLocalization.string("ai_settings_section")) {
+                Text(BrowserLocalization.string("ai_settings_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Picker(
+                    BrowserLocalization.string("ai_settings_provider"),
+                    selection: $aiSettings.provider
+                ) {
+                    ForEach(AIProviderKind.allCases) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+
+                switch aiSettings.provider {
+                case .anthropic:
+                    SecureField(
+                        BrowserLocalization.string("ai_settings_api_key"),
+                        text: $aiSettings.anthropicAPIKey,
+                        prompt: Text(verbatim: "sk-ant-…")
+                    )
+                    Picker(
+                        BrowserLocalization.string("ai_settings_model"),
+                        selection: $aiSettings.anthropicModel
+                    ) {
+                        ForEach(AnthropicProvider.availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                case .openAICompatible:
+                    SecureField(
+                        BrowserLocalization.string("ai_settings_api_key"),
+                        text: $aiSettings.openAIAPIKey,
+                        prompt: Text(verbatim: "sk-…")
+                    )
+                    TextField(
+                        BrowserLocalization.string("ai_settings_base_url"),
+                        text: $aiSettings.openAIBaseURLText
+                    )
+                    TextField(
+                        BrowserLocalization.string("ai_settings_model"),
+                        text: $aiSettings.openAIModel
+                    )
+                case .ollama:
+                    AIOllamaStatusView()
+                }
+
+                Toggle(
+                    BrowserLocalization.string("ai_settings_share_page"),
+                    isOn: $aiSettings.includesPageContext
+                )
+
+                LabeledContent(
+                    BrowserLocalization.string("ai_settings_context_limit")
+                ) {
+                    TextField(
+                        BrowserLocalization.string("ai_settings_context_limit"),
+                        value: $aiSettings.contextLimitOverride,
+                        format: .number
+                    )
+                    .labelsHidden()
+                    .frame(width: 100)
+                }
+                Text(BrowserLocalization.string("ai_settings_context_limit_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section(BrowserLocalization.string("ai_settings_memory")) {
+                Text(BrowserLocalization.string("ai_settings_memory_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LabeledContent(
+                    BrowserLocalization.string(
+                        "ai_settings_memory_count",
+                        memories.memories.count
+                    )
+                ) {
+                    Button(
+                        BrowserLocalization.string("ai_settings_memory_clear"),
+                        role: .destructive
+                    ) {
+                        memories.forgetAll()
+                    }
+                    .disabled(memories.isEmpty)
+                }
+            }
+
             Section(BrowserLocalization.string("memory_management")) {
                 LabeledContent(BrowserLocalization.string("memory_limit")) {
                     Text(memoryLimitFraction, format: .percent.precision(.fractionLength(0)))
@@ -75,7 +181,7 @@ public struct BrowserSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 340)
+        .frame(width: 480, height: 620)
         .onAppear(perform: refreshDefaultBrowserStatus)
         .onReceive(
             NotificationCenter.default.publisher(

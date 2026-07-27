@@ -82,6 +82,8 @@
 	<string>Close Tab</string>
 	<key>close_preview</key>
 	<string>Close Preview</string>
+	<string>close_all_tabs</string>
+	<string>Close All Tabs</string>
 	<key>dismiss_preview_tip</key>
 	<string>Dismiss preview tip</string>
 	<key>cookies</key>

@@ -210,6 +210,34 @@ public final class WebEngineSession: NSObject {
         }
     }
 
+    /// Extracts the readable text of the current page for the AI assistant.
+    public func extractPageText(limit: Int) async -> String? {
+        let script = """
+        (() => {
+          const root = document.querySelector('article') ||
+            document.querySelector('main') || document.body;
+          if (!root) { return ''; }
+          return root.innerText.replace(/\\n{3,}/g, '\\n\\n').slice(0, \(limit));
+        })()
+        """
+        let value = try? await webView.evaluateJavaScript(script)
+        return value as? String
+    }
+
+    /// Captures the visible page as JPEG for the chat's screenshot tool.
+    public func captureSnapshot(maxWidth: CGFloat = 1200) async -> Data? {
+        let configuration = WKSnapshotConfiguration()
+        configuration.snapshotWidth = NSNumber(value: Double(maxWidth))
+        guard let image = try? await webView.takeSnapshot(configuration: configuration),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff)
+        else { return nil }
+        return bitmap.representation(
+            using: .jpeg,
+            properties: [.compressionFactor: 0.75]
+        )
+    }
+
     public func find(_ text: String) {
         guard !text.isEmpty else { return }
         let configuration = WKFindConfiguration()
