@@ -190,7 +190,13 @@ public enum AIConversationMessage: Sendable, Codable {
 
 public struct AIChatRequest: Sendable {
     public var model: String
+    /// The stable half of the system prompt. Byte-identical across every
+    /// request, which is what makes it cacheable.
     public var system: String
+    /// System text that changes between requests — memories, and anything else
+    /// derived from mutable state. Kept out of `system` so a change here does
+    /// not invalidate the cached tools+prompt prefix in front of it.
+    public var systemContext: String
     public var messages: [AIConversationMessage]
     public var tools: [AIToolSpec]
     public var maxTokens: Int
@@ -198,15 +204,69 @@ public struct AIChatRequest: Sendable {
     public init(
         model: String,
         system: String,
+        systemContext: String = "",
         messages: [AIConversationMessage],
         tools: [AIToolSpec],
         maxTokens: Int
     ) {
         self.model = model
         self.system = system
+        self.systemContext = systemContext
         self.messages = messages
         self.tools = tools
         self.maxTokens = maxTokens
+    }
+}
+
+/// What one request cost, split by how the input was billed.
+///
+/// Cache reads are roughly a tenth the price of fresh input and cache writes
+/// are a small premium over it, so the split — not the total — is what says
+/// whether caching is actually paying off.
+public struct AITokenUsage: Sendable, Equatable {
+    /// Input processed at full price.
+    public var inputTokens: Int
+    public var outputTokens: Int
+    /// Input written into the cache this request.
+    public var cacheCreationTokens: Int
+    /// Input served from the cache this request.
+    public var cacheReadTokens: Int
+
+    public init(
+        inputTokens: Int = 0,
+        outputTokens: Int = 0,
+        cacheCreationTokens: Int = 0,
+        cacheReadTokens: Int = 0
+    ) {
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.cacheCreationTokens = cacheCreationTokens
+        self.cacheReadTokens = cacheReadTokens
+    }
+
+    public var isEmpty: Bool {
+        inputTokens == 0 && outputTokens == 0
+            && cacheCreationTokens == 0 && cacheReadTokens == 0
+    }
+
+    public static func + (lhs: Self, rhs: Self) -> Self {
+        AITokenUsage(
+            inputTokens: lhs.inputTokens + rhs.inputTokens,
+            outputTokens: lhs.outputTokens + rhs.outputTokens,
+            cacheCreationTokens: lhs.cacheCreationTokens + rhs.cacheCreationTokens,
+            cacheReadTokens: lhs.cacheReadTokens + rhs.cacheReadTokens
+        )
+    }
+
+    /// Total input, however it was billed.
+    public var totalInputTokens: Int {
+        inputTokens + cacheCreationTokens + cacheReadTokens
+    }
+
+    /// Share of input that came from the cache — the headline number.
+    public var cachedInputFraction: Double {
+        guard totalInputTokens > 0 else { return 0 }
+        return Double(cacheReadTokens) / Double(totalInputTokens)
     }
 }
 
@@ -214,6 +274,8 @@ public struct AIChatRequest: Sendable {
 public enum AIStreamEvent: Sendable {
     case textDelta(String)
     case toolCall(AIToolCall)
+    /// Billing breakdown for the request, once the provider reports it.
+    case usage(AITokenUsage)
     case finished(stopReason: AIStopReason)
 }
 

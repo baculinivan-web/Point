@@ -76,7 +76,7 @@ struct AnthropicAssemblerTests {
             return
         }
         #expect(reason == .toolUse)
-        #expect(assembler.finish() == nil)
+        #expect(assembler.finish().isEmpty)
     }
 }
 

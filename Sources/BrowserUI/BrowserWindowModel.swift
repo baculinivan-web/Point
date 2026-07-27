@@ -1,5 +1,6 @@
 import AppKit
 import BrowserAI
+import BrowserAutomation
 import BrowserCore
 import BrowserEngine
 import Foundation
@@ -255,6 +256,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var isAIChatPresented = false
     public var openAIChatWindowRequest: (@MainActor (_ token: UUID) -> Void)?
     @ObservationIgnored private var aiToolBridge: BrowserAIToolBridge?
+
+    /// What the assistant is doing to the page right now, for the blue glow
+    /// and the click markers drawn over the web surface.
+    public let agentActivity = AgentActivityCenter()
+    /// The gate the assistant has to pass before anything irreversible.
+    public let agentConsent = AgentConsentCenter()
 
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
@@ -1391,6 +1398,43 @@ public final class BrowserWindowModel: WebEngineEventSink {
         openAIChatWindowRequest(token)
     }
 
+    /// Takes the browser back from the assistant mid-task: cancels the turn,
+    /// drops the grant, and answers every pending confirmation with "no".
+    public func stopAgentControl() {
+        aiChat.cancelStreaming()
+        aiToolBridge?.releaseBrowserControl()
+    }
+
+    /// The live web view for a tab, prepared for the agent to work in whether
+    /// or not the person is looking at it.
+    ///
+    /// A tab that is not on screen has no layout size, so every element would
+    /// measure zero and the agent would read the page as empty. Giving the
+    /// view a desktop-sized frame makes WebKit lay the page out properly even
+    /// unhosted, which is what lets the agent work in the background.
+    func webView(for id: TabID) -> WKWebView? {
+        guard let tab = tab(id) else { return nil }
+        let engine = ensureEngine(for: tab)
+        if engine.webView.superview == nil, engine.webView.bounds.width < 8 {
+            engine.webView.frame = CGRect(x: 0, y: 0, width: 1280, height: 900)
+        }
+        // A tab restored from eviction has an engine but no content yet; only
+        // the selected tab gets loaded on activation.
+        if !tab.hasLoadedInitialURL, let url = tab.url {
+            tab.hasLoadedInitialURL = true
+            engine.load(url)
+        }
+        return engine.webView
+    }
+
+    func agentLoad(_ url: URL, in id: TabID) {
+        navigate(tabID: id, to: .url(url))
+    }
+
+    func agentGoBack(in id: TabID) {
+        goBack(tabID: id)
+    }
+
     private func prepareAIChatIfNeeded() {
         guard aiToolBridge == nil else { return }
         let bridge = BrowserAIToolBridge(model: self)
@@ -1398,6 +1442,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
         aiChat.toolExecutor = bridge
         aiChat.onReattachRequest = { [weak self] in
             self?.isAIChatPresented = true
+        }
+        aiChat.onStopAgentRequest = { [weak self] in
+            self?.stopAgentControl()
         }
         aiChat.onOpenURL = { [weak self] url in
             // A link in the chat belongs in this browser, not another app.
@@ -2512,6 +2559,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     ) -> TabProtectionReason {
         var reasons = tab.engineProtectionReasons
         if isVisibleSplitTab(tab.id) {
+            reasons.insert(.active)
+        }
+        // Evicting the tab the agent is working in would discard the page
+        // mid-task and reload it under the agent's feet.
+        if agentActivity.controlledTabID == tab.id {
             reasons.insert(.active)
         }
         if now < tab.evictionGraceUntil {

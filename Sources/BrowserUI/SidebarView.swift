@@ -1,4 +1,5 @@
 import AppKit
+import BrowserAutomation
 import BrowserCore
 import Observation
 import SwiftUI
@@ -955,6 +956,24 @@ private struct TabRow: View {
         .frame(minHeight: 36)
         .contentShape(Rectangle())
         .background { selectionBackground }
+        .overlay { agentControlBorder }
+    }
+
+    /// Marks the tab the assistant is working in. It usually runs in the
+    /// background, so the sidebar is the only place the person can see which
+    /// tab that is without opening each one.
+    @ViewBuilder
+    private var agentControlBorder: some View {
+        if model.agentActivity.controlledTabID == tab.id {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.accentAgent, lineWidth: 1.5)
+                .shadow(color: Color.accentAgent.opacity(0.55), radius: 5)
+                .transition(.opacity)
+                .animation(
+                    reduceMotion ? nil : .easeOut(duration: 0.25),
+                    value: model.agentActivity.controlledTabID
+                )
+        }
     }
 
     private var tabTitle: some View {

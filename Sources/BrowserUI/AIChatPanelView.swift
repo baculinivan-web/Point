@@ -1,5 +1,6 @@
 import AppKit
 import BrowserAI
+import BrowserAutomation
 import BrowserCore
 import SwiftUI
 
@@ -308,8 +309,22 @@ struct AIChatConversationView: View {
                     session.errorMessage = nil
                 }
             }
+            // The gate sits right where the person is already looking, and the
+            // tool call stays suspended until they answer it.
+            if let consent = session.agentConsent, let request = consent.current {
+                AgentConsentCard(request: request) { approved in
+                    consent.resolve(request.id, approved: approved)
+                }
+                .id(request.id)
+            } else if let activity = session.agentActivity,
+                      activity.isControllingBrowser {
+                AgentStepTicker(activity: activity) {
+                    session.onStopAgentRequest?()
+                }
+            }
             composer
         }
+        .animation(.easeOut(duration: 0.2), value: session.agentConsent?.current?.id)
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
         .background {
@@ -470,6 +485,20 @@ private struct AIChatContextMeter: View {
                 ProgressView(value: session.contextUsageFraction)
                     .controlSize(.mini)
                     .tint(tint)
+
+                // Only shown once the provider has actually reported a cache
+                // read — a zero here would read as "caching is broken" on
+                // providers that never report usage at all.
+                if session.usage.cacheReadTokens > 0 {
+                    Text(
+                        BrowserLocalization.string(
+                            "ai_chat_cache_savings",
+                            Int(session.usage.cachedInputFraction * 100)
+                        )
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                }
             }
 
             if !session.isCompacting {
@@ -667,13 +696,28 @@ private struct AIChatToolActivityGroup: View {
             } label: {
                 HStack(spacing: 7) {
                     leadingIcon
-                    Text(title)
+                    // Names what the assistant is doing right now rather than
+                    // counting what it has done: during a long agent run the
+                    // headline is the only thing most people read.
+                    Text(headline)
                         .font(.caption.weight(.medium))
+                        .contentTransition(.opacity)
+                    if extraCount > 0 {
+                        Text("+\(extraCount)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText(value: Double(extraCount)))
+                            .monospacedDigit()
+                    }
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .animation(
+                    reduceMotion ? nil : .snappy(duration: 0.28),
+                    value: activities.count
+                )
                 .padding(.horizontal, 9)
                 .frame(height: 26)
                 .background(.quaternary.opacity(0.5), in: Capsule())
@@ -681,7 +725,7 @@ private struct AIChatToolActivityGroup: View {
             }
             .buttonStyle(.plain)
             .help(BrowserLocalization.string("ai_chat_tools_expand"))
-            .accessibilityLabel(title)
+            .accessibilityLabel(accessibilityTitle)
             .accessibilityHint(BrowserLocalization.string("ai_chat_tools_expand"))
 
             if showsChildren {
@@ -696,6 +740,14 @@ private struct AIChatToolActivityGroup: View {
         }
         .onChange(of: isExpanded) { _, expanded in
             revealChildren(expanding: expanded)
+        }
+        .onChange(of: activities.count) { _, total in
+            // The list is live: a call that arrives while the group is open
+            // has to appear in it, not wait for the person to toggle it.
+            guard isExpanded, showsChildren, visibleCount < total else { return }
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                visibleCount = total
+            }
         }
         .onDisappear { revealTask?.cancel() }
     }
@@ -754,18 +806,26 @@ private struct AIChatToolActivityGroup: View {
         }
     }
 
-    private var title: String {
-        guard runningCount > 0 else {
+    /// The newest call still running, or failing that the newest overall —
+    /// what the assistant is busy with at this instant.
+    private var current: AIChatToolActivity? {
+        activities.last { $0.state == .running } ?? activities.last
+    }
+
+    private var headline: String {
+        guard let current else {
             return BrowserLocalization.string(
                 "ai_chat_tools_collapsed",
                 activities.count
             )
         }
-        return BrowserLocalization.string(
-            "ai_chat_tools_running",
-            activities.count - runningCount,
-            activities.count
-        )
+        return AIChatToolPresentation.progressTitle(for: current.name)
+    }
+
+    private var extraCount: Int { max(0, activities.count - 1) }
+
+    private var accessibilityTitle: String {
+        extraCount > 0 ? "\(headline) +\(extraCount)" : headline
     }
 
     private var runningCount: Int {
@@ -816,36 +876,11 @@ private struct AIChatToolActivityView: View {
     }
 
     private var symbol: String {
-        switch activity.name {
-        case "web_search": "magnifyingglass"
-        case "open_tab": "plus.rectangle.on.rectangle"
-        case "read_page": "doc.text.magnifyingglass"
-        case "screenshot_page": "camera.viewfinder"
-        case "run_python": "chevron.left.forwardslash.chevron.right"
-        case "list_tabs": "rectangle.stack"
-        case "group_tabs": "folder.badge.plus"
-        case "remember": "brain"
-        case "recall_memories", "search_memories": "brain.head.profile"
-        case "forget_memory": "trash"
-        default: "wrench.and.screwdriver"
-        }
+        AIChatToolPresentation.symbol(for: activity.name)
     }
 
     private var title: String {
-        switch activity.name {
-        case "web_search": BrowserLocalization.string("ai_tool_web_search")
-        case "open_tab": BrowserLocalization.string("ai_tool_open_tab")
-        case "read_page": BrowserLocalization.string("ai_tool_read_page")
-        case "screenshot_page": BrowserLocalization.string("ai_tool_screenshot")
-        case "run_python": BrowserLocalization.string("ai_tool_python")
-        case "list_tabs": BrowserLocalization.string("ai_tool_list_tabs")
-        case "group_tabs": BrowserLocalization.string("ai_tool_group_tabs")
-        case "remember": BrowserLocalization.string("ai_tool_remember")
-        case "recall_memories", "search_memories":
-            BrowserLocalization.string("ai_tool_recall")
-        case "forget_memory": BrowserLocalization.string("ai_tool_forget")
-        default: activity.name
-        }
+        AIChatToolPresentation.title(for: activity.name)
     }
 
     private var helpText: String {
@@ -1133,6 +1168,93 @@ struct AIOllamaStatusView: View {
                 ProgressView()
                     .controlSize(.small)
             }
+        }
+    }
+}
+
+
+/// One place that names a tool, so the collapsed header, the expanded chips,
+/// and VoiceOver never drift apart.
+enum AIChatToolPresentation {
+    static func symbol(for name: String) -> String {
+        switch name {
+        case "web_search": "magnifyingglass"
+        case "open_tab": "plus.rectangle.on.rectangle"
+        case "read_page": "doc.text.magnifyingglass"
+        case "screenshot_page": "camera.viewfinder"
+        case "run_python": "chevron.left.forwardslash.chevron.right"
+        case "list_tabs": "rectangle.stack"
+        case "group_tabs": "folder.badge.plus"
+        case "remember": "brain"
+        case "recall_memories", "search_memories": "brain.head.profile"
+        case "forget_memory": "trash"
+        case "browser_request_control": "hand.raised"
+        case "browser_release_control": "hand.wave"
+        case "browser_snapshot": "eye"
+        case "browser_click": "cursorarrow.click"
+        case "browser_type": "keyboard"
+        case "browser_select": "chevron.up.chevron.down"
+        case "browser_scroll": "arrow.up.and.down"
+        case "browser_navigate": "arrow.turn.up.right"
+        case "browser_switch_tab": "rectangle.on.rectangle"
+        case "browser_close_tab": "xmark.rectangle"
+        default: "wrench.and.screwdriver"
+        }
+    }
+
+    /// The label on a finished chip: what the call was.
+    static func title(for name: String) -> String {
+        switch name {
+        case "web_search": BrowserLocalization.string("ai_tool_web_search")
+        case "open_tab": BrowserLocalization.string("ai_tool_open_tab")
+        case "read_page": BrowserLocalization.string("ai_tool_read_page")
+        case "screenshot_page": BrowserLocalization.string("ai_tool_screenshot")
+        case "run_python": BrowserLocalization.string("ai_tool_python")
+        case "list_tabs": BrowserLocalization.string("ai_tool_list_tabs")
+        case "group_tabs": BrowserLocalization.string("ai_tool_group_tabs")
+        case "remember": BrowserLocalization.string("ai_tool_remember")
+        case "recall_memories", "search_memories":
+            BrowserLocalization.string("ai_tool_recall")
+        case "forget_memory": BrowserLocalization.string("ai_tool_forget")
+        case "browser_request_control":
+            BrowserLocalization.string("ai_tool_agent_control")
+        case "browser_release_control":
+            BrowserLocalization.string("ai_tool_agent_release")
+        case "browser_snapshot": BrowserLocalization.string("ai_tool_agent_look")
+        case "browser_click": BrowserLocalization.string("ai_tool_agent_click")
+        case "browser_type": BrowserLocalization.string("ai_tool_agent_type")
+        case "browser_select": BrowserLocalization.string("ai_tool_agent_select")
+        case "browser_scroll": BrowserLocalization.string("ai_tool_agent_scroll")
+        case "browser_navigate": BrowserLocalization.string("ai_tool_agent_navigate")
+        case "browser_switch_tab": BrowserLocalization.string("ai_tool_agent_switch")
+        case "browser_close_tab": BrowserLocalization.string("ai_tool_agent_close")
+        default: name
+        }
+    }
+
+    /// The label on the collapsed group header: what is happening now.
+    static func progressTitle(for name: String) -> String {
+        switch name {
+        case "web_search": BrowserLocalization.string("ai_progress_searching")
+        case "open_tab", "browser_navigate":
+            BrowserLocalization.string("ai_progress_navigating")
+        case "read_page", "browser_snapshot":
+            BrowserLocalization.string("ai_progress_reading")
+        case "screenshot_page": BrowserLocalization.string("ai_progress_capturing")
+        case "run_python": BrowserLocalization.string("ai_progress_running")
+        case "list_tabs", "group_tabs", "browser_switch_tab", "browser_close_tab":
+            BrowserLocalization.string("ai_progress_tabs")
+        case "remember", "recall_memories", "search_memories", "forget_memory":
+            BrowserLocalization.string("ai_progress_remembering")
+        case "browser_request_control":
+            BrowserLocalization.string("ai_progress_asking")
+        case "browser_release_control":
+            BrowserLocalization.string("ai_progress_finishing")
+        case "browser_click": BrowserLocalization.string("ai_progress_clicking")
+        case "browser_type": BrowserLocalization.string("ai_progress_typing")
+        case "browser_select": BrowserLocalization.string("ai_progress_selecting")
+        case "browser_scroll": BrowserLocalization.string("ai_progress_scrolling")
+        default: BrowserLocalization.string("ai_progress_working")
         }
     }
 }

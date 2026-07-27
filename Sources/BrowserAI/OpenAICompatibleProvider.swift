@@ -9,11 +9,21 @@ public struct OpenAICompatibleProvider: AIProvider {
     private let apiKey: String
     private let baseURL: URL
     private let requiresAPIKey: Bool
+    private let reportsStreamingUsage: Bool
 
-    public init(apiKey: String, baseURL: URL, requiresAPIKey: Bool = true) {
+    /// - Parameter reportsStreamingUsage: whether the endpoint honours
+    ///   `stream_options.include_usage`. Off for local runtimes, which have no
+    ///   caching to report and may reject the unknown field outright.
+    public init(
+        apiKey: String,
+        baseURL: URL,
+        requiresAPIKey: Bool = true,
+        reportsStreamingUsage: Bool = true
+    ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.requiresAPIKey = requiresAPIKey
+        self.reportsStreamingUsage = reportsStreamingUsage
     }
 
     public func streamChat(
@@ -48,9 +58,14 @@ public struct OpenAICompatibleProvider: AIProvider {
         if !apiKey.isEmpty {
             urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
+        // Sorted keys keep the body byte-identical across launches, which is
+        // what these endpoints match on for their automatic prefix caching.
         urlRequest.httpBody = try JSONSerialization.data(
-            withJSONObject: Self.requestBody(for: request),
-            options: []
+            withJSONObject: Self.requestBody(
+                for: request,
+                reportsUsage: reportsStreamingUsage
+            ),
+            options: [.sortedKeys]
         )
 
         let session = AIProviderHTTP.makeSession()
@@ -81,10 +96,20 @@ public struct OpenAICompatibleProvider: AIProvider {
         }
     }
 
-    static func requestBody(for request: AIChatRequest) -> [String: Any] {
+    /// These endpoints cache prompt prefixes automatically — there is no
+    /// `cache_control` to place. What the caller controls is the prefix itself:
+    /// the stable system prompt goes first and anything volatile follows it, so
+    /// the cacheable span stays byte-identical between requests.
+    static func requestBody(
+        for request: AIChatRequest,
+        reportsUsage: Bool = true
+    ) -> [String: Any] {
         var messages: [[String: Any]] = []
         if !request.system.isEmpty {
             messages.append(["role": "system", "content": request.system])
+        }
+        if !request.systemContext.isEmpty {
+            messages.append(["role": "system", "content": request.systemContext])
         }
         for message in request.messages {
             switch message {
@@ -137,6 +162,11 @@ public struct OpenAICompatibleProvider: AIProvider {
             "stream": true,
             "messages": messages
         ]
+        if reportsUsage {
+            // Streaming responses omit usage unless it is asked for, and usage
+            // is the only place the cached-token count shows up.
+            body["stream_options"] = ["include_usage": true]
+        }
         if !request.tools.isEmpty {
             body["tools"] = request.tools.map { tool in
                 [
@@ -183,11 +213,20 @@ struct OpenAIStreamAssembler {
     private var pendingToolCalls: [Int: PendingToolCall] = [:]
     private var finishReason: String?
     private var didFinish = false
+    private var usage = AITokenUsage()
 
     mutating func handle(dataPayload: String) -> [AIStreamEvent] {
         guard let data = dataPayload.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AIJSONValue.self, from: data),
-              case let .array(choices)? = payload["choices"],
+              let payload = try? JSONDecoder().decode(AIJSONValue.self, from: data)
+        else { return [] }
+
+        // The usage chunk arrives on its own, with an empty `choices` array —
+        // read it before the guard below discards the payload.
+        if let reported = payload["usage"] {
+            record(usage: reported)
+        }
+
+        guard case let .array(choices)? = payload["choices"],
               let choice = choices.first
         else { return [] }
 
@@ -238,6 +277,10 @@ struct OpenAIStreamAssembler {
         }
         pendingToolCalls = [:]
 
+        if !usage.isEmpty {
+            events.append(.usage(usage))
+        }
+
         let stopReason: AIStopReason = switch finishReason {
         case "tool_calls": .toolUse
         case "length": .maxTokens
@@ -246,6 +289,24 @@ struct OpenAIStreamAssembler {
         }
         events.append(.finished(stopReason: stopReason))
         return events
+    }
+
+    /// `prompt_tokens` is the whole input including whatever was served from
+    /// cache, so the cached share is subtracted out to leave what was actually
+    /// billed at full price. Implicit caching has no write step to report.
+    private mutating func record(usage reported: AIJSONValue) {
+        func count(_ value: AIJSONValue?) -> Int {
+            guard case let .number(number)? = value else { return 0 }
+            return Int(number)
+        }
+        let cached = count(reported["prompt_tokens_details"]?["cached_tokens"])
+        let prompt = count(reported["prompt_tokens"])
+        usage = AITokenUsage(
+            inputTokens: max(0, prompt - cached),
+            outputTokens: count(reported["completion_tokens"]),
+            cacheCreationTokens: 0,
+            cacheReadTokens: cached
+        )
     }
 
     private func isToolCall(_ event: AIStreamEvent) -> Bool {

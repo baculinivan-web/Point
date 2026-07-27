@@ -46,9 +46,13 @@ public struct AnthropicProvider: AIProvider {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         urlRequest.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        // Sorted keys keep the serialized body byte-identical across launches.
+        // Swift hashes strings with a per-process seed, so unsorted dictionaries
+        // would reorder `input_schema` properties on every restart — enough to
+        // miss a cache entry that is otherwise still warm.
         urlRequest.httpBody = try JSONSerialization.data(
             withJSONObject: Self.requestBody(for: request),
-            options: []
+            options: [.sortedKeys]
         )
 
         let session = AIProviderHTTP.makeSession()
@@ -69,31 +73,146 @@ public struct AnthropicProvider: AIProvider {
                 continuation.yield(streamEvent)
             }
         }
-        if let final = assembler.finish() {
-            continuation.yield(final)
+        for streamEvent in assembler.finish() {
+            continuation.yield(streamEvent)
         }
     }
 
+    /// How many blocks may sit between two conversation breakpoints.
+    ///
+    /// The API walks back at most 20 content blocks from a breakpoint looking
+    /// for an existing entry. One agent turn can append more than that — a
+    /// dozen tool results in a single message — so a second anchor is placed
+    /// well inside the window. Without it the next request's breakpoint finds
+    /// nothing and silently misses.
+    private static let breakpointBlockSpacing = 12
+
     static func requestBody(for request: AIChatRequest) -> [String: Any] {
+        var messages = request.messages.map(messagePayload(for:))
+        for index in cacheBreakpointIndices(for: request.messages) {
+            messages[index] = markingLastBlock(messages[index], ttl: nil)
+        }
+
         var body: [String: Any] = [
             "model": request.model,
             "max_tokens": request.maxTokens,
             "stream": true,
-            "messages": request.messages.map(messagePayload(for:))
+            "messages": messages
         ]
-        if !request.system.isEmpty {
-            body["system"] = request.system
+
+        var tools = request.tools.map { tool in
+            [
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": jsonObject(from: tool.parameters)
+            ] as [String: Any]
         }
-        if !request.tools.isEmpty {
-            body["tools"] = request.tools.map { tool in
-                [
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": jsonObject(from: tool.parameters)
-                ]
+        let system = systemBlocks(for: request)
+
+        // Render order is tools → system → messages, so one breakpoint on the
+        // last stable system block caches the tools with it. When there is no
+        // system prompt the marker moves onto the last tool instead.
+        //
+        // These bytes are identical on every request in every conversation, so
+        // they get the hour-long TTL: the doubled write cost is repaid many
+        // times over by not re-sending the whole tool schema each turn.
+        if !system.stable.isEmpty {
+            body["system"] = markedSystem(system)
+        } else if !tools.isEmpty {
+            tools[tools.count - 1]["cache_control"] = cacheControl(ttl: "1h")
+            if !system.volatile.isEmpty {
+                body["system"] = [["type": "text", "text": system.volatile]]
             }
+        } else if !system.volatile.isEmpty {
+            body["system"] = [["type": "text", "text": system.volatile]]
+        }
+
+        if !tools.isEmpty {
+            body["tools"] = tools
         }
         return body
+    }
+
+    private static func systemBlocks(
+        for request: AIChatRequest
+    ) -> (stable: String, volatile: String) {
+        (request.system, request.systemContext)
+    }
+
+    private static func markedSystem(
+        _ system: (stable: String, volatile: String)
+    ) -> [[String: Any]] {
+        var blocks: [[String: Any]] = [[
+            "type": "text",
+            "text": system.stable,
+            "cache_control": cacheControl(ttl: "1h")
+        ]]
+        // The volatile tail sits after the breakpoint, so rewriting it costs
+        // only itself rather than the whole prefix in front of it.
+        if !system.volatile.isEmpty {
+            blocks.append(["type": "text", "text": system.volatile])
+        }
+        return blocks
+    }
+
+    private static func cacheControl(ttl: String?) -> [String: Any] {
+        var control: [String: Any] = ["type": "ephemeral"]
+        if let ttl { control["ttl"] = ttl }
+        return control
+    }
+
+    /// Messages whose last content block carries a conversation breakpoint.
+    ///
+    /// The newest turn always gets one, so the next request can read the whole
+    /// conversation up to it — in an agent loop that is most of the prompt.
+    /// A second anchor further back keeps the chain inside the lookback window.
+    static func cacheBreakpointIndices(for messages: [AIConversationMessage]) -> Set<Int> {
+        guard let last = messages.indices.last else { return [] }
+        var indices: Set<Int> = [last]
+
+        var blocks = blockCount(of: messages[last])
+        var index = last - 1
+        while index >= 0 {
+            blocks += blockCount(of: messages[index])
+            if blocks >= breakpointBlockSpacing {
+                indices.insert(index)
+                break
+            }
+            index -= 1
+        }
+        return indices
+    }
+
+    private static func blockCount(of message: AIConversationMessage) -> Int {
+        switch message {
+        case let .user(_, attachments):
+            attachments.filter { $0.kind == .image }.count + 1
+        case let .assistant(text, toolCalls):
+            (text.isEmpty ? 0 : 1) + toolCalls.count
+        case let .toolResults(results):
+            results.count
+        }
+    }
+
+    /// Puts a breakpoint on a message, promoting plain-string content to a
+    /// block array because `cache_control` only exists on blocks.
+    private static func markingLastBlock(
+        _ payload: [String: Any],
+        ttl: String?
+    ) -> [String: Any] {
+        var payload = payload
+        var blocks: [[String: Any]]
+        if let text = payload["content"] as? String {
+            blocks = [["type": "text", "text": text]]
+        } else if let existing = payload["content"] as? [[String: Any]] {
+            blocks = existing
+        } else {
+            return payload
+        }
+        guard !blocks.isEmpty else { return payload }
+        blocks[blocks.count - 1]["cache_control"] = cacheControl(ttl: ttl)
+        payload["content"] = blocks
+        return payload
     }
 
     private static func messagePayload(for message: AIConversationMessage) -> [String: Any] {
@@ -188,6 +307,9 @@ struct AnthropicStreamAssembler {
     private var pendingToolCalls: [Int: PendingToolCall] = [:]
     private var stopReason: AIStopReason?
     private var didEmitFinish = false
+    /// Input counts arrive on `message_start` and output counts on
+    /// `message_delta`, so the two halves are merged before being emitted once.
+    private var usage = AITokenUsage()
 
     mutating func handle(_ event: SSEEvent) -> [AIStreamEvent] {
         guard let data = event.data.data(using: .utf8),
@@ -196,6 +318,11 @@ struct AnthropicStreamAssembler {
         else { return [] }
 
         switch type {
+        case "message_start":
+            if let reported = payload["message"]?["usage"] {
+                merge(usage: reported)
+            }
+            return []
         case "content_block_start":
             guard let index = payload["index"].flatMap(intValue),
                   let block = payload["content_block"],
@@ -234,10 +361,13 @@ struct AnthropicStreamAssembler {
             if let reason = payload["delta"]?["stop_reason"]?.stringValue {
                 stopReason = Self.stopReason(from: reason)
             }
+            if let reported = payload["usage"] {
+                merge(usage: reported)
+            }
             return []
         case "message_stop":
             didEmitFinish = true
-            return [.finished(stopReason: stopReason ?? .endTurn)]
+            return usageEvents() + [.finished(stopReason: stopReason ?? .endTurn)]
         case "error":
             let message = payload["error"]?["message"]?.stringValue ?? "stream error"
             didEmitFinish = true
@@ -247,10 +377,31 @@ struct AnthropicStreamAssembler {
         }
     }
 
-    mutating func finish() -> AIStreamEvent? {
-        guard !didEmitFinish else { return nil }
+    mutating func finish() -> [AIStreamEvent] {
+        guard !didEmitFinish else { return [] }
         didEmitFinish = true
-        return .finished(stopReason: stopReason ?? .endTurn)
+        return usageEvents() + [.finished(stopReason: stopReason ?? .endTurn)]
+    }
+
+    private func usageEvents() -> [AIStreamEvent] {
+        usage.isEmpty ? [] : [.usage(usage)]
+    }
+
+    /// Anthropic reports each field only on the event that knows it, so a
+    /// zero here means "not in this event", never "reset to zero".
+    private mutating func merge(usage reported: AIJSONValue) {
+        func count(_ key: String) -> Int? {
+            guard case let .number(number)? = reported[key] else { return nil }
+            return Int(number)
+        }
+        if let value = count("input_tokens") { usage.inputTokens = value }
+        if let value = count("output_tokens") { usage.outputTokens = value }
+        if let value = count("cache_creation_input_tokens") {
+            usage.cacheCreationTokens = value
+        }
+        if let value = count("cache_read_input_tokens") {
+            usage.cacheReadTokens = value
+        }
     }
 
     private func intValue(_ value: AIJSONValue) -> Int? {

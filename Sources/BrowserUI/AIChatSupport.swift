@@ -1,22 +1,61 @@
 import AppKit
 import BrowserAI
+import BrowserAutomation
 import BrowserCore
 import Foundation
 import Observation
 
 /// Hands the chat real browser capabilities: reading the current page,
-/// searching, opening and organizing tabs, screenshots, Python, and memory.
+/// searching, opening and organizing tabs, screenshots, Python, memory, and —
+/// once the person has explicitly allowed it — direct control of the page.
 @MainActor
 final class BrowserAIToolBridge: AIChatToolExecutor {
-    private weak var model: BrowserWindowModel?
+    let model: BrowserWindowModel?
     private let memories: AIMemoryStore
+
+    /// True once the person has approved this conversation driving the browser.
+    /// Reset whenever a new conversation starts, so consent never leaks between
+    /// unrelated tasks.
+    var hasBrowserControl = false
+    /// The tab the agent is currently working in.
+    var agentTabID: TabID?
+    /// The most recent snapshot per tab, so a click can be classified against
+    /// the element the model actually saw.
+    var lastElements: [TabID: [String: AgentElement]] = [:]
+
+    let classifier = AgentActionClassifier.shared
 
     init(model: BrowserWindowModel, memories: AIMemoryStore = .shared) {
         self.model = model
         self.memories = memories
     }
 
+    var agentActivity: AgentActivityCenter? { model?.agentActivity }
+    var agentConsent: AgentConsentCenter? { model?.agentConsent }
+    var isBrowserControlActive: Bool { hasBrowserControl }
+
+    /// A page-driving turn takes many more steps than a question does — a real
+    /// errand is snapshot, click, snapshot, click, dozens of times over — so
+    /// the harness raises its budget once the agent actually has control.
+    var toolIterationLimit: Int { hasBrowserControl ? 150 : 12 }
+
+    func resetToolState() {
+        releaseBrowserControl()
+    }
+
+    func releaseBrowserControl() {
+        hasBrowserControl = false
+        agentTabID = nil
+        lastElements.removeAll()
+        agentActivity?.endControl()
+        agentConsent?.cancelAll()
+    }
+
     var toolSpecs: [AIToolSpec] {
+        baseToolSpecs + agentToolSpecs
+    }
+
+    private var baseToolSpecs: [AIToolSpec] {
         [
             spec(
                 "web_search",
@@ -46,8 +85,11 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
             ),
             spec(
                 "screenshot_page",
-                "Capture a screenshot of a page and look at it. Use for layout, charts, "
-                    + "or anything the text does not convey. Defaults to the current page.",
+                "Capture a screenshot of a page and look at it. For charts, images, "
+                    + "maps, and layout you cannot read from text. Do not use it to "
+                    + "check the state of a page you are driving — browser_snapshot "
+                    + "already carries that, in a fraction of the context. Defaults "
+                    + "to the current page.",
                 properties: [
                     "url": string("Optional URL of an open tab; omit for the current page.")
                 ],
@@ -130,18 +172,22 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
 
     func executeTool(name: String, arguments: AIJSONValue) async throws -> AIToolOutput {
         switch name {
-        case "web_search": try await runWebSearch(arguments)
-        case "open_tab": try await runOpenTab(arguments)
-        case "read_page": try await runReadPage(arguments)
-        case "screenshot_page": try await runScreenshot(arguments)
-        case "run_python": try await runPython(arguments)
-        case "list_tabs": runListTabs()
-        case "group_tabs": try runGroupTabs(arguments)
-        case "remember": try runRemember(arguments)
-        case "recall_memories": runRecallMemories(arguments)
-        case "search_memories": try runSearchMemories(arguments)
-        case "forget_memory": try runForgetMemory(arguments)
-        default: throw AIToolBridgeError.unknownTool(name)
+        case "web_search": return try await runWebSearch(arguments)
+        case "open_tab": return try await runOpenTab(arguments)
+        case "read_page": return try await runReadPage(arguments)
+        case "screenshot_page": return try await runScreenshot(arguments)
+        case "run_python": return try await runPython(arguments)
+        case "list_tabs": return runListTabs()
+        case "group_tabs": return try runGroupTabs(arguments)
+        case "remember": return try runRemember(arguments)
+        case "recall_memories": return runRecallMemories(arguments)
+        case "search_memories": return try runSearchMemories(arguments)
+        case "forget_memory": return try runForgetMemory(arguments)
+        default:
+            guard name.hasPrefix("browser_") else {
+                throw AIToolBridgeError.unknownTool(name)
+            }
+            return try await runAgentTool(name: name, arguments: arguments)
         }
     }
 
@@ -310,7 +356,7 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
 
     // MARK: - Schema helpers
 
-    private func spec(
+    func spec(
         _ name: String,
         _ description: String,
         properties: [String: AIJSONValue],
@@ -327,15 +373,15 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
         )
     }
 
-    private func string(_ description: String) -> AIJSONValue {
+    func string(_ description: String) -> AIJSONValue {
         .object(["type": .string("string"), "description": .string(description)])
     }
 
-    private func boolean(_ description: String) -> AIJSONValue {
+    func boolean(_ description: String) -> AIJSONValue {
         .object(["type": .string("boolean"), "description": .string(description)])
     }
 
-    private func stringEnum(_ description: String, values: [String]) -> AIJSONValue {
+    func stringEnum(_ description: String, values: [String]) -> AIJSONValue {
         .object([
             "type": .string("string"),
             "description": .string(description),
@@ -343,11 +389,11 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
         ])
     }
 
-    private func number(_ description: String) -> AIJSONValue {
+    func number(_ description: String) -> AIJSONValue {
         .object(["type": .string("integer"), "description": .string(description)])
     }
 
-    private func array(_ description: String, itemDescription: String) -> AIJSONValue {
+    func array(_ description: String, itemDescription: String) -> AIJSONValue {
         .object([
             "type": .string("array"),
             "description": .string(description),
@@ -358,12 +404,12 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
         ])
     }
 
-    private static func intValue(_ value: AIJSONValue) -> Int? {
+    static func intValue(_ value: AIJSONValue) -> Int? {
         if case let .number(number) = value { return Int(number) }
         return nil
     }
 
-    private static func webURL(from raw: String?) throws -> URL {
+    static func webURL(from raw: String?) throws -> URL {
         guard let raw,
               let url = URL(string: raw),
               ["http", "https"].contains(url.scheme?.lowercased() ?? "")

@@ -25,17 +25,21 @@ let package = Package(
             dependencies: ["BrowserCore"]
         ),
         .target(
-            name: "BrowserAI",
+            name: "BrowserAutomation",
             dependencies: ["BrowserCore"]
         ),
         .target(
+            name: "BrowserAI",
+            dependencies: ["BrowserCore", "BrowserAutomation"]
+        ),
+        .target(
             name: "BrowserUI",
-            dependencies: ["BrowserCore", "BrowserEngine", "BrowserAI"],
+            dependencies: ["BrowserCore", "BrowserEngine", "BrowserAI", "BrowserAutomation"],
             resources: [.process("Resources")]
         ),
         .executableTarget(
             name: "BrowserApp",
-            dependencies: ["BrowserCore", "BrowserEngine", "BrowserPersistence", "BrowserUI", "BrowserAI"]
+            dependencies: ["BrowserCore", "BrowserEngine", "BrowserPersistence", "BrowserUI", "BrowserAI", "BrowserAutomation"]
         ),
         .testTarget(
             name: "BrowserCoreTests",
@@ -47,11 +51,15 @@ let package = Package(
         ),
         .testTarget(
             name: "BrowserAITests",
-            dependencies: ["BrowserAI"]
+            dependencies: ["BrowserAI", "BrowserAutomation"]
         ),
         .testTarget(
             name: "BrowserUITests",
             dependencies: ["BrowserUI"]
+        ),
+        .testTarget(
+            name: "BrowserAutomationTests",
+            dependencies: ["BrowserAutomation"]
         )
     ],
     swiftLanguageModes: [.v6]
