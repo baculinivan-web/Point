@@ -143,8 +143,7 @@
 	<key>embedded_media_request</key>
 	<string>Request embedded in %@</string>
 	<key>external_url_details</key>
-	<string>Scheme: %@
-%@</string>
+	<string>Scheme: %@%@</string>
 	<key>expand_preview</key>
 	<string>Open Preview in New Tab</string>
 	<key>preview_tip_message</key>
