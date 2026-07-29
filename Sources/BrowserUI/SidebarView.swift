@@ -803,11 +803,7 @@ private struct PinnedTabCard: View {
             }
             .buttonStyle(.plain)
 
-            if tab.isLoading {
-                ProgressView()
-                    .controlSize(.mini)
-                    .padding(7)
-            } else if isHovering {
+            if isHovering {
                 Button {
                     model.closeTab(tab.id)
                 } label: {
@@ -991,9 +987,7 @@ private struct TabRow: View {
 
     @ViewBuilder
     private var trailingControl: some View {
-        if tab.isLoading {
-            ProgressView().controlSize(.mini)
-        } else if showsCloseButton {
+        if showsCloseButton {
             Button {
                 model.closeTab(tab.id)
             } label: {
