@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — Spaces and Browser Control
+
+- Added Spaces for organizing tabs into named workspaces, with a split-view layout that can show two spaces side by side.
+- Kept tab close controls available while a page is loading.
+- Added browser-use control for the built-in AI assistant.
+- Updated the bundle version to `0.2.1` (`29`).
+
 ## 0.2.0 — Chat
 
 - Added a built-in chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, resized by dragging its edge, or detached into its own window.
