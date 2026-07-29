@@ -46,6 +46,10 @@ let package = Package(
             dependencies: ["BrowserCore"]
         ),
         .testTarget(
+            name: "BrowserEngineTests",
+            dependencies: ["BrowserEngine"]
+        ),
+        .testTarget(
             name: "BrowserPersistenceTests",
             dependencies: ["BrowserCore", "BrowserPersistence"]
         ),

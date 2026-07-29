@@ -221,6 +221,10 @@
 	<string>Move Selected Here</string>
 	<key>move_to_folder</key>
 	<string>Move to Folder</string>
+	<key>move_to_space</key>
+	<string>Move to Space</string>
+	<key>move_selected_to_space</key>
+	<string>Move Selected Tabs Here</string>
 	<key>move_to_new_window</key>
 	<string>Move to New Window</string>
 	<key>move_to_top_level</key>
@@ -237,6 +241,8 @@
 	<string>New Nested Folder</string>
 	<key>new_private_window</key>
 	<string>New Private Window</string>
+	<key>new_space</key>
+	<string>New Space</string>
 	<key>new_tab</key>
 	<string>New Tab</string>
 	<key>new_window</key>
@@ -249,6 +255,8 @@
 	<string>No Saved Permissions</string>
 	<key>ok</key>
 	<string>OK</string>
+	<key>done</key>
+	<string>Done</string>
 	<key>open</key>
 	<string>Open</string>
 	<key>open_in_other_app</key>
@@ -361,6 +369,14 @@
 	<string>Sign In to %@</string>
 	<key>site_permissions</key>
 	<string>Site Permissions…</string>
+	<key>space_default_name</key>
+	<string>Space %d</string>
+	<key>space_icon</key>
+	<string>Space Icon</string>
+	<key>space_name_placeholder</key>
+	<string>Space Name</string>
+	<key>delete_space</key>
+	<string>Delete Space</string>
 	<key>site_permissions_detail</key>
 	<string>Saved camera and microphone decisions</string>
 	<key>site_permissions_unavailable</key>

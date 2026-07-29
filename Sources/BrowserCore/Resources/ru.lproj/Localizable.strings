@@ -221,6 +221,10 @@
 	<string>Поместить выбранные сюда</string>
 	<key>move_to_folder</key>
 	<string>Переместить в папку</string>
+	<key>move_to_space</key>
+	<string>Переместить в пространство</string>
+	<key>move_selected_to_space</key>
+	<string>Переместить выбранные вкладки сюда</string>
 	<key>move_to_new_window</key>
 	<string>Переместить в новое окно</string>
 	<key>move_to_top_level</key>
@@ -237,6 +241,8 @@
 	<string>Новая вложенная папка</string>
 	<key>new_private_window</key>
 	<string>Новое приватное окно</string>
+	<key>new_space</key>
+	<string>Новое пространство</string>
 	<key>new_tab</key>
 	<string>Новая вкладка</string>
 	<key>new_window</key>
@@ -249,6 +255,8 @@
 	<string>Нет сохранённых разрешений</string>
 	<key>ok</key>
 	<string>OK</string>
+	<key>done</key>
+	<string>Готово</string>
 	<key>open</key>
 	<string>Открыть</string>
 	<key>open_in_other_app</key>
@@ -361,6 +369,14 @@
 	<string>Вход на %@</string>
 	<key>site_permissions</key>
 	<string>Разрешения сайтов…</string>
+	<key>space_default_name</key>
+	<string>Пространство %d</string>
+	<key>space_icon</key>
+	<string>Значок пространства</string>
+	<key>space_name_placeholder</key>
+	<string>Название пространства</string>
+	<key>delete_space</key>
+	<string>Удалить пространство</string>
 	<key>site_permissions_detail</key>
 	<string>Сохранённые решения камеры и микрофона</string>
 	<key>site_permissions_unavailable</key>

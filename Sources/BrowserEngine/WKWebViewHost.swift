@@ -9,6 +9,7 @@ public final class WebContainerView: NSView {
     private var fullscreenObservation: NSKeyValueObservation?
     private let interactionShield = WebInteractionShieldView()
     private var interactionShieldWidthConstraint: NSLayoutConstraint?
+    private var blockedLeadingWidth: CGFloat = 0
     private var swipeMonitor: Any?
     private var onSwipeBack: (@MainActor () -> Bool)?
     private var onSwipeForward: (@MainActor () -> Bool)?
@@ -94,6 +95,7 @@ public final class WebContainerView: NSView {
     @MainActor
     public func setBlockedLeadingWidth(_ width: CGFloat) {
         let width = max(0, width)
+        blockedLeadingWidth = width
         interactionShieldWidthConstraint?.constant = width
         interactionShield.isHidden = width == 0
     }
@@ -173,6 +175,7 @@ public final class WebContainerView: NSView {
     private func handleSwipeEvent(_ event: NSEvent) -> NSEvent? {
         guard event.window === window,
               bounds.contains(convert(event.locationInWindow, from: nil)),
+              convert(event.locationInWindow, from: nil).x >= blockedLeadingWidth,
               let webView = attachedWebView,
               let direction = NavigationSwipeDirection(
                   deltaX: Double(event.deltaX),

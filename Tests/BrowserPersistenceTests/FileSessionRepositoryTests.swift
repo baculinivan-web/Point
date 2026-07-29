@@ -16,10 +16,13 @@ struct FileSessionRepositoryTests {
         )
         let firstID = TabID()
         let secondID = TabID()
+        let personalSpaceID = TabSpaceID()
+        let workSpaceID = TabSpaceID()
         let workFolderID = TabFolderID()
         let researchFolderID = TabFolderID()
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: secondID,
+            selectedSpaceID: workSpaceID,
             sidebarMode: .autoHide,
             tabs: [
                 PersistedTab(
@@ -28,6 +31,7 @@ struct FileSessionRepositoryTests {
                     url: URL(string: "https://example.com"),
                     faviconURL: URL(string: "https://cdn.example.com/icon.png"),
                     isPinned: true,
+                    spaceID: personalSpaceID,
                     position: 1024,
                     navigationHistory: TabNavigationHistory(
                         entries: [
@@ -48,6 +52,7 @@ struct FileSessionRepositoryTests {
                     title: "Second",
                     url: URL(string: "https://example.org"),
                     isPinned: false,
+                    spaceID: workSpaceID,
                     folderID: researchFolderID,
                     position: 2048
                 )
@@ -57,16 +62,34 @@ struct FileSessionRepositoryTests {
                     id: workFolderID,
                     name: "Работа",
                     symbolName: "briefcase.fill",
+                    spaceID: workSpaceID,
                     position: 1024
                 ),
                 PersistedTabFolder(
                     id: researchFolderID,
                     name: "Исследование",
+                    spaceID: workSpaceID,
                     parentID: workFolderID,
                     position: 1024,
                     isExpanded: false,
                     isSplit: true,
                     splitRatio: 0.62
+                )
+            ],
+            spaces: [
+                PersistedTabSpace(
+                    id: personalSpaceID,
+                    name: "Personal",
+                    symbolName: "house.fill",
+                    position: 1024,
+                    lastSelectedTabID: firstID
+                ),
+                PersistedTabSpace(
+                    id: workSpaceID,
+                    name: "Work",
+                    symbolName: "briefcase.fill",
+                    position: 2048,
+                    lastSelectedTabID: secondID
                 )
             ]
         )
@@ -113,6 +136,9 @@ struct FileSessionRepositoryTests {
         let restored = try await FileSessionRepository(fileURL: fileURL).load()
         #expect(restored?.folders == [])
         #expect(restored?.tabs.first?.folderID == nil)
+        #expect(restored?.selectedSpaceID == .default)
+        #expect(restored?.spaces == [.default])
+        #expect(restored?.tabs.first?.spaceID == .default)
     }
 }
 
