@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 — Manual Updates
+
+- Added a lightweight GitHub Releases manual-update flow for trusted beta builds: daily checks, native update choices, DMG download and Finder reveal, and one-time versioned release notes after replacement.
+- Added a manual update check in Settings.
+- Updated the bundle version to `0.2.2` (`30`).
+
 ## 0.2.1 — Spaces and Browser Control
 
 - Added Spaces for organizing tabs into named workspaces, with a split-view layout that can show two spaces side by side.

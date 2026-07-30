@@ -48,10 +48,20 @@
         </dict>
     </array>
     <key>CFBundleShortVersionString</key>
-	<string>0.2.1</string>
+	<string>0.2.2</string>
 	<key>CFBundleVersion</key>
-	<string>29</string>
-    <key>LSMinimumSystemVersion</key>
+	<string>30</string>
+	<!--
+	 Replace all three values before publishing a beta release. Keeping the
+	 placeholders disables automatic update checks in development builds.
+	-->
+	<key>BrowserGitHubReleasesAPIURL</key>
+	<string>https://api.github.com/repos/REPLACE_WITH_OWNER/REPLACE_WITH_REPOSITORY/releases/latest</string>
+	<key>BrowserReleaseNotesURLFormat</key>
+	<string>https://REPLACE_WITH_OWNER.github.io/REPLACE_WITH_REPOSITORY/releases/{version}</string>
+	<key>BrowserReleaseAssetName</key>
+	<string>Point.dmg</string>
+	<key>LSMinimumSystemVersion</key>
     <string>26.0</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>

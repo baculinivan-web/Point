@@ -413,5 +413,33 @@
 	<string>Веб-страница</string>
 	<key>work</key>
 	<string>Работа</string>
+	<key>later</key>
+	<string>Позже</string>
+	<key>check_for_updates</key>
+	<string>Проверить обновления</string>
+	<key>update</key>
+	<string>Обновить</string>
+	<key>updates</key>
+	<string>Обновления</string>
+	<key>updates_detail</key>
+	<string>Point проверяет GitHub Releases не чаще одного раза в 24 часа во время работы.</string>
+	<key>update_available_message</key>
+	<string>Point %@ готов к загрузке.</string>
+	<key>update_available_title</key>
+	<string>Доступно обновление</string>
+	<key>update_download_failed</key>
+	<string>Не удалось загрузить обновление. Проверьте подключение и повторите попытку позже.</string>
+	<key>update_download_failed_title</key>
+	<string>Ошибка загрузки</string>
+	<key>update_downloading_message</key>
+	<string>Point загружает образ диска. Загрузку можно отменить в любой момент.</string>
+	<key>update_downloading_title</key>
+	<string>Загрузка обновления…</string>
+	<key>update_ready_instructions</key>
+	<string>Образ диска открыт в Finder. Закройте Point, откройте загруженный DMG, перетащите Point в «Программы», замените старую копию и снова откройте Point.</string>
+	<key>update_ready_title</key>
+	<string>Готово к установке</string>
+	<key>whats_new</key>
+	<string>Что нового</string>
 </dict>
 </plist>

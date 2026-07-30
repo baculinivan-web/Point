@@ -5984,6 +5984,90 @@
           }
         }
       }
+    },
+    "later": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Later" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Позже" } }
+      }
+    },
+    "check_for_updates": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Check for Updates" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Проверить обновления" } }
+      }
+    },
+    "update": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Update" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Обновить" } }
+      }
+    },
+    "updates": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Updates" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Обновления" } }
+      }
+    },
+    "updates_detail": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Point checks GitHub Releases no more than once every 24 hours while it is running." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Point проверяет GitHub Releases не чаще одного раза в 24 часа во время работы." } }
+      }
+    },
+    "update_available_message": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Point %@ is ready to download." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Point %@ готов к загрузке." } }
+      }
+    },
+    "update_available_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Update Available" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Доступно обновление" } }
+      }
+    },
+    "update_download_failed": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The update could not be downloaded. Check your connection and try again later." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось загрузить обновление. Проверьте подключение и повторите попытку позже." } }
+      }
+    },
+    "update_download_failed_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Download Failed" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ошибка загрузки" } }
+      }
+    },
+    "update_downloading_message": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Point is downloading the disk image. You can cancel at any time." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Point загружает образ диска. Загрузку можно отменить в любой момент." } }
+      }
+    },
+    "update_downloading_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Downloading Update…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Загрузка обновления…" } }
+      }
+    },
+    "update_ready_instructions": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Образ диска открыт в Finder. Закройте Point, откройте загруженный DMG, перетащите Point в «Программы», замените старую копию и снова откройте Point." } }
+      }
+    },
+    "update_ready_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Ready to Install" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Готово к установке" } }
+      }
+    },
+    "whats_new": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "What’s New" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Что нового" } }
+      }
     }
   },
   "version": "1.0"

@@ -13,7 +13,7 @@ run: app
 	open dist/Point.app
 
 release:
-	./scripts/notarize-app.sh
+	./scripts/package-release.sh
 
 clean:
 	swift package clean

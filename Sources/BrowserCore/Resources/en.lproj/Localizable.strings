@@ -413,5 +413,33 @@
 	<string>Web Page</string>
 	<key>work</key>
 	<string>Work</string>
+	<key>later</key>
+	<string>Later</string>
+	<key>check_for_updates</key>
+	<string>Check for Updates</string>
+	<key>update</key>
+	<string>Update</string>
+	<key>updates</key>
+	<string>Updates</string>
+	<key>updates_detail</key>
+	<string>Point checks GitHub Releases no more than once every 24 hours while it is running.</string>
+	<key>update_available_message</key>
+	<string>Point %@ is ready to download.</string>
+	<key>update_available_title</key>
+	<string>Update Available</string>
+	<key>update_download_failed</key>
+	<string>The update could not be downloaded. Check your connection and try again later.</string>
+	<key>update_download_failed_title</key>
+	<string>Download Failed</string>
+	<key>update_downloading_message</key>
+	<string>Point is downloading the disk image. You can cancel at any time.</string>
+	<key>update_downloading_title</key>
+	<string>Downloading Update…</string>
+	<key>update_ready_instructions</key>
+	<string>The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point.</string>
+	<key>update_ready_title</key>
+	<string>Ready to Install</string>
+	<key>whats_new</key>
+	<string>What’s New</string>
 </dict>
 </plist>

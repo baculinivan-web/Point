@@ -48,6 +48,20 @@ public struct BrowserSettingsView: View {
                 }
             }
 
+            Section(BrowserLocalization.string("updates")) {
+                Text(BrowserLocalization.string("updates_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(BrowserLocalization.string("check_for_updates")) {
+                    NotificationCenter.default.post(
+                        name: BrowserManualUpdate.checkRequested,
+                        object: nil
+                    )
+                }
+            }
+
             Section(BrowserLocalization.string("onboarding_section_title")) {
                 Text(BrowserLocalization.string("onboarding_section_detail"))
                     .font(.caption)
@@ -181,7 +195,7 @@ public struct BrowserSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 620)
+        .frame(width: 480, height: 670)
         .onAppear(perform: refreshDefaultBrowserStatus)
         .onReceive(
             NotificationCenter.default.publisher(
