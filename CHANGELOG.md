@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 — Update Check Verification
+
+- Published a follow-up beta release to verify manual update detection from Point 0.2.3.
+- Updated the bundle version to `0.2.4` (`32`).
+
 ## 0.2.3 — Update Check Feedback
 
 - Made the Settings update check show checking, available, up-to-date, recent-check, and failure states.
