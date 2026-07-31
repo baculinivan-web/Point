@@ -292,6 +292,75 @@ struct FileBrowsingHistoryRepositoryTests {
     }
 }
 
+@Suite("Bookmark persistence")
+struct FileBookmarkRepositoryTests {
+    @Test("Bookmarks persist newest first and duplicate URLs update in place")
+    func roundTripAndDuplicateUpdate() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserBookmarkTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let fileURL = directory.appending(path: "bookmarks.json")
+        let repository = FileBookmarkRepository(fileURL: fileURL)
+        let firstURL = URL(string: "https://example.com/first")!
+        let secondURL = URL(string: "https://example.org/second")!
+        let first = try await repository.saveBookmark(
+            url: firstURL,
+            title: "First",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        _ = try await repository.saveBookmark(
+            url: secondURL,
+            title: "Second",
+            createdAt: Date(timeIntervalSince1970: 200),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let updated = try await repository.saveBookmark(
+            url: firstURL,
+            title: "Updated",
+            createdAt: Date(timeIntervalSince1970: 300),
+            updatedAt: Date(timeIntervalSince1970: 300)
+        )
+
+        #expect(updated.id == first.id)
+
+        let restored = FileBookmarkRepository(fileURL: fileURL)
+        let entries = try await restored.all()
+        #expect(entries.map(\.url) == [firstURL, secondURL])
+        #expect(entries.first?.title == "Updated")
+    }
+
+    @Test("Bookmarks can remove one entry or clear the list")
+    func removeAndClear() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "BrowserBookmarkDeleteTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let repository = FileBookmarkRepository(
+            fileURL: directory.appending(path: "bookmarks.json")
+        )
+        let first = try await repository.saveBookmark(
+            url: URL(string: "https://example.com")!,
+            title: "First",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let second = try await repository.saveBookmark(
+            url: URL(string: "https://example.org")!,
+            title: "Second",
+            createdAt: Date(timeIntervalSince1970: 200),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        try await repository.remove(first.id)
+        #expect(try await repository.all() == [second])
+
+        try await repository.removeAll()
+        #expect(try await repository.all().isEmpty)
+    }
+}
+
 @Suite("SwiftData persistence and migration")
 struct SwiftDataRepositoryTests {
     @Test("Legacy JSON session migrates once into the primary window")

@@ -154,16 +154,28 @@ public struct BrowserWindowView: View {
                     .zIndex(11)
             }
 
+            if model.isBookmarkManagerPresented {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+                    .onTapGesture { model.dismissBookmarkManager() }
+                    .zIndex(12)
+
+                BookmarkManagerOverlay(model: model)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    .zIndex(13)
+            }
+
             if model.isClearBrowsingDataPresented {
                 Color.black.opacity(0.08)
                     .ignoresSafeArea()
                     .onTapGesture { model.dismissClearBrowsingData() }
-                    .zIndex(12)
+                    .zIndex(14)
 
                 ClearBrowsingDataOverlay(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .zIndex(13)
+                    .zIndex(15)
             }
 
             if isOnboardingPresented {
@@ -200,6 +212,7 @@ public struct BrowserWindowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.mediaPermissionPrompt?.id)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isSitePermissionsPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isBrowsingHistoryPresented)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isBookmarkManagerPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isClearBrowsingDataPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.toastMessage)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: isOnboardingPresented)

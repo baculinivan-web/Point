@@ -34,3 +34,40 @@ public protocol BrowsingHistoryRepository: Sendable {
     func removeVisits(before date: Date) async throws
     func removeAll() async throws
 }
+
+public struct BookmarkEntry: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var url: URL
+    public var title: String
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        url: URL,
+        title: String,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.url = url
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+public protocol BookmarkRepository: Sendable {
+    func all() async throws -> [BookmarkEntry]
+
+    @discardableResult
+    func saveBookmark(
+        url: URL,
+        title: String,
+        createdAt: Date,
+        updatedAt: Date
+    ) async throws -> BookmarkEntry
+
+    func remove(_ id: UUID) async throws
+    func removeAll() async throws
+}

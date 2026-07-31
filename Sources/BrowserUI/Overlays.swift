@@ -759,6 +759,207 @@ private struct BrowsingHistoryRow: View {
     }
 }
 
+struct BookmarkManagerOverlay: View {
+    @Bindable var model: BrowserWindowModel
+    @State private var confirmsClear = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content
+            Divider()
+            footer
+        }
+        .frame(width: 640, height: 520)
+        .browserGlassSurface(cornerRadius: 20)
+        .shadow(color: .black.opacity(0.18), radius: 28, y: 14)
+        .onExitCommand { model.dismissBookmarkManager() }
+        .confirmationDialog(
+            BrowserLocalization.string("clear_all_bookmarks_question"),
+            isPresented: $confirmsClear,
+            titleVisibility: .visible
+        ) {
+            Button(BrowserLocalization.string("clear_bookmarks"), role: .destructive) {
+                model.clearBookmarks()
+            }
+        } message: {
+            Text(BrowserLocalization.string("bookmarks_clear_info"))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(BrowserLocalization.string("bookmark_manager"))
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text(BrowserLocalization.string("bookmarks"))
+                .font(.headline)
+            if model.isLoadingBookmarks {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Spacer()
+            Button {
+                model.dismissBookmarkManager()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(BrowserLocalization.string("close"))
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 54)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let error = model.bookmarkError {
+            ContentUnavailableView(
+                BrowserLocalization.string("bookmarks_unavailable"),
+                systemImage: "exclamationmark.triangle",
+                description: Text(error)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.bookmarks.isEmpty {
+            if model.isLoadingBookmarks {
+                ProgressView()
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView(
+                    BrowserLocalization.string("bookmarks_empty"),
+                    systemImage: "bookmark",
+                    description: Text(BrowserLocalization.string("bookmarks_empty_info"))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(model.bookmarks) { bookmark in
+                        BookmarkRow(
+                            bookmark: bookmark,
+                            favicon: model.bookmarkFavicons[bookmark.id],
+                            onOpen: {
+                                model.openBookmark(bookmark)
+                            },
+                            onRemove: {
+                                model.removeBookmark(bookmark)
+                            }
+                        )
+                        Divider()
+                            .padding(.leading, 58)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Text(BrowserLocalization.string("bookmarks_footer_info"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(BrowserLocalization.string("clear_bookmarks")) {
+                confirmsClear = true
+            }
+            .disabled(model.bookmarks.isEmpty || model.isLoadingBookmarks)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 54)
+    }
+}
+
+private struct BookmarkRow: View {
+    let bookmark: BookmarkEntry
+    let favicon: NSImage?
+    let onOpen: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    faviconView
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(displayTitle)
+                            .lineLimit(1)
+                        Text(bookmark.url.absoluteString)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Text(bookmark.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("\(displayTitle), \(bookmark.url.absoluteString)")
+
+            Button(action: onRemove) {
+                Image(systemName: "trash")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(BrowserLocalization.string("remove_from_list"))
+            .accessibilityLabel(BrowserLocalization.string("remove_from_list"))
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 58)
+    }
+
+    @ViewBuilder
+    private var faviconView: some View {
+        if let favicon {
+            Image(nsImage: favicon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .frame(width: 30, height: 30)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(monogramColor.opacity(0.18))
+                Text(monogram)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(monogramColor)
+            }
+            .frame(width: 30, height: 30)
+        }
+    }
+
+    private var displayTitle: String {
+        let title = bookmark.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty, title != BrowserLocalization.string("new_tab") {
+            return title
+        }
+        return bookmark.url.host ?? bookmark.url.absoluteString
+    }
+
+    private var monogram: String {
+        String((bookmark.url.host ?? "?").prefix(1)).uppercased()
+    }
+
+    private var monogramColor: Color {
+        let seed = (bookmark.url.host ?? bookmark.url.absoluteString).unicodeScalars.reduce(0) {
+            ($0 &* 31 &+ Int($1.value)) % 360
+        }
+        return Color(hue: Double(seed) / 360, saturation: 0.58, brightness: 0.72)
+    }
+}
+
 struct ClearBrowsingDataOverlay: View {
     @Bindable var model: BrowserWindowModel
 

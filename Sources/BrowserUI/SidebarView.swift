@@ -300,6 +300,16 @@ struct SidebarView: View {
             Spacer()
 
             Button {
+                model.presentBookmarkManager()
+            } label: {
+                Image(systemName: "bookmark")
+                    .frame(width: 24, height: 24)
+            }
+            .disabled(model.isPrivate)
+            .help(BrowserLocalization.string("show_bookmark_manager"))
+            .accessibilityLabel(BrowserLocalization.string("bookmarks"))
+
+            Button {
                 model.toggleDownloads()
             } label: {
                 Image(
@@ -884,6 +894,11 @@ private struct PinnedTabCard: View {
             }
         }
         Divider()
+        if !model.isPrivate, tab.url != nil {
+            Button(BrowserLocalization.string("bookmark_tab")) {
+                model.bookmarkTab(tab)
+            }
+        }
         if !model.isPrivate {
             Button(BrowserLocalization.string("move_to_new_window")) {
                 if !model.selectedTabIDs.contains(tab.id) {
@@ -1027,6 +1042,11 @@ private struct TabRow: View {
             }
         }
         Divider()
+        if !model.isPrivate, tab.url != nil {
+            Button(BrowserLocalization.string("bookmark_tab")) {
+                model.bookmarkTab(tab)
+            }
+        }
         if !model.isPrivate {
             Button(BrowserLocalization.string("move_to_new_window")) {
                 if !model.selectedTabIDs.contains(tab.id) {

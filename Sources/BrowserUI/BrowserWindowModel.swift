@@ -237,6 +237,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var browsingHistoryFavicons: [UUID: NSImage] = [:]
     public private(set) var isLoadingBrowsingHistory = false
     public private(set) var browsingHistoryError: String?
+    public var isBookmarkManagerPresented = false
+    public private(set) var bookmarks: [BookmarkEntry] = []
+    public private(set) var bookmarkFavicons: [UUID: NSImage] = [:]
+    public private(set) var isLoadingBookmarks = false
+    public private(set) var bookmarkError: String?
     public var isClearBrowsingDataPresented = false
     public var selectedBrowsingDataCategories = Set(BrowsingDataCategory.allCases)
     public private(set) var isClearingBrowsingData = false
@@ -259,6 +264,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
     private let browsingHistoryRepository: any BrowsingHistoryRepository
+    private let bookmarkRepository: any BookmarkRepository
     @ObservationIgnored private let websiteDataStore: WKWebsiteDataStore
     private var parser: OmniboxParser
     private let lifecyclePolicy = TabLifecyclePolicy()
@@ -293,12 +299,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
     @ObservationIgnored private var pendingMediaPermissionRequests: [PendingMediaPermissionRequest] = []
     @ObservationIgnored private var sitePermissionManagementTask: Task<Void, Never>?
     @ObservationIgnored private var browsingHistoryManagementTask: Task<Void, Never>?
+    @ObservationIgnored private var bookmarkManagementTask: Task<Void, Never>?
     @ObservationIgnored private var clearBrowsingDataTask: Task<Void, Never>?
 
     public init(
         repository: any SessionRepository,
         sitePermissionRepository: any SitePermissionRepository,
         browsingHistoryRepository: any BrowsingHistoryRepository,
+        bookmarkRepository: any BookmarkRepository,
         parser: OmniboxParser? = nil,
         downloadManager: DownloadManager? = nil,
         passkeyAccessManager: PasskeyAccessManager? = nil,
@@ -313,6 +321,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.repository = repository
         self.sitePermissionRepository = sitePermissionRepository
         self.browsingHistoryRepository = browsingHistoryRepository
+        self.bookmarkRepository = bookmarkRepository
         self.isPrivate = isPrivate
         self.websiteDataStore = websiteDataStore
             ?? (isPrivate ? .nonPersistent() : .default())
@@ -554,6 +563,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         isSitePermissionsPresented = false
         sitePermissionManagementTask?.cancel()
         sitePermissionManagementTask = nil
+        dismissBookmarkManager()
         isBrowsingHistoryPresented = true
         reloadBrowsingHistory()
     }
@@ -612,10 +622,114 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
     }
 
+    public func presentBookmarkManager() {
+        dismissOmnibox()
+        dismissSitePermissions()
+        dismissBrowsingHistory()
+        isBookmarkManagerPresented = true
+        reloadBookmarks()
+    }
+
+    public func dismissBookmarkManager() {
+        isBookmarkManagerPresented = false
+        bookmarkManagementTask?.cancel()
+        bookmarkManagementTask = nil
+    }
+
+    public func bookmarkTab(_ tab: BrowserTab) {
+        guard !isPrivate,
+              let url = tab.url,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { return }
+
+        bookmarkManagementTask?.cancel()
+        bookmarkError = nil
+        let repository = bookmarkRepository
+        let title = tab.displayTitle
+        bookmarkManagementTask = Task { @MainActor [weak self] in
+            do {
+                let bookmark = try await repository.saveBookmark(
+                    url: url,
+                    title: title,
+                    createdAt: Date(),
+                    updatedAt: Date()
+                )
+                guard !Task.isCancelled, let self else { return }
+                showToast(BrowserLocalization.string("bookmark_added"))
+                if isBookmarkManagerPresented {
+                    reloadBookmarks()
+                } else if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
+                    bookmarks[index] = bookmark
+                }
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                bookmarkError = BrowserLocalization.string(
+                    "save_bookmark_failed",
+                    error.localizedDescription
+                )
+                showToast(bookmarkError ?? BrowserLocalization.string("save_bookmark_failed", ""))
+            }
+        }
+    }
+
+    public func bookmarkActiveTab() {
+        guard let activeTab else { return }
+        bookmarkTab(activeTab)
+    }
+
+    public func openBookmark(_ bookmark: BookmarkEntry) {
+        dismissBookmarkManager()
+        navigate(to: bookmark.url)
+    }
+
+    public func removeBookmark(_ bookmark: BookmarkEntry) {
+        bookmarkManagementTask?.cancel()
+        bookmarks.removeAll { $0.id == bookmark.id }
+        bookmarkFavicons[bookmark.id] = nil
+        bookmarkError = nil
+        let repository = bookmarkRepository
+        bookmarkManagementTask = Task { @MainActor [weak self] in
+            do {
+                try await repository.remove(bookmark.id)
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                bookmarkError = BrowserLocalization.string(
+                    "remove_bookmark_failed",
+                    error.localizedDescription
+                )
+                reloadBookmarks()
+            }
+        }
+    }
+
+    public func clearBookmarks() {
+        bookmarkManagementTask?.cancel()
+        isLoadingBookmarks = true
+        bookmarkError = nil
+        let repository = bookmarkRepository
+        bookmarkManagementTask = Task { @MainActor [weak self] in
+            do {
+                try await repository.removeAll()
+                guard !Task.isCancelled, let self else { return }
+                bookmarks = []
+                bookmarkFavicons = [:]
+                isLoadingBookmarks = false
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                isLoadingBookmarks = false
+                bookmarkError = BrowserLocalization.string(
+                    "clear_bookmarks_failed",
+                    error.localizedDescription
+                )
+            }
+        }
+    }
+
     public func presentClearBrowsingData() {
         dismissOmnibox()
         dismissSitePermissions()
         dismissBrowsingHistory()
+        dismissBookmarkManager()
         clearBrowsingDataStatus = nil
         isClearBrowsingDataPresented = true
     }
@@ -2167,29 +2281,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 browsingHistory = entries
                 browsingHistoryFavicons = [:]
                 isLoadingBrowsingHistory = false
-
-                var imagesByOrigin: [String: NSImage] = [:]
-                var checkedOrigins: Set<String> = []
-                for entry in entries {
-                    guard !Task.isCancelled,
-                          let key = FaviconCacheKey.make(for: entry.url)
-                    else { continue }
-                    if checkedOrigins.insert(key).inserted,
-                       let image = await faviconRepository.cachedImage(for: entry.url) {
-                        imagesByOrigin[key] = NSImage(
-                            cgImage: image,
-                            size: NSSize(width: image.width, height: image.height)
-                        )
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                browsingHistoryFavicons = Dictionary(
-                    uniqueKeysWithValues: entries.compactMap { entry in
-                        guard let key = FaviconCacheKey.make(for: entry.url),
-                              let image = imagesByOrigin[key]
-                        else { return nil }
-                        return (entry.id, image)
-                    }
+                browsingHistoryFavicons = await faviconsByEntryID(
+                    for: entries.map { ($0.id, $0.url) },
+                    repository: faviconRepository
                 )
             } catch {
                 guard !Task.isCancelled, let self else { return }
@@ -2200,6 +2294,63 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 )
             }
         }
+    }
+
+    private func reloadBookmarks() {
+        bookmarkManagementTask?.cancel()
+        isLoadingBookmarks = true
+        bookmarkError = nil
+        let repository = bookmarkRepository
+        let faviconRepository = faviconRepository
+        bookmarkManagementTask = Task { @MainActor [weak self] in
+            do {
+                let entries = try await repository.all()
+                guard !Task.isCancelled, let self else { return }
+                bookmarks = entries
+                bookmarkFavicons = [:]
+                isLoadingBookmarks = false
+                bookmarkFavicons = await faviconsByEntryID(
+                    for: entries.map { ($0.id, $0.url) },
+                    repository: faviconRepository
+                )
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                isLoadingBookmarks = false
+                bookmarkError = BrowserLocalization.string(
+                    "load_bookmarks_failed",
+                    error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func faviconsByEntryID(
+        for entries: [(UUID, URL)],
+        repository: FaviconRepository
+    ) async -> [UUID: NSImage] {
+        var imagesByOrigin: [String: NSImage] = [:]
+        var checkedOrigins: Set<String> = []
+        for (_, url) in entries {
+            guard !Task.isCancelled,
+                  let key = FaviconCacheKey.make(for: url)
+            else { continue }
+            if checkedOrigins.insert(key).inserted,
+               let image = await repository.cachedImage(for: url) {
+                imagesByOrigin[key] = NSImage(
+                    cgImage: image,
+                    size: NSSize(width: image.width, height: image.height)
+                )
+            }
+        }
+        guard !Task.isCancelled else { return [:] }
+        return Dictionary(
+            uniqueKeysWithValues: entries.compactMap { id, url in
+                guard let key = FaviconCacheKey.make(for: url),
+                      let image = imagesByOrigin[key]
+                else { return nil }
+                return (id, image)
+            }
+        )
     }
 
     private func loadRestoredFavicon(for tab: BrowserTab) {

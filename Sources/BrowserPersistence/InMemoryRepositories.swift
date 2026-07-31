@@ -61,6 +61,49 @@ public actor InMemoryBrowsingHistoryRepository: BrowsingHistoryRepository {
     }
 }
 
+public actor InMemoryBookmarkRepository: BookmarkRepository {
+    private var entries: [BookmarkEntry] = []
+
+    public init() {}
+
+    public func all() async throws -> [BookmarkEntry] {
+        entries
+    }
+
+    @discardableResult
+    public func saveBookmark(
+        url: URL,
+        title: String,
+        createdAt: Date,
+        updatedAt: Date
+    ) async throws -> BookmarkEntry {
+        if let index = entries.firstIndex(where: { $0.url == url }) {
+            var entry = entries.remove(at: index)
+            entry.title = title
+            entry.updatedAt = updatedAt
+            entries.insert(entry, at: 0)
+            return entry
+        }
+
+        let entry = BookmarkEntry(
+            url: url,
+            title: title,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        entries.insert(entry, at: 0)
+        return entry
+    }
+
+    public func remove(_ id: UUID) async throws {
+        entries.removeAll { $0.id == id }
+    }
+
+    public func removeAll() async throws {
+        entries.removeAll()
+    }
+}
+
 public actor InMemorySitePermissionRepository: SitePermissionRepository {
     private var stored: [StoredSitePermission] = []
 

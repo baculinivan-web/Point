@@ -141,3 +141,123 @@ public actor FileBrowsingHistoryRepository: BrowsingHistoryRepository {
         cachedEntries = entries
     }
 }
+
+public actor FileBookmarkRepository: BookmarkRepository {
+    private struct Snapshot: Codable {
+        let schemaVersion: Int
+        var entries: [BookmarkEntry]
+    }
+
+    private let fileURL: URL
+    private let retentionLimit: Int
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+    private var cachedEntries: [BookmarkEntry]?
+
+    public init(
+        fileURL: URL? = nil,
+        retentionLimit: Int = 5_000
+    ) {
+        if let fileURL {
+            self.fileURL = fileURL
+        } else {
+            let support = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0]
+            self.fileURL = support
+                .appending(path: "Browser", directoryHint: .isDirectory)
+                .appending(path: "bookmarks.json", directoryHint: .notDirectory)
+        }
+        self.retentionLimit = max(1, retentionLimit)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        self.encoder = encoder
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        self.decoder = decoder
+    }
+
+    public func all() async throws -> [BookmarkEntry] {
+        try loadIfNeeded()
+    }
+
+    @discardableResult
+    public func saveBookmark(
+        url: URL,
+        title: String,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) async throws -> BookmarkEntry {
+        var entries = try loadIfNeeded()
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let index = entries.firstIndex(where: { $0.url == url }) {
+            var entry = entries.remove(at: index)
+            if !normalizedTitle.isEmpty {
+                entry.title = normalizedTitle
+            }
+            entry.updatedAt = updatedAt
+            entries.insert(entry, at: 0)
+            try persist(Array(entries.prefix(retentionLimit)))
+            return entry
+        }
+
+        let entry = BookmarkEntry(
+            url: url,
+            title: normalizedTitle,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        entries.insert(entry, at: 0)
+        if entries.count > retentionLimit {
+            entries.removeLast(entries.count - retentionLimit)
+        }
+        try persist(entries)
+        return entry
+    }
+
+    public func remove(_ id: UUID) async throws {
+        let entries = try loadIfNeeded().filter { $0.id != id }
+        try persist(entries)
+    }
+
+    public func removeAll() async throws {
+        _ = try loadIfNeeded()
+        try persist([])
+    }
+
+    private func loadIfNeeded() throws -> [BookmarkEntry] {
+        if let cachedEntries {
+            return cachedEntries
+        }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            cachedEntries = []
+            return []
+        }
+        let data = try Data(contentsOf: fileURL)
+        let snapshot = try decoder.decode(Snapshot.self, from: data)
+        guard snapshot.schemaVersion == 1 else {
+            cachedEntries = []
+            return []
+        }
+        let entries = Array(snapshot.entries.prefix(retentionLimit))
+        cachedEntries = entries
+        return entries
+    }
+
+    private func persist(_ entries: [BookmarkEntry]) throws {
+        let directory = fileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let snapshot = Snapshot(schemaVersion: 1, entries: entries)
+        let data = try encoder.encode(snapshot)
+        try data.write(to: fileURL, options: .atomic)
+        cachedEntries = entries
+    }
+}

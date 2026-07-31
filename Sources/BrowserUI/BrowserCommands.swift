@@ -152,6 +152,20 @@ public struct BrowserCommands: Commands {
             .keyboardShortcut("y")
         }
 
+        CommandMenu(BrowserLocalization.string("bookmarks")) {
+            Button(BrowserLocalization.string("bookmark_active_tab")) {
+                model?.bookmarkActiveTab()
+            }
+            .keyboardShortcut("d")
+            .disabled(model?.isPrivate != false || model?.activeTab?.url == nil)
+
+            Button(BrowserLocalization.string("show_bookmark_manager")) {
+                model?.presentBookmarkManager()
+            }
+            .keyboardShortcut("b", modifiers: [.command, .option])
+            .disabled(model == nil)
+        }
+
         CommandMenu(BrowserLocalization.string("navigation")) {
             Button(BrowserLocalization.string("back")) {
                 guard let id = model?.selectedTabID else { return }

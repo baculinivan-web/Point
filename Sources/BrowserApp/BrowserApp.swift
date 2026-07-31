@@ -69,6 +69,7 @@ private final class BrowserRuntime {
 
     private let persistenceController: BrowserPersistenceController?
     private let browsingHistoryRepository: any BrowsingHistoryRepository
+    private let bookmarkRepository: any BookmarkRepository
     private lazy var maintenance = BrowsingDataMaintenance(
         browsingHistoryRepository: browsingHistoryRepository
     )
@@ -85,6 +86,7 @@ private final class BrowserRuntime {
         persistenceController = controller
         browsingHistoryRepository = controller?.browsingHistoryRepository()
             ?? FileBrowsingHistoryRepository()
+        bookmarkRepository = FileBookmarkRepository()
     }
 
     func makeWindowModel(isPrivate: Bool) -> BrowserWindowModel {
@@ -99,6 +101,7 @@ private final class BrowserRuntime {
                     repository: InMemorySessionRepository(),
                     sitePermissionRepository: InMemorySitePermissionRepository(),
                     browsingHistoryRepository: InMemoryBrowsingHistoryRepository(),
+                    bookmarkRepository: InMemoryBookmarkRepository(),
                     downloadManager: privateDownloadManager,
                     faviconRepository: FaviconRepository(persistsToDisk: false),
                     isPrivate: true,
@@ -131,6 +134,7 @@ private final class BrowserRuntime {
                 repository: sessionRepository,
                 sitePermissionRepository: FileSitePermissionRepository(),
                 browsingHistoryRepository: browsingHistoryRepository,
+                bookmarkRepository: bookmarkRepository,
                 downloadManager: downloadManager,
                 isPrivate: false,
                 websiteDataStore: .default()
