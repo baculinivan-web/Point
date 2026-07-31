@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.8 — Background Update Downloads
+
+- Moved update-download progress and errors into the persistent blue sidebar entry.
+- Removed blocking download alerts from every open browser window.
+- Kept Finder reveal and manual installation instructions available after download without interrupting browsing.
+- Updated the bundle version to `0.2.8` (`36`).
+
 ## 0.2.7 — Update Details Test Release
 
 - Published the update-details experience for beta verification from Point 0.2.6.

@@ -6087,6 +6087,12 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Загрузка обновления…" } }
       }
     },
+    "update_downloading_percent": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Downloading… %d%%" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Загрузка… %d%%" } }
+      }
+    },
     "update_details_title": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Point %@ is available" } },
@@ -6109,6 +6115,24 @@
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Ready to Install" } },
         "ru": { "stringUnit": { "state": "translated", "value": "Готово к установке" } }
+      }
+    },
+    "update_ready_sidebar": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Ready to install" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Готово к установке" } }
+      }
+    },
+    "update_retry_sidebar": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Download failed · Try again" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ошибка загрузки · Повторить" } }
+      }
+    },
+    "update_show_in_finder": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Show in Finder" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Показать в Finder" } }
       }
     },
     "release_notes": {

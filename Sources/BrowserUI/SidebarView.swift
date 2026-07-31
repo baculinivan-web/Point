@@ -9,6 +9,8 @@ struct SidebarView: View {
     let model: BrowserWindowModel
     let isFullScreen: Bool
     let availableUpdate: AvailableRelease?
+    let updateDownloadState: BrowserUpdateDownloadState
+    let onCancelUpdateDownload: () -> Void
     let onShowUpdateDetails: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -217,9 +219,12 @@ struct SidebarView: View {
                 .padding(.bottom, 10)
 
             if let availableUpdate {
-                UpdateAvailableSidebarRow(release: availableUpdate) {
-                    onShowUpdateDetails()
-                }
+                UpdateAvailableSidebarRow(
+                    release: availableUpdate,
+                    downloadState: updateDownloadState,
+                    action: onShowUpdateDetails,
+                    onCancelDownload: onCancelUpdateDownload
+                )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 10)
             }
@@ -431,39 +436,96 @@ struct SidebarView: View {
 
 private struct UpdateAvailableSidebarRow: View {
     let release: AvailableRelease
+    let downloadState: BrowserUpdateDownloadState
     let action: () -> Void
+    let onCancelDownload: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(BrowserLocalization.string("update_available_sidebar"))
-                        .font(.subheadline.weight(.semibold))
-                    Text(release.version.description)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.78))
+        HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 10) {
+                    Image(systemName: iconName)
+                        .font(.system(size: 18, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(BrowserLocalization.string("update_available_sidebar"))
+                            .font(.subheadline.weight(.semibold))
+                        Text(statusText)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.82))
+                        if case let .downloading(progress) = downloadState {
+                            if let progress {
+                                ProgressView(value: progress)
+                                    .progressViewStyle(.linear)
+                                    .tint(.white)
+                            } else {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(.white)
+                            }
+                        }
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if case .downloading = downloadState {
+                Button(action: onCancelDownload) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.84))
+                        .frame(width: 28, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(BrowserLocalization.string("cancel"))
+            } else {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.72))
+                    .padding(.trailing, 4)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .frame(height: 52)
-            .background(
-                Color.blue.gradient,
-                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 52)
+        .background(
+            Color.blue.gradient,
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         .accessibilityLabel(BrowserLocalization.string(
             "update_available_message",
             release.version.description
         ))
+    }
+
+    private var iconName: String {
+        switch downloadState {
+        case .idle: "arrow.down.circle.fill"
+        case .downloading: "arrow.down.circle"
+        case .ready: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var statusText: String {
+        switch downloadState {
+        case .idle:
+            return release.version.description
+        case let .downloading(progress):
+            guard let progress else {
+                return BrowserLocalization.string("update_downloading_title")
+            }
+            return BrowserLocalization.string(
+                "update_downloading_percent",
+                Int((progress * 100).rounded())
+            )
+        case .ready:
+            return BrowserLocalization.string("update_ready_sidebar")
+        case .failed:
+            return BrowserLocalization.string("update_retry_sidebar")
+        }
     }
 }
 

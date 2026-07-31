@@ -447,6 +447,8 @@
 	<string>Point is downloading the disk image. You can cancel at any time.</string>
 	<key>update_downloading_title</key>
 	<string>Downloading Update…</string>
+	<key>update_downloading_percent</key>
+	<string>Downloading… %d%%</string>
 	<key>update_details_title</key>
 	<string>Point %@ is available</string>
 	<key>update_available_sidebar</key>
@@ -455,6 +457,12 @@
 	<string>The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point.</string>
 	<key>update_ready_title</key>
 	<string>Ready to Install</string>
+	<key>update_ready_sidebar</key>
+	<string>Ready to install</string>
+	<key>update_retry_sidebar</key>
+	<string>Download failed · Try again</string>
+	<key>update_show_in_finder</key>
+	<string>Show in Finder</string>
 	<key>release_notes</key>
 	<string>Release Notes</string>
 	<key>release_notes_unavailable</key>

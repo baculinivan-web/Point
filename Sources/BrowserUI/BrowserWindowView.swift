@@ -5,11 +5,21 @@ import BrowserCore
 import BrowserEngine
 import SwiftUI
 
+public enum BrowserUpdateDownloadState: Equatable, Sendable {
+    case idle
+    case downloading(progress: Double?)
+    case ready
+    case failed
+}
+
 public struct BrowserWindowView: View {
     @Bindable private var model: BrowserWindowModel
     @Binding private var isOnboardingPresented: Bool
     private let availableUpdate: AvailableRelease?
+    private let updateDownloadState: BrowserUpdateDownloadState
     private let onInstallUpdate: (AvailableRelease) -> Void
+    private let onCancelUpdateDownload: () -> Void
+    private let onRevealDownloadedUpdate: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var hideTask: Task<Void, Never>?
@@ -22,12 +32,18 @@ public struct BrowserWindowView: View {
         model: BrowserWindowModel,
         isOnboardingPresented: Binding<Bool> = .constant(false),
         availableUpdate: AvailableRelease? = nil,
-        onInstallUpdate: @escaping (AvailableRelease) -> Void = { _ in }
+        updateDownloadState: BrowserUpdateDownloadState = .idle,
+        onInstallUpdate: @escaping (AvailableRelease) -> Void = { _ in },
+        onCancelUpdateDownload: @escaping () -> Void = {},
+        onRevealDownloadedUpdate: @escaping () -> Void = {}
     ) {
         self.model = model
         _isOnboardingPresented = isOnboardingPresented
         self.availableUpdate = availableUpdate
+        self.updateDownloadState = updateDownloadState
         self.onInstallUpdate = onInstallUpdate
+        self.onCancelUpdateDownload = onCancelUpdateDownload
+        self.onRevealDownloadedUpdate = onRevealDownloadedUpdate
     }
 
     public var body: some View {
@@ -61,7 +77,9 @@ public struct BrowserWindowView: View {
             SidebarView(
                 model: model,
                 isFullScreen: isFullScreen,
-                availableUpdate: availableUpdate
+                availableUpdate: availableUpdate,
+                updateDownloadState: updateDownloadState,
+                onCancelUpdateDownload: onCancelUpdateDownload
             ) {
                 isUpdateDetailsPresented = true
             }
@@ -200,10 +218,13 @@ public struct BrowserWindowView: View {
 
                 ReleaseUpdateOverlay(
                     release: availableUpdate,
+                    downloadState: updateDownloadState,
                     onUpdate: {
                         onInstallUpdate(availableUpdate)
                         isUpdateDetailsPresented = false
                     },
+                    onCancelDownload: onCancelUpdateDownload,
+                    onRevealDownloadedUpdate: onRevealDownloadedUpdate,
                     onClose: { isUpdateDetailsPresented = false }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -296,7 +317,10 @@ public struct BrowserWindowView: View {
 
 private struct ReleaseUpdateOverlay: View {
     let release: AvailableRelease
+    let downloadState: BrowserUpdateDownloadState
     let onUpdate: () -> Void
+    let onCancelDownload: () -> Void
+    let onRevealDownloadedUpdate: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -328,22 +352,26 @@ private struct ReleaseUpdateOverlay: View {
             Divider()
 
             ScrollView {
-                if release.releaseNotes.trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ).isEmpty {
-                    ContentUnavailableView(
-                        BrowserLocalization.string("release_notes"),
-                        systemImage: "note.text",
-                        description: Text(BrowserLocalization.string(
-                            "release_notes_unavailable"
-                        ))
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(32)
-                } else {
-                    ChatMarkdownView(text: release.releaseNotes)
-                        .padding(20)
+                VStack(alignment: .leading, spacing: 16) {
+                    downloadStatusCard
+
+                    if release.releaseNotes.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty {
+                        ContentUnavailableView(
+                            BrowserLocalization.string("release_notes"),
+                            systemImage: "note.text",
+                            description: Text(BrowserLocalization.string(
+                                "release_notes_unavailable"
+                            ))
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(32)
+                    } else {
+                        ChatMarkdownView(text: release.releaseNotes)
+                    }
                 }
+                .padding(20)
             }
             .frame(maxHeight: .infinity)
 
@@ -352,8 +380,23 @@ private struct ReleaseUpdateOverlay: View {
             HStack {
                 Button(BrowserLocalization.string("later"), action: onClose)
                 Spacer()
-                Button(BrowserLocalization.string("update"), action: onUpdate)
+                switch downloadState {
+                case .idle, .failed:
+                    Button(BrowserLocalization.string("update"), action: onUpdate)
+                        .buttonStyle(.borderedProminent)
+                case .downloading:
+                    Button(
+                        BrowserLocalization.string("cancel"),
+                        role: .destructive,
+                        action: onCancelDownload
+                    )
+                case .ready:
+                    Button(
+                        BrowserLocalization.string("update_show_in_finder"),
+                        action: onRevealDownloadedUpdate
+                    )
                     .buttonStyle(.borderedProminent)
+                }
             }
             .padding(.horizontal, 20)
             .frame(height: 62)
@@ -367,6 +410,59 @@ private struct ReleaseUpdateOverlay: View {
             "update_details_title",
             release.version.description
         ))
+    }
+
+    @ViewBuilder
+    private var downloadStatusCard: some View {
+        switch downloadState {
+        case .idle:
+            EmptyView()
+        case let .downloading(progress):
+            VStack(alignment: .leading, spacing: 8) {
+                Text(downloadProgressText(progress))
+                    .font(.subheadline.weight(.semibold))
+                if let progress {
+                    ProgressView(value: progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case .ready:
+            Label {
+                Text(BrowserLocalization.string("update_ready_instructions"))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+            .font(.subheadline)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case .failed:
+            Label(
+                BrowserLocalization.string("update_download_failed"),
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.red)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func downloadProgressText(_ progress: Double?) -> String {
+        guard let progress else {
+            return BrowserLocalization.string("update_downloading_title")
+        }
+        return BrowserLocalization.string(
+            "update_downloading_percent",
+            Int((progress * 100).rounded())
+        )
     }
 }
 
