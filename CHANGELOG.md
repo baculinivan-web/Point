@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5 — Immediate Manual Check
+
+- Made the explicit Settings update check query GitHub immediately instead of waiting for the daily background-check interval.
+- Updated the bundle version to `0.2.5` (`33`).
+
 ## 0.2.4 — Update Check Verification
 
 - Published a follow-up beta release to verify manual update detection from Point 0.2.3.

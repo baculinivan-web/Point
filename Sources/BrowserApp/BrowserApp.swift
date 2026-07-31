@@ -298,7 +298,7 @@ private final class ManualUpdateCoordinator {
     }
 
     func checkFromSettings() async -> BrowserManualUpdate.CheckStatus {
-        await checkForUpdateIfNeeded()
+        await checkForUpdateIfNeeded(force: true)
     }
 
     func openReleaseNotes(for release: AvailableRelease) {
@@ -362,14 +362,15 @@ private final class ManualUpdateCoordinator {
     }
 
     private func checkForUpdateIfNeeded(
-        now: Date = Date()
+        now: Date = Date(),
+        force: Bool = false
     ) async -> BrowserManualUpdate.CheckStatus {
         guard configuration.isConfigured else {
             return .configurationMissing
         }
         guard !isChecking else { return .checkInProgress }
         let lastCheck = defaults.object(forKey: Self.lastCheckKey) as? Date
-        guard lastCheck.map({
+        guard force || lastCheck.map({
             now.timeIntervalSince($0) >= Self.checkInterval
         }) ?? true else {
             return availableRelease == nil ? .checkedRecently : .updateAvailable
