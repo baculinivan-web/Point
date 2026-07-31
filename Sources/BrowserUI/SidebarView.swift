@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 struct SidebarView: View {
     let model: BrowserWindowModel
     let isFullScreen: Bool
+    let availableUpdate: AvailableRelease?
+    let onShowUpdateDetails: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -213,6 +215,14 @@ struct SidebarView: View {
                 .padding(.horizontal, 10)
                 .padding(.top, 7)
                 .padding(.bottom, 10)
+
+            if let availableUpdate {
+                UpdateAvailableSidebarRow(release: availableUpdate) {
+                    onShowUpdateDetails()
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
         }
         .onDisappear {
             spaceSwipeCompletionTask?.cancel()
@@ -417,6 +427,44 @@ struct SidebarView: View {
         }
     }
 
+}
+
+private struct UpdateAvailableSidebarRow: View {
+    let release: AvailableRelease
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(BrowserLocalization.string("update_available_sidebar"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(release.version.description)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 52)
+            .background(
+                Color.blue.gradient,
+                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(BrowserLocalization.string(
+            "update_available_message",
+            release.version.description
+        ))
+    }
 }
 
 private struct SpaceSwitcher: View {

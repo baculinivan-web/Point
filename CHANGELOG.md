@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.7 — Update Details Test Release
+
+- Published the update-details experience for beta verification from Point 0.2.6.
+- Shows a persistent blue update entry at the bottom of the sidebar and rendered release notes in its modal.
+- Updated the bundle version to `0.2.7` (`35`).
+
+## 0.2.6 — Update Details
+
+- Added a persistent blue update entry at the bottom of the sidebar.
+- Added a release-details modal with rendered GitHub Release notes and an update action.
+- Updated the bundle version to `0.2.6` (`34`).
+
 ## 0.2.5 — Immediate Manual Check
 
 - Made the explicit Settings update check query GitHub immediately instead of waiting for the daily background-check interval.

@@ -23,7 +23,7 @@ struct ReleaseUpdateTests {
         let service = ReleaseUpdateService(
             configuration: configuration,
             fetcher: StubFetcher(json: """
-            {"tag_name":"v1.4.0","html_url":"https://github.com/example/point/releases/tag/v1.4.0","assets":[
+            {"tag_name":"v1.4.0","html_url":"https://github.com/example/point/releases/tag/v1.4.0","body":"## Changes\\n- Faster checks","assets":[
               {"name":"notes.txt","browser_download_url":"https://example.com/notes.txt"},
               {"name":"Point.dmg","browser_download_url":"https://example.com/Point.dmg"}
             ]}
@@ -33,6 +33,7 @@ struct ReleaseUpdateTests {
         let update = try await service.latestUpdate(installedVersion: ReleaseVersion("1.3.9")!)
         #expect(update?.version == ReleaseVersion("1.4.0"))
         #expect(update?.asset.name == "Point.dmg")
+        #expect(update?.releaseNotes == "## Changes\n- Faster checks")
     }
 
     @Test("Missing configured asset does not produce an unsafe fallback")

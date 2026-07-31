@@ -447,10 +447,18 @@
 	<string>Point загружает образ диска. Загрузку можно отменить в любой момент.</string>
 	<key>update_downloading_title</key>
 	<string>Загрузка обновления…</string>
+	<key>update_details_title</key>
+	<string>Доступен Point %@</string>
+	<key>update_available_sidebar</key>
+	<string>Доступно обновление</string>
 	<key>update_ready_instructions</key>
 	<string>Образ диска открыт в Finder. Закройте Point, откройте загруженный DMG, перетащите Point в «Программы», замените старую копию и снова откройте Point.</string>
 	<key>update_ready_title</key>
 	<string>Готово к установке</string>
+	<key>release_notes</key>
+	<string>Заметки к релизу</string>
+	<key>release_notes_unavailable</key>
+	<string>Для этой версии заметки к релизу не указаны.</string>
 	<key>whats_new</key>
 	<string>Что нового</string>
 </dict>

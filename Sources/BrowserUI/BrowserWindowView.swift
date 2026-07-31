@@ -8,19 +8,26 @@ import SwiftUI
 public struct BrowserWindowView: View {
     @Bindable private var model: BrowserWindowModel
     @Binding private var isOnboardingPresented: Bool
+    private let availableUpdate: AvailableRelease?
+    private let onInstallUpdate: (AvailableRelease) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var hideTask: Task<Void, Never>?
     @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
     @State private var hostWindow: NSWindow?
+    @State private var isUpdateDetailsPresented = false
 
     public init(
         model: BrowserWindowModel,
-        isOnboardingPresented: Binding<Bool> = .constant(false)
+        isOnboardingPresented: Binding<Bool> = .constant(false),
+        availableUpdate: AvailableRelease? = nil,
+        onInstallUpdate: @escaping (AvailableRelease) -> Void = { _ in }
     ) {
         self.model = model
         _isOnboardingPresented = isOnboardingPresented
+        self.availableUpdate = availableUpdate
+        self.onInstallUpdate = onInstallUpdate
     }
 
     public var body: some View {
@@ -51,7 +58,13 @@ public struct BrowserWindowView: View {
                 edgeSensor
             }
 
-            SidebarView(model: model, isFullScreen: isFullScreen)
+            SidebarView(
+                model: model,
+                isFullScreen: isFullScreen,
+                availableUpdate: availableUpdate
+            ) {
+                isUpdateDetailsPresented = true
+            }
                 .frame(width: model.sidebarMode == .pinned ? 300 : 280)
                 .padding(.leading, model.sidebarMode == .pinned ? 0 : 10)
                 .padding(.vertical, model.sidebarMode == .pinned ? 0 : 10)
@@ -176,7 +189,25 @@ public struct BrowserWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .zIndex(60)
+                    .zIndex(60)
+            }
+
+            if let availableUpdate, isUpdateDetailsPresented {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { isUpdateDetailsPresented = false }
+                    .zIndex(70)
+
+                ReleaseUpdateOverlay(
+                    release: availableUpdate,
+                    onUpdate: {
+                        onInstallUpdate(availableUpdate)
+                        isUpdateDetailsPresented = false
+                    },
+                    onClose: { isUpdateDetailsPresented = false }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(71)
             }
 
         }
@@ -260,6 +291,82 @@ public struct BrowserWindowView: View {
             guard !Task.isCancelled else { return }
             model.hideAutoHideSidebar()
         }
+    }
+}
+
+private struct ReleaseUpdateOverlay: View {
+    let release: AvailableRelease
+    let onUpdate: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(BrowserLocalization.string(
+                        "update_details_title",
+                        release.version.description
+                    ))
+                    .font(.headline)
+                    Text(BrowserLocalization.string("release_notes"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(BrowserLocalization.string("close"))
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 64)
+
+            Divider()
+
+            ScrollView {
+                if release.releaseNotes.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty {
+                    ContentUnavailableView(
+                        BrowserLocalization.string("release_notes"),
+                        systemImage: "note.text",
+                        description: Text(BrowserLocalization.string(
+                            "release_notes_unavailable"
+                        ))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(32)
+                } else {
+                    ChatMarkdownView(text: release.releaseNotes)
+                        .padding(20)
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            Divider()
+
+            HStack {
+                Button(BrowserLocalization.string("later"), action: onClose)
+                Spacer()
+                Button(BrowserLocalization.string("update"), action: onUpdate)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 62)
+        }
+        .frame(width: 500, height: 470)
+        .browserGlassSurface(cornerRadius: 20)
+        .shadow(color: .black.opacity(0.2), radius: 30, y: 16)
+        .onExitCommand(perform: onClose)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(BrowserLocalization.string(
+            "update_details_title",
+            release.version.description
+        ))
     }
 }
 

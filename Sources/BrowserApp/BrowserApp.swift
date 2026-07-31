@@ -196,7 +196,13 @@ private struct BrowserWindowScene: View {
     var body: some View {
         BrowserWindowView(
             model: model,
-            isOnboardingPresented: $isOnboardingPresented
+            isOnboardingPresented: $isOnboardingPresented,
+            availableUpdate: isPrivate
+                ? nil
+                : runtime.manualUpdateCoordinator.availableRelease,
+            onInstallUpdate: { release in
+                runtime.manualUpdateCoordinator.beginDownload(release)
+            }
         )
             .task {
                 model.openWindowRequest = { shouldOpenPrivateWindow in
@@ -389,10 +395,12 @@ private final class ManualUpdateCoordinator {
                 installedVersion: installedVersion
             ) else { return .upToDate }
             let version = release.version.description
+            // Keep the sidebar entry available on every launch, even after a
+            // person has already dismissed the one-time native prompt.
+            availableRelease = release
             guard defaults.string(forKey: Self.lastPromptedVersionKey) != version else {
                 return .updateAvailable
             }
-            availableRelease = release
             defaults.set(version, forKey: Self.lastPromptedVersionKey)
             isUpdatePromptPresented = true
             return .updateAvailable

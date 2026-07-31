@@ -144,11 +144,18 @@ public struct AvailableRelease: Sendable, Equatable {
     public let version: ReleaseVersion
     public let asset: ReleaseAsset
     public let githubReleaseURL: URL
+    public let releaseNotes: String
 
-    public init(version: ReleaseVersion, asset: ReleaseAsset, githubReleaseURL: URL) {
+    public init(
+        version: ReleaseVersion,
+        asset: ReleaseAsset,
+        githubReleaseURL: URL,
+        releaseNotes: String = ""
+    ) {
         self.version = version
         self.asset = asset
         self.githubReleaseURL = githubReleaseURL
+        self.releaseNotes = releaseNotes
     }
 }
 
@@ -232,7 +239,8 @@ public struct ReleaseUpdateService: Sendable {
         return AvailableRelease(
             version: version,
             asset: ReleaseAsset(name: asset.name, downloadURL: asset.downloadURL),
-            githubReleaseURL: githubReleaseURL
+            githubReleaseURL: githubReleaseURL,
+            releaseNotes: release.body ?? ""
         )
     }
 }
@@ -240,11 +248,13 @@ public struct ReleaseUpdateService: Sendable {
 private struct GitHubRelease: Decodable {
     let tagName: String
     let htmlURL: String
+    let body: String?
     let assets: [GitHubReleaseAsset]
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case htmlURL = "html_url"
+        case body
         case assets
     }
 }

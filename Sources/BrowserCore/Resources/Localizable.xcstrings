@@ -6087,6 +6087,18 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Загрузка обновления…" } }
       }
     },
+    "update_details_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Point %@ is available" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Доступен Point %@" } }
+      }
+    },
+    "update_available_sidebar": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Update Available" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Доступно обновление" } }
+      }
+    },
     "update_ready_instructions": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point." } },
@@ -6097,6 +6109,18 @@
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Ready to Install" } },
         "ru": { "stringUnit": { "state": "translated", "value": "Готово к установке" } }
+      }
+    },
+    "release_notes": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Release Notes" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Заметки к релизу" } }
+      }
+    },
+    "release_notes_unavailable": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No release notes were provided for this version." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Для этой версии заметки к релизу не указаны." } }
       }
     },
     "whats_new": {
