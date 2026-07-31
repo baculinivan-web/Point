@@ -417,12 +417,24 @@
 	<string>Later</string>
 	<key>check_for_updates</key>
 	<string>Check for Updates</string>
+	<key>checking_for_updates</key>
+	<string>Checking for Updates…</string>
 	<key>update</key>
 	<string>Update</string>
 	<key>updates</key>
 	<string>Updates</string>
 	<key>updates_detail</key>
 	<string>Point checks GitHub Releases no more than once every 24 hours while it is running.</string>
+	<key>update_check_available</key>
+	<string>An update is available.</string>
+	<key>update_check_failed</key>
+	<string>Could not check for updates. Try again later.</string>
+	<key>update_check_not_configured</key>
+	<string>Update checks are not configured for this build.</string>
+	<key>update_check_recently</key>
+	<string>Checked recently. Point checks once every 24 hours.</string>
+	<key>update_check_up_to_date</key>
+	<string>You’re up to date.</string>
 	<key>update_available_message</key>
 	<string>Point %@ is ready to download.</string>
 	<key>update_available_title</key>

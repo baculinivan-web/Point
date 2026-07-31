@@ -417,12 +417,24 @@
 	<string>Позже</string>
 	<key>check_for_updates</key>
 	<string>Проверить обновления</string>
+	<key>checking_for_updates</key>
+	<string>Проверка обновлений…</string>
 	<key>update</key>
 	<string>Обновить</string>
 	<key>updates</key>
 	<string>Обновления</string>
 	<key>updates_detail</key>
 	<string>Point проверяет GitHub Releases не чаще одного раза в 24 часа во время работы.</string>
+	<key>update_check_available</key>
+	<string>Доступно обновление.</string>
+	<key>update_check_failed</key>
+	<string>Не удалось проверить обновления. Повторите попытку позже.</string>
+	<key>update_check_not_configured</key>
+	<string>Проверка обновлений не настроена для этой сборки.</string>
+	<key>update_check_recently</key>
+	<string>Проверка уже выполнялась недавно. Point проверяет обновления раз в 24 часа.</string>
+	<key>update_check_up_to_date</key>
+	<string>Установлена актуальная версия.</string>
 	<key>update_available_message</key>
 	<string>Point %@ готов к загрузке.</string>
 	<key>update_available_title</key>

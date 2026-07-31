@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3 — Update Check Feedback
+
+- Made the Settings update check show checking, available, up-to-date, recent-check, and failure states.
+- Configured the Point GitHub Releases source and version-specific release-notes fallback.
+- Updated the bundle version to `0.2.3` (`31`).
+
 ## 0.2.2 — Manual Updates
 
 - Added a lightweight GitHub Releases manual-update flow for trusted beta builds: daily checks, native update choices, DMG download and Finder reveal, and one-time versioned release notes after replacement.

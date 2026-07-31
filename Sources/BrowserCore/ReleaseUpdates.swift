@@ -6,6 +6,19 @@ public enum BrowserManualUpdate {
     public static let checkRequested = Notification.Name(
         "BrowserManualUpdateCheckRequested"
     )
+    public static let checkFinished = Notification.Name(
+        "BrowserManualUpdateCheckFinished"
+    )
+    public static let statusUserInfoKey = "status"
+
+    public enum CheckStatus: String, Sendable {
+        case updateAvailable
+        case upToDate
+        case checkedRecently
+        case unavailable
+        case configurationMissing
+        case checkInProgress
+    }
 }
 
 /// Version values accepted from `CFBundleShortVersionString` and GitHub tags.

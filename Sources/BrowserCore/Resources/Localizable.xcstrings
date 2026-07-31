@@ -5997,6 +5997,12 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Проверить обновления" } }
       }
     },
+    "checking_for_updates": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Checking for Updates…" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Проверка обновлений…" } }
+      }
+    },
     "update": {
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Update" } },
@@ -6013,6 +6019,36 @@
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Point checks GitHub Releases no more than once every 24 hours while it is running." } },
         "ru": { "stringUnit": { "state": "translated", "value": "Point проверяет GitHub Releases не чаще одного раза в 24 часа во время работы." } }
+      }
+    },
+    "update_check_available": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "An update is available." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Доступно обновление." } }
+      }
+    },
+    "update_check_failed": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Could not check for updates. Try again later." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось проверить обновления. Повторите попытку позже." } }
+      }
+    },
+    "update_check_not_configured": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Update checks are not configured for this build." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Проверка обновлений не настроена для этой сборки." } }
+      }
+    },
+    "update_check_recently": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Checked recently. Point checks once every 24 hours." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Проверка уже выполнялась недавно. Point проверяет обновления раз в 24 часа." } }
+      }
+    },
+    "update_check_up_to_date": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "You’re up to date." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Установлена актуальная версия." } }
       }
     },
     "update_available_message": {

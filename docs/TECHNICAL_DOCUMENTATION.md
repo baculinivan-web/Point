@@ -176,15 +176,15 @@ This produces `dist/Point.dmg` with ad-hoc signing only. It does not use Sparkle
 
 ### Manual update configuration
 
-Before publishing, set all three placeholders in [`Resources/Info.plist`](../Resources/Info.plist):
+The release source is configured in one place: [`Resources/Info.plist`](../Resources/Info.plist).
 
 - `BrowserGitHubReleasesAPIURL` — `https://api.github.com/repos/<owner>/<repository>/releases/latest`.
 - `BrowserReleaseAssetName` — the exact DMG asset name uploaded to every release, for example `Point.dmg`.
-- `BrowserReleaseNotesURLFormat` — the GitHub Pages release-notes format, with a required `{version}` token, for example `https://<owner>.github.io/<repository>/releases/{version}`.
+- `BrowserReleaseNotesURLFormat` — the release-notes format, with a required `{version}` token. Point temporarily uses the exact GitHub Release URL until its GitHub Pages changelog exists; replace it with `https://<owner>.github.io/<repository>/releases/{version}` when Pages is published.
 
-The app leaves update checks disabled while a placeholder remains. When configured, it asks GitHub for `releases/latest` no more than once per 24 hours while Point is running. It offers a newer numeric version only if the configured DMG asset is present, downloads it to Downloads, reveals it in Finder, and explains the manual replacement steps. A failed network request, invalid response, missing asset, or cancelled download is quiet and eligible for the next daily check. The same release is not prompted repeatedly after “Later.”
+When configured, it asks GitHub for `releases/latest` no more than once per 24 hours while Point is running. The Settings control visibly reports a check in progress, an available update, an up-to-date result, a recent throttled check, or an error. It offers a newer numeric version only if the configured DMG asset is present, downloads it to Downloads, reveals it in Finder, and explains the manual replacement steps. A failed network request, invalid response, missing asset, or cancelled download is quiet and eligible for the next daily check. The same release is not prompted repeatedly after “Later.”
 
-After a replacement changes `CFBundleShortVersionString`, Point opens that version’s GitHub Pages notes once. The last installed and last-opened-notes versions are stored in `UserDefaults`; the first ever launch does not open notes.
+After a replacement changes `CFBundleShortVersionString`, Point opens that version’s configured notes once. The last installed and last-opened-notes versions are stored in `UserDefaults`; the first ever launch does not open notes.
 
 The local fixture server exercises downloads, camera and microphone permissions, JavaScript prompts, HTTP Basic authentication (`browser` / `test`), and `mailto` confirmation without relying on public websites:
 

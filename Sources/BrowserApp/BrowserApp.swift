@@ -157,6 +157,10 @@ private final class BrowserRuntime {
         await manualUpdateCoordinator.start()
     }
 
+    func checkForUpdatesFromSettings() async -> BrowserManualUpdate.CheckStatus {
+        await manualUpdateCoordinator.checkFromSettings()
+    }
+
     var activeDownloadCount: Int {
         privateDownloadManagers.removeAll { $0.value == nil }
         return downloadManager.activeDownloadCount
@@ -231,7 +235,16 @@ private struct BrowserWindowScene: View {
                 )
             ) { _ in
                 guard !isPrivate else { return }
-                Task { await runtime.startManualUpdateChecks() }
+                Task {
+                    let status = await runtime.checkForUpdatesFromSettings()
+                    NotificationCenter.default.post(
+                        name: BrowserManualUpdate.checkFinished,
+                        object: nil,
+                        userInfo: [
+                            BrowserManualUpdate.statusUserInfoKey: status.rawValue
+                        ]
+                    )
+                }
             }
             .manualUpdateAlerts(
                 coordinator: runtime.manualUpdateCoordinator,
@@ -273,15 +286,19 @@ private final class ManualUpdateCoordinator {
 
     func start() async {
         openNotesAfterVersionChangeIfNeeded()
-        await checkForUpdateIfNeeded()
+        _ = await checkForUpdateIfNeeded()
         guard scheduledCheckTask == nil else { return }
         scheduledCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Self.checkInterval))
                 guard !Task.isCancelled, let self else { return }
-                await self.checkForUpdateIfNeeded()
+                _ = await self.checkForUpdateIfNeeded()
             }
         }
+    }
+
+    func checkFromSettings() async -> BrowserManualUpdate.CheckStatus {
+        await checkForUpdateIfNeeded()
     }
 
     func openReleaseNotes(for release: AvailableRelease) {
@@ -344,12 +361,19 @@ private final class ManualUpdateCoordinator {
         }
     }
 
-    private func checkForUpdateIfNeeded(now: Date = Date()) async {
-        guard configuration.isConfigured, !isChecking else { return }
+    private func checkForUpdateIfNeeded(
+        now: Date = Date()
+    ) async -> BrowserManualUpdate.CheckStatus {
+        guard configuration.isConfigured else {
+            return .configurationMissing
+        }
+        guard !isChecking else { return .checkInProgress }
         let lastCheck = defaults.object(forKey: Self.lastCheckKey) as? Date
         guard lastCheck.map({
             now.timeIntervalSince($0) >= Self.checkInterval
-        }) ?? true else { return }
+        }) ?? true else {
+            return availableRelease == nil ? .checkedRecently : .updateAvailable
+        }
 
         // Record every attempt before starting network work. This keeps a
         // transient offline or malformed-response state from being retried on
@@ -358,21 +382,23 @@ private final class ManualUpdateCoordinator {
         isChecking = true
         defer { isChecking = false }
 
-        guard let installedVersion = installedVersion else { return }
+        guard let installedVersion = installedVersion else { return .unavailable }
         do {
             guard let release = try await service.latestUpdate(
                 installedVersion: installedVersion
-            ) else { return }
+            ) else { return .upToDate }
             let version = release.version.description
             guard defaults.string(forKey: Self.lastPromptedVersionKey) != version else {
-                return
+                return .updateAvailable
             }
             availableRelease = release
             defaults.set(version, forKey: Self.lastPromptedVersionKey)
             isUpdatePromptPresented = true
+            return .updateAvailable
         } catch {
             // Network, JSON, and missing-asset failures intentionally stay
             // quiet; the next eligible daily check can recover automatically.
+            return .unavailable
         }
     }
 
