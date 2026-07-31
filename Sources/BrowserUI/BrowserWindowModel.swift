@@ -1,5 +1,6 @@
 import AppKit
 import BrowserAI
+import BrowserAutomation
 import BrowserCore
 import BrowserEngine
 import Foundation
@@ -15,6 +16,7 @@ public final class BrowserTab: Identifiable {
     public var url: URL?
     public var faviconURL: URL?
     public var isPinned: Bool
+    public var spaceID: TabSpaceID
     public var folderID: TabFolderID?
     public var position: Int64
     /// True when the AI assistant opened this tab; shown with a sparkle badge.
@@ -49,6 +51,7 @@ public final class BrowserTab: Identifiable {
         url = restoredNavigationHistory.currentEntry?.url ?? snapshot.url
         faviconURL = snapshot.faviconURL
         isPinned = snapshot.isPinned
+        spaceID = snapshot.spaceID
         folderID = snapshot.folderID
         position = snapshot.position
         isAICreated = snapshot.isAICreated
@@ -64,6 +67,7 @@ public final class BrowserTab: Identifiable {
             url: url,
             faviconURL: faviconURL,
             isPinned: isPinned,
+            spaceID: spaceID,
             folderID: folderID,
             position: position,
             navigationHistory: navigationHistory,
@@ -86,6 +90,7 @@ public final class TabFolder: Identifiable {
     public nonisolated let id: TabFolderID
     public var name: String
     public var symbolName: String
+    public var spaceID: TabSpaceID
     public var parentID: TabFolderID?
     public var position: Int64
     public var isExpanded: Bool
@@ -96,6 +101,7 @@ public final class TabFolder: Identifiable {
         id = snapshot.id
         name = snapshot.name
         symbolName = snapshot.symbolName ?? "folder.fill"
+        spaceID = snapshot.spaceID
         parentID = snapshot.parentID
         position = snapshot.position
         isExpanded = snapshot.isExpanded
@@ -108,11 +114,40 @@ public final class TabFolder: Identifiable {
             id: id,
             name: name,
             symbolName: symbolName,
+            spaceID: spaceID,
             parentID: parentID,
             position: position,
             isExpanded: isExpanded,
             isSplit: isSplit,
             splitRatio: splitRatio
+        )
+    }
+}
+
+@MainActor
+@Observable
+public final class TabSpace: Identifiable {
+    public nonisolated let id: TabSpaceID
+    public var name: String
+    public var symbolName: String
+    public var position: Int64
+    public var lastSelectedTabID: TabID?
+
+    public init(snapshot: PersistedTabSpace) {
+        id = snapshot.id
+        name = snapshot.name
+        symbolName = snapshot.symbolName
+        position = snapshot.position
+        lastSelectedTabID = snapshot.lastSelectedTabID
+    }
+
+    public var snapshot: PersistedTabSpace {
+        PersistedTabSpace(
+            id: id,
+            name: name,
+            symbolName: symbolName,
+            position: position,
+            lastSelectedTabID: lastSelectedTabID
         )
     }
 }
@@ -200,6 +235,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
+    public private(set) var spaces: [TabSpace] = [
+        TabSpace(snapshot: .default)
+    ]
+    public private(set) var selectedSpaceID: TabSpaceID = .default
     /// A live, non-persisted tab presented above the current page.
     /// Promoting it moves the same WebKit view into `tabs` without navigation.
     public private(set) var previewTab: BrowserTab?
@@ -260,6 +299,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var isAIChatPresented = false
     public var openAIChatWindowRequest: (@MainActor (_ token: UUID) -> Void)?
     @ObservationIgnored private var aiToolBridge: BrowserAIToolBridge?
+
+    /// What the assistant is doing to the page right now, for the blue glow
+    /// and the click markers drawn over the web surface.
+    public let agentActivity = AgentActivityCenter()
+    /// The gate the assistant has to pass before anything irreversible.
+    public let agentConsent = AgentConsentCenter()
 
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
@@ -337,11 +382,24 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.passkeyAccessManager = passkeyAccessManager ?? .shared
         self.faviconRepository = faviconRepository
             ?? FaviconRepository(persistsToDisk: !isPrivate)
+        spaces[0].name = BrowserLocalization.string("space_default_name", 1)
         Self.removeLegacyTabSnapshotCache()
     }
 
     public var activeTab: BrowserTab? {
         tabs.first { $0.id == selectedTabID }
+    }
+
+    public var selectedSpace: TabSpace? {
+        spaces.first { $0.id == selectedSpaceID }
+    }
+
+    public var sortedSpaces: [TabSpace] {
+        spaces.sorted { $0.position < $1.position }
+    }
+
+    public var currentSpaceFolders: [TabFolder] {
+        folders.filter { $0.spaceID == selectedSpaceID }
     }
 
     /// The two tabs currently visible in the split workspace, ordered left to right.
@@ -367,11 +425,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public var pinnedTabs: [BrowserTab] {
-        tabs.filter(\.isPinned).sorted { $0.position < $1.position }
+        tabs
+            .filter { $0.spaceID == selectedSpaceID && $0.isPinned }
+            .sorted { $0.position < $1.position }
     }
 
     public var regularTabs: [BrowserTab] {
-        tabs.filter { !$0.isPinned }.sorted { $0.position < $1.position }
+        tabs
+            .filter { $0.spaceID == selectedSpaceID && !$0.isPinned }
+            .sorted { $0.position < $1.position }
     }
 
     public var selectedTabCount: Int { selectedTabIDs.count }
@@ -400,8 +462,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let query = omniboxText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return [] }
         return tabs.filter {
+            $0.spaceID == selectedSpaceID
+                && (
             $0.displayTitle.localizedCaseInsensitiveContains(query)
                 || ($0.url?.absoluteString.localizedCaseInsensitiveContains(query) ?? false)
+                )
         }
     }
 
@@ -415,6 +480,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
         do {
             if let snapshot = try await repository.load() {
                 didRestorePersistedSession = true
+                spaces = snapshot.spaces.map(TabSpace.init(snapshot:))
+                for (index, space) in sortedSpaces.enumerated()
+                where space.name == "space_default_name"
+                    || (space.id == .default && space.name == "Space 1") {
+                    space.name = BrowserLocalization.string("space_default_name", index + 1)
+                }
+                selectedSpaceID = spaces.contains { $0.id == snapshot.selectedSpaceID }
+                    ? snapshot.selectedSpaceID
+                    : spaces[0].id
                 folders = snapshot.folders.map(TabFolder.init(snapshot:))
                 tabs = snapshot.tabs
                     .filter { $0.url != nil }
@@ -430,8 +504,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     return
                 }
                 selectedTabID = snapshot.selectedTabID.flatMap { selected in
-                    tabs.contains { $0.id == selected } ? selected : nil
-                } ?? tabs.first?.id
+                    tabs.contains { $0.id == selected && $0.spaceID == selectedSpaceID }
+                        ? selected
+                        : nil
+                } ?? rememberedTabID(in: selectedSpaceID)
+                    ?? tabs.first(where: { $0.spaceID == selectedSpaceID })?.id
                 selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
                 selectionAnchorID = selectedTabID
                 sidebarMode = snapshot.sidebarMode
@@ -483,8 +560,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func requestPasskeyAccess() {
         let previousState = passkeyAccessManager.refreshState()
         passkeyAccessManager.requestAccess { [weak self] state in
-            if previousState != .authorized, state == .authorized {
-                self?.activeTab?.engine?.reload()
+            if previousState != .authorized,
+               state == .authorized,
+               let tab = self?.activeTab {
+                tab.engine?.reload(fallbackURL: tab.url)
             }
             self?.showPasskeyAccessResult(state)
         }
@@ -810,7 +889,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
                 if !websiteDataTypes.isEmpty {
                     for tab in tabs {
-                        tab.engine?.reload()
+                        tab.engine?.reload(fallbackURL: tab.url)
                     }
                 }
                 guard !Task.isCancelled else { return }
@@ -852,7 +931,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
         case let .goForward(id):
             goForward(tabID: id)
         case let .reload(id, bypassCache):
-            tab(id)?.engine?.reload(bypassingCache: bypassCache)
+            guard let tab = tab(id) else { return }
+            let engine = ensureEngine(for: tab)
+            tab.hasLoadedInitialURL = true
+            engine.reload(
+                bypassingCache: bypassCache,
+                fallbackURL: tab.url
+            )
         case let .stop(id):
             tab(id)?.engine?.stop()
         case .toggleSidebar:
@@ -883,6 +968,116 @@ public final class BrowserWindowModel: WebEngineEventSink {
         return tab.pendingNavigationHistoryIndex != nil
     }
 
+    @discardableResult
+    public func switchSpace(by offset: Int) -> Bool {
+        guard let destination = spaceDestinationIndex(by: offset) else { return false }
+        let ordered = sortedSpaces
+        selectSpace(ordered[destination].id)
+        return true
+    }
+
+    public func canSwitchSpace(by offset: Int) -> Bool {
+        spaceDestinationIndex(by: offset) != nil
+    }
+
+    private func spaceDestinationIndex(by offset: Int) -> Int? {
+        let ordered = sortedSpaces
+        guard ordered.count > 1,
+              let index = ordered.firstIndex(where: { $0.id == selectedSpaceID })
+        else { return nil }
+        let destination = index + offset
+        return ordered.indices.contains(destination) ? destination : nil
+    }
+
+    public func selectSpace(_ id: TabSpaceID) {
+        guard id != selectedSpaceID, spaces.contains(where: { $0.id == id }) else { return }
+        selectedSpace?.lastSelectedTabID = selectedTabID
+        backgroundVisibleTabs()
+        dismissPreview()
+        dismissOmnibox()
+        selectedSpaceID = id
+        selectedTabID = rememberedTabID(in: id)
+            ?? tabs.first(where: { $0.spaceID == id })?.id
+        selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
+        selectionAnchorID = selectedTabID
+        renamingFolderID = nil
+        activateSelectedTabIfNeeded()
+        omniboxText = activeTab?.url?.absoluteString ?? ""
+        reconcileLifecycle()
+        if selectedTabID == nil {
+            newTab()
+        }
+        persist()
+    }
+
+    @discardableResult
+    public func createSpace() -> TabSpaceID {
+        let id = TabSpaceID()
+        let ordinal = spaces.count + 1
+        spaces.append(
+            TabSpace(
+                snapshot: PersistedTabSpace(
+                    id: id,
+                    name: BrowserLocalization.string("space_default_name", ordinal),
+                    symbolName: "circle.grid.2x2.fill",
+                    position: (spaces.map(\.position).max() ?? 0) + 1024
+                )
+            )
+        )
+        selectSpace(id)
+        return id
+    }
+
+    public func renameSpace(_ id: TabSpaceID, to proposedName: String) {
+        guard let space = space(id) else { return }
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        space.name = name
+        persist()
+    }
+
+    public func setSpaceSymbol(_ symbolName: String, for id: TabSpaceID) {
+        guard let space = space(id), !symbolName.isEmpty else { return }
+        space.symbolName = symbolName
+        persist()
+    }
+
+    public func deleteSpace(_ id: TabSpaceID) {
+        guard spaces.count > 1, let removed = space(id) else { return }
+        let destination = sortedSpaces.first { $0.id != id }!
+        let movingFolderIDs = Set(folders.filter { $0.spaceID == id }.map(\.id))
+        for folder in folders where movingFolderIDs.contains(folder.id) {
+            folder.spaceID = destination.id
+        }
+        var rootPosition = nextPosition(in: nil, spaceID: destination.id)
+        for folder in folders where movingFolderIDs.contains(folder.id) && folder.parentID == nil {
+            folder.position = rootPosition
+            rootPosition += 1024
+        }
+        for tab in tabs where tab.spaceID == id {
+            tab.spaceID = destination.id
+            if tab.isPinned {
+                tab.position = nextPinnedPosition(in: destination.id)
+            } else if tab.folderID == nil {
+                tab.position = rootPosition
+                rootPosition += 1024
+            }
+        }
+        spaces.removeAll { $0.id == removed.id }
+        if selectedSpaceID == id {
+            backgroundVisibleTabs()
+            selectedSpaceID = destination.id
+            selectedTabID = destination.lastSelectedTabID
+                ?? tabs.first(where: { $0.spaceID == destination.id })?.id
+            selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
+            selectionAnchorID = selectedTabID
+            activateSelectedTabIfNeeded()
+        }
+        normalizeAllSiblingPositions()
+        reconcileLifecycle()
+        persist()
+    }
+
     public func newTab(background: Bool = false) {
         guard !background else { return }
 
@@ -910,6 +1105,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         self.previewTab = nil
         previewTab.folderID = nil
         previewTab.isPinned = false
+        previewTab.spaceID = selectedSpaceID
         previewTab.position = nextPosition(in: nil)
         previewTab.lifecycleState = .active
         tabs.append(previewTab)
@@ -930,7 +1126,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             selectionAnchorID = nil
         }
 
-        if tabs.isEmpty {
+        let remainingSpaceTabs = tabs.filter { $0.spaceID == selectedSpaceID }
+        if remainingSpaceTabs.isEmpty {
             selectedTabID = nil
             dismissOmnibox()
             newTab()
@@ -940,8 +1137,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
 
         if wasSelected {
-            let nextIndex = min(index, tabs.count - 1)
-            selectTab(tabs[nextIndex].id)
+            let nextIndex = min(index, max(tabs.count - 1, 0))
+            let next = tabs[nextIndex...].first { $0.spaceID == selectedSpaceID }
+                ?? tabs[..<nextIndex].last { $0.spaceID == selectedSpaceID }
+                ?? remainingSpaceTabs.first
+            if let next { selectTab(next.id) }
         }
         normalizeSiblingPositions(in: removedFolderID)
         reconcileLifecycle()
@@ -987,13 +1187,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
             tab.isPinned = false
         }
 
-        if tabs.isEmpty {
+        if tabs.allSatisfy({ $0.spaceID != selectedSpaceID }) {
             selectedTabID = nil
             selectedTabIDs = []
             dismissOmnibox()
             newTab()
-        } else if selectedTabID.map(movingIDs.contains) == true {
-            selectTab(tabs[0].id)
+        } else if selectedTabID.map(movingIDs.contains) == true,
+                  let next = tabs.first(where: { $0.spaceID == selectedSpaceID }) {
+            selectTab(next.id)
         }
         normalizeAllSiblingPositions()
         BrowserWindowTransferCenter.shared.stage(movingTabs)
@@ -1007,6 +1208,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         for (index, tab) in transferredTabs.enumerated() {
             tab.folderID = nil
             tab.isPinned = false
+            tab.spaceID = selectedSpaceID
             tab.position = nextPosition(in: nil) + Int64(index) * 1024
             tab.engine?.eventSink = self
             tabs.append(tab)
@@ -1020,6 +1222,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard let index = closedTabs.firstIndex(where: { $0.url != nil }) else { return }
         var snapshot = closedTabs.remove(at: index)
         snapshot.folderID = nil
+        snapshot.spaceID = selectedSpaceID
         snapshot.position = nextPosition(in: nil)
         let restored = BrowserTab(snapshot: snapshot)
         tabs.append(restored)
@@ -1029,7 +1232,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func selectTab(_ id: TabID, extendingSelection: Bool = false) {
-        guard tab(id) != nil else { return }
+        guard let requestedTab = tab(id) else { return }
+        if requestedTab.spaceID != selectedSpaceID {
+            selectedSpace?.lastSelectedTabID = selectedTabID
+            backgroundVisibleTabs()
+            selectedSpaceID = requestedTab.spaceID
+            selectedTabIDs = []
+            selectionAnchorID = nil
+        }
         if extendingSelection,
            let anchor = selectionAnchorID,
            let anchorIndex = tabSelectionOrder.firstIndex(where: { $0.id == anchor }),
@@ -1050,6 +1260,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             activeTab.engine?.refreshMediaPlaybackState()
         }
         selectedTabID = id
+        selectedSpace?.lastSelectedTabID = id
         activateSelectedTabIfNeeded()
         if mediaPermissionPrompt?.tabID != id {
             mediaPermissionPrompt = nil
@@ -1070,7 +1281,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         tab.isPinned = isPinned
         if isPinned {
             tab.folderID = nil
-            tab.position = nextPinnedPosition
+            tab.position = nextPinnedPosition(in: tab.spaceID)
         } else {
             tab.position = nextPosition(in: nil)
         }
@@ -1091,6 +1302,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             snapshot: PersistedTabFolder(
                 id: id,
                 name: BrowserLocalization.string("new_folder"),
+                spaceID: selectedSpaceID,
                 parentID: validParentID,
                 position: nextPosition(in: validParentID)
             )
@@ -1175,6 +1387,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 id: splitID,
                 name: "",
                 symbolName: "rectangle.split.2x1",
+                spaceID: target.spaceID,
                 parentID: target.isPinned ? nil : parentID,
                 position: position,
                 isExpanded: true,
@@ -1216,9 +1429,51 @@ public final class BrowserWindowModel: WebEngineEventSink {
         moveTabs(ids, to: folderID)
     }
 
+    public func moveTab(_ id: TabID, toSpace spaceID: TabSpaceID) {
+        let ids = selectedTabIDs.contains(id) ? selectedTabIDs : [id]
+        moveTabs(ids, toSpace: spaceID)
+    }
+
+    public func moveSelectedTabs(toSpace spaceID: TabSpaceID) {
+        moveTabs(selectedTabIDs, toSpace: spaceID)
+    }
+
+    public func moveFolder(_ id: TabFolderID, toSpace spaceID: TabSpaceID) {
+        guard let moving = folder(id), moving.spaceID != spaceID, space(spaceID) != nil else {
+            return
+        }
+        let folderIDs = folderSubtreeIDs(rootedAt: id)
+        let movingTabIDs = Set(
+            tabs.filter { $0.folderID.map(folderIDs.contains) == true }.map(\.id)
+        )
+        if selectedTabID.map(movingTabIDs.contains) == true {
+            backgroundVisibleTabs()
+        }
+        moving.parentID = nil
+        moving.position = nextPosition(in: nil, spaceID: spaceID)
+        for folder in folders where folderIDs.contains(folder.id) {
+            folder.spaceID = spaceID
+        }
+        for tab in tabs where tab.folderID.map(folderIDs.contains) == true {
+            tab.spaceID = spaceID
+        }
+        if selectedTabID.flatMap({ tab($0) })?.spaceID != selectedSpaceID {
+            selectedTabID = tabs.first(where: { $0.spaceID == selectedSpaceID })?.id
+            selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
+            selectionAnchorID = selectedTabID
+            activateSelectedTabIfNeeded()
+            if selectedTabID == nil { newTab() }
+        }
+        reconcileLifecycle()
+        persist()
+    }
+
     public func moveFolder(_ id: TabFolderID, inside parentID: TabFolderID?) {
         guard let moving = folder(id), id != parentID else { return }
         guard parentID.flatMap(folder)?.isSplit != true else { return }
+        guard parentID.flatMap(folder)?.spaceID == nil
+                || parentID.flatMap(folder)?.spaceID == moving.spaceID
+        else { return }
         if let parentID, isFolder(parentID, descendantOf: id) { return }
         moving.parentID = parentID
         moving.position = nextPosition(in: parentID, excludingFolderID: id)
@@ -1274,14 +1529,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
 
         if selectedTabID.map(removedTabIDs.contains) == true {
-            if tabs.isEmpty {
+            let currentTabs = tabs.filter { $0.spaceID == selectedSpaceID }
+            if currentTabs.isEmpty {
                 selectedTabID = nil
                 selectedTabIDs = []
                 dismissOmnibox()
                 newTab()
             } else {
-                let index = min(selectedIndex ?? 0, tabs.count - 1)
-                selectTab(tabs[index].id)
+                let index = min(selectedIndex ?? 0, max(tabs.count - 1, 0))
+                let next = tabs[index...].first { $0.spaceID == selectedSpaceID }
+                    ?? tabs[..<index].last { $0.spaceID == selectedSpaceID }
+                    ?? currentTabs[0]
+                selectTab(next.id)
             }
         }
         normalizeAllSiblingPositions()
@@ -1291,10 +1550,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     func sidebarItems(in parentID: TabFolderID?) -> [SidebarTreeItem] {
         let childFolders = folders
-            .filter { $0.parentID == parentID }
+            .filter { $0.spaceID == selectedSpaceID && $0.parentID == parentID }
             .map(SidebarTreeItem.folder)
         let childTabs = tabs
-            .filter { !$0.isPinned && $0.folderID == parentID }
+            .filter {
+                $0.spaceID == selectedSpaceID && !$0.isPinned && $0.folderID == parentID
+            }
             .map(SidebarTreeItem.tab)
         return (childFolders + childTabs).sorted {
             let lhsPosition = sidebarPosition(of: $0)
@@ -1314,7 +1575,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     func folders(in parentID: TabFolderID?) -> [TabFolder] {
-        folders.filter { $0.parentID == parentID }.sorted { $0.position < $1.position }
+        folders
+            .filter { $0.spaceID == selectedSpaceID && $0.parentID == parentID }
+            .sorted { $0.position < $1.position }
     }
 
     func folderPath(_ id: TabFolderID) -> String {
@@ -1342,6 +1605,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     func canMoveFolder(_ id: TabFolderID, inside parentID: TabFolderID) -> Bool {
         id != parentID
+            && folder(id)?.spaceID == folder(parentID)?.spaceID
             && !isFolder(parentID, descendantOf: id)
             && folder(parentID)?.isSplit != true
     }
@@ -1559,6 +1823,43 @@ public final class BrowserWindowModel: WebEngineEventSink {
         openAIChatWindowRequest(token)
     }
 
+    /// Takes the browser back from the assistant mid-task: cancels the turn,
+    /// drops the grant, and answers every pending confirmation with "no".
+    public func stopAgentControl() {
+        aiChat.cancelStreaming()
+        aiToolBridge?.releaseBrowserControl()
+    }
+
+    /// The live web view for a tab, prepared for the agent to work in whether
+    /// or not the person is looking at it.
+    ///
+    /// A tab that is not on screen has no layout size, so every element would
+    /// measure zero and the agent would read the page as empty. Giving the
+    /// view a desktop-sized frame makes WebKit lay the page out properly even
+    /// unhosted, which is what lets the agent work in the background.
+    func webView(for id: TabID) -> WKWebView? {
+        guard let tab = tab(id) else { return nil }
+        let engine = ensureEngine(for: tab)
+        if engine.webView.superview == nil, engine.webView.bounds.width < 8 {
+            engine.webView.frame = CGRect(x: 0, y: 0, width: 1280, height: 900)
+        }
+        // A tab restored from eviction has an engine but no content yet; only
+        // the selected tab gets loaded on activation.
+        if !tab.hasLoadedInitialURL, let url = tab.url {
+            tab.hasLoadedInitialURL = true
+            engine.load(url)
+        }
+        return engine.webView
+    }
+
+    func agentLoad(_ url: URL, in id: TabID) {
+        navigate(tabID: id, to: .url(url))
+    }
+
+    func agentGoBack(in id: TabID) {
+        goBack(tabID: id)
+    }
+
     private func prepareAIChatIfNeeded() {
         guard aiToolBridge == nil else { return }
         let bridge = BrowserAIToolBridge(model: self)
@@ -1566,6 +1867,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
         aiChat.toolExecutor = bridge
         aiChat.onReattachRequest = { [weak self] in
             self?.isAIChatPresented = true
+        }
+        aiChat.onStopAgentRequest = { [weak self] in
+            self?.stopAgentControl()
         }
         aiChat.onOpenURL = { [weak self] url in
             // A link in the chat belongs in this browser, not another app.
@@ -1591,6 +1895,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     id: id,
                     name: name,
                     symbolName: symbolName ?? "folder.fill",
+                    spaceID: selectedSpaceID,
                     position: nextPosition(in: nil)
                 )
             )
@@ -1612,6 +1917,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 title: BrowserLocalization.string("new_tab"),
                 url: url,
                 isPinned: false,
+                spaceID: selectedSpaceID,
                 position: nextPosition(in: nil),
                 isAICreated: true
             )
@@ -1756,7 +2062,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         if tab.id == selectedTabID, tab.automaticCrashRecoveries == 0 {
             tab.automaticCrashRecoveries += 1
-            session.reload()
+            session.reload(fallbackURL: tab.url)
             tab.lifecycleState = .active
         } else if tab.id != selectedTabID {
             session.invalidate()
@@ -1885,6 +2191,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 title: BrowserLocalization.string("new_tab"),
                 url: request?.url,
                 isPinned: false,
+                spaceID: tab(for: session)?.spaceID ?? selectedSpaceID,
                 position: nextPosition(in: nil)
             )
         )
@@ -1920,6 +2227,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 title: BrowserLocalization.string("new_tab"),
                 url: url,
                 isPinned: false,
+                spaceID: tab(for: session)?.spaceID ?? selectedSpaceID,
                 position: 0
             )
         )
@@ -2006,8 +2314,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         presentNextMediaPermissionIfPossible()
     }
 
-    private var nextPinnedPosition: Int64 {
-        (tabs.filter(\.isPinned).map(\.position).max() ?? 0) + 1024
+    private func nextPinnedPosition(in spaceID: TabSpaceID) -> Int64 {
+        (tabs
+            .filter { $0.spaceID == spaceID && $0.isPinned }
+            .map(\.position)
+            .max() ?? 0) + 1024
     }
 
     private func appendTab(url: URL) -> TabID {
@@ -2019,6 +2330,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                     title: BrowserLocalization.string("new_tab"),
                     url: url,
                     isPinned: false,
+                    spaceID: selectedSpaceID,
                     position: nextPosition(in: nil)
                 )
             )
@@ -2150,6 +2462,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 companionEngine.load(url)
             }
             companionEngine.refreshMediaPlaybackState()
+        }
+    }
+
+    private func backgroundVisibleTabs() {
+        let now = Date()
+        for tab in tabs where tab.lifecycleState == .active {
+            tab.lifecycleState = .liveBackground
+            tab.evictionGraceUntil = max(
+                tab.evictionGraceUntil,
+                now.addingTimeInterval(5)
+            )
+            tab.engine?.refreshMediaPlaybackState()
         }
     }
 
@@ -2734,6 +3058,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         if isVisibleSplitTab(tab.id) {
             reasons.insert(.active)
         }
+        // Evicting the tab the agent is working in would discard the page
+        // mid-task and reload it under the agent's feet.
+        if agentActivity.controlledTabID == tab.id {
+            reasons.insert(.active)
+        }
         if now < tab.evictionGraceUntil {
             reasons.insert(.gracePeriod)
         }
@@ -2794,6 +3123,17 @@ public final class BrowserWindowModel: WebEngineEventSink {
         folders.first { $0.id == id }
     }
 
+    private func space(_ id: TabSpaceID) -> TabSpace? {
+        spaces.first { $0.id == id }
+    }
+
+    private func rememberedTabID(in spaceID: TabSpaceID) -> TabID? {
+        guard let remembered = space(spaceID)?.lastSelectedTabID,
+              tabs.contains(where: { $0.id == remembered && $0.spaceID == spaceID })
+        else { return nil }
+        return remembered
+    }
+
     private func isFolder(_ candidateID: TabFolderID, descendantOf ancestorID: TabFolderID) -> Bool {
         var currentID: TabFolderID? = candidateID
         var visited: Set<TabFolderID> = []
@@ -2819,13 +3159,23 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func nextPosition(
         in parentID: TabFolderID?,
-        excludingFolderID: TabFolderID? = nil
+        excludingFolderID: TabFolderID? = nil,
+        spaceID proposedSpaceID: TabSpaceID? = nil
     ) -> Int64 {
+        let spaceID = proposedSpaceID
+            ?? parentID.flatMap(folder)?.spaceID
+            ?? selectedSpaceID
         let tabPositions = tabs
-            .filter { !$0.isPinned && $0.folderID == parentID }
+            .filter {
+                $0.spaceID == spaceID && !$0.isPinned && $0.folderID == parentID
+            }
             .map(\.position)
         let folderPositions = folders
-            .filter { $0.parentID == parentID && $0.id != excludingFolderID }
+            .filter {
+                $0.spaceID == spaceID
+                    && $0.parentID == parentID
+                    && $0.id != excludingFolderID
+            }
             .map(\.position)
         return (tabPositions + folderPositions).max().map { $0 + 1024 } ?? 1024
     }
@@ -2840,18 +3190,51 @@ public final class BrowserWindowModel: WebEngineEventSink {
         else { return }
         dissolveSplits(containing: ids)
         let destinationID = proposedFolderID.flatMap(folder) == nil ? nil : proposedFolderID
+        let destinationSpaceID = destinationID.flatMap(folder)?.spaceID
         if let destinationID {
             folder(destinationID)?.isExpanded = true
         }
         let orderedTabs = orderedTabs(in: ids)
-        var position = nextPosition(in: destinationID)
+        let effectiveSpaceID = destinationSpaceID ?? orderedTabs.first?.spaceID ?? selectedSpaceID
+        var position = nextPosition(in: destinationID, spaceID: effectiveSpaceID)
         for tab in orderedTabs {
             tab.isPinned = false
+            tab.spaceID = effectiveSpaceID
             tab.folderID = destinationID
             tab.position = position
             position += 1024
         }
         if persistChange { persist() }
+    }
+
+    private func moveTabs(_ ids: Set<TabID>, toSpace spaceID: TabSpaceID) {
+        guard !ids.isEmpty, space(spaceID) != nil else { return }
+        let movesActiveTab = selectedTabID.map(ids.contains) == true
+        if movesActiveTab { backgroundVisibleTabs() }
+        dissolveSplits(containing: ids)
+        let movingTabs = orderedTabs(in: ids)
+        guard !movingTabs.isEmpty else { return }
+        var regularPosition = nextPosition(in: nil, spaceID: spaceID)
+        for tab in movingTabs {
+            tab.spaceID = spaceID
+            tab.folderID = nil
+            if tab.isPinned {
+                tab.position = nextPinnedPosition(in: spaceID)
+            } else {
+                tab.position = regularPosition
+                regularPosition += 1024
+            }
+        }
+        selectedTabIDs.subtract(ids)
+        if movesActiveTab {
+            selectedTabID = tabs.first(where: { $0.spaceID == selectedSpaceID })?.id
+            selectedTabIDs = Set(selectedTabID.map { [$0] } ?? [])
+            selectionAnchorID = selectedTabID
+            activateSelectedTabIfNeeded()
+            if selectedTabID == nil { newTab() }
+        }
+        reconcileLifecycle()
+        persist()
     }
 
     func moveTabs(_ ids: Set<TabID>, before targetID: TabID?) {
@@ -2879,6 +3262,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
         for tab in movingTabs {
             tab.isPinned = target.isPinned
+            tab.spaceID = target.spaceID
             tab.folderID = target.isPinned ? nil : target.folderID
         }
 
@@ -2921,6 +3305,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard !movingTabs.isEmpty else { return }
         for tab in movingTabs {
             tab.isPinned = false
+            tab.spaceID = targetFolder.spaceID
             tab.folderID = targetFolder.parentID
         }
 
@@ -2948,6 +3333,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard let moving = folder(id),
               let target = folder(targetID),
               id != targetID,
+              moving.spaceID == target.spaceID,
               !target.isSplit
         else { return false }
         let parentID = target.parentID
@@ -3002,13 +3388,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     private func normalizeAllSiblingPositions() {
-        for (index, tab) in pinnedTabs.enumerated() {
-            tab.position = Int64(index + 1) * 1024
+        let originalSpaceID = selectedSpaceID
+        for space in spaces {
+            selectedSpaceID = space.id
+            for (index, tab) in pinnedTabs.enumerated() {
+                tab.position = Int64(index + 1) * 1024
+            }
+            normalizeSiblingPositions(in: nil)
+            for folder in folders where folder.spaceID == space.id {
+                normalizeSiblingPositions(in: folder.id)
+            }
         }
-        normalizeSiblingPositions(in: nil)
-        for folder in folders {
-            normalizeSiblingPositions(in: folder.id)
-        }
+        selectedSpaceID = originalSpaceID
     }
 
     private func assignPositions(to items: [SidebarTreeItem]) {
@@ -3023,7 +3414,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func sanitizeFolderTree() {
         let validIDs = Set(folders.map(\.id))
-        for folder in folders where folder.parentID.map({ !validIDs.contains($0) }) == true {
+        for folder in folders where folder.parentID.map({ parentID in
+            !validIDs.contains(parentID) || self.folder(parentID)?.spaceID != folder.spaceID
+        }) == true {
             folder.parentID = nil
         }
         for value in folders {
@@ -3033,7 +3426,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
             }
         }
         for tab in tabs {
-            if tab.isPinned || tab.folderID.map({ !validIDs.contains($0) }) == true {
+            if tab.isPinned || tab.folderID.map({ folderID in
+                !validIDs.contains(folderID) || self.folder(folderID)?.spaceID != tab.spaceID
+            }) == true {
                 tab.folderID = nil
             }
         }
@@ -3072,9 +3467,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard !isPrivate else { return }
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: selectedTabID,
+            selectedSpaceID: selectedSpaceID,
             sidebarMode: sidebarMode,
             tabs: tabs.map(\.snapshot),
-            folders: folders.map(\.snapshot)
+            folders: folders.map(\.snapshot),
+            spaces: spaces.map(\.snapshot)
         )
         let repository = repository
         let previousSave = persistenceTask

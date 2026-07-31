@@ -10,6 +10,21 @@ public struct TabID: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+public struct TabSpaceID: Hashable, Codable, Sendable, Identifiable {
+    public let rawValue: UUID
+
+    public var id: UUID { rawValue }
+
+    /// Stable destination for sessions created before Spaces existed.
+    public static let `default` = TabSpaceID(
+        UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    )
+
+    public init(_ rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+}
+
 public struct TabFolderID: Hashable, Codable, Sendable, Identifiable {
     public let rawValue: UUID
 
@@ -152,6 +167,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
     public var url: URL?
     public var faviconURL: URL?
     public var isPinned: Bool
+    public var spaceID: TabSpaceID
     public var folderID: TabFolderID?
     public var position: Int64
     public var navigationHistory: TabNavigationHistory?
@@ -164,6 +180,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         url: URL?,
         faviconURL: URL? = nil,
         isPinned: Bool,
+        spaceID: TabSpaceID = .default,
         folderID: TabFolderID? = nil,
         position: Int64,
         navigationHistory: TabNavigationHistory? = nil,
@@ -174,6 +191,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         self.url = url
         self.faviconURL = faviconURL
         self.isPinned = isPinned
+        self.spaceID = spaceID
         self.folderID = folderID
         self.position = position
         self.navigationHistory = navigationHistory
@@ -186,6 +204,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         case url
         case faviconURL
         case isPinned
+        case spaceID
         case folderID
         case position
         case navigationHistory
@@ -199,6 +218,7 @@ public struct PersistedTab: Codable, Equatable, Identifiable, Sendable {
         url = try container.decodeIfPresent(URL.self, forKey: .url)
         faviconURL = try container.decodeIfPresent(URL.self, forKey: .faviconURL)
         isPinned = try container.decode(Bool.self, forKey: .isPinned)
+        spaceID = try container.decodeIfPresent(TabSpaceID.self, forKey: .spaceID) ?? .default
         folderID = try container.decodeIfPresent(TabFolderID.self, forKey: .folderID)
         position = try container.decode(Int64.self, forKey: .position)
         navigationHistory = try container.decodeIfPresent(
@@ -213,6 +233,7 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
     public let id: TabFolderID
     public var name: String
     public var symbolName: String?
+    public var spaceID: TabSpaceID
     public var parentID: TabFolderID?
     public var position: Int64
     public var isExpanded: Bool
@@ -225,6 +246,7 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         id: TabFolderID = TabFolderID(),
         name: String,
         symbolName: String? = "folder.fill",
+        spaceID: TabSpaceID = .default,
         parentID: TabFolderID? = nil,
         position: Int64,
         isExpanded: Bool = true,
@@ -234,6 +256,7 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         self.id = id
         self.name = name
         self.symbolName = symbolName
+        self.spaceID = spaceID
         self.parentID = parentID
         self.position = position
         self.isExpanded = isExpanded
@@ -245,6 +268,7 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         case id
         case name
         case symbolName
+        case spaceID
         case parentID
         case position
         case isExpanded
@@ -257,6 +281,7 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
         id = try container.decode(TabFolderID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         symbolName = try container.decodeIfPresent(String.self, forKey: .symbolName)
+        spaceID = try container.decodeIfPresent(TabSpaceID.self, forKey: .spaceID) ?? .default
         parentID = try container.decodeIfPresent(TabFolderID.self, forKey: .parentID)
         position = try container.decode(Int64.self, forKey: .position)
         isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? true
@@ -265,48 +290,98 @@ public struct PersistedTabFolder: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct PersistedTabSpace: Codable, Equatable, Identifiable, Sendable {
+    public let id: TabSpaceID
+    public var name: String
+    public var symbolName: String
+    public var position: Int64
+    public var lastSelectedTabID: TabID?
+
+    public init(
+        id: TabSpaceID = TabSpaceID(),
+        name: String,
+        symbolName: String = "square.grid.2x2.fill",
+        position: Int64,
+        lastSelectedTabID: TabID? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.symbolName = symbolName
+        self.position = position
+        self.lastSelectedTabID = lastSelectedTabID
+    }
+
+    public static let `default` = PersistedTabSpace(
+        id: .default,
+        name: "Space 1",
+        position: 1024
+    )
+}
+
 public struct BrowserSessionSnapshot: Codable, Equatable, Sendable {
     public var selectedTabID: TabID?
+    public var selectedSpaceID: TabSpaceID
     public var sidebarMode: SidebarMode
     public var tabs: [PersistedTab]
     public var folders: [PersistedTabFolder]
+    public var spaces: [PersistedTabSpace]
 
     public init(
         selectedTabID: TabID?,
+        selectedSpaceID: TabSpaceID = .default,
         sidebarMode: SidebarMode,
         tabs: [PersistedTab],
-        folders: [PersistedTabFolder] = []
+        folders: [PersistedTabFolder] = [],
+        spaces: [PersistedTabSpace] = [.default]
     ) {
         self.selectedTabID = selectedTabID
+        self.selectedSpaceID = selectedSpaceID
         self.sidebarMode = sidebarMode
         self.tabs = tabs
         self.folders = folders
+        self.spaces = spaces.isEmpty ? [.default] : spaces
     }
 
     private enum CodingKeys: String, CodingKey {
         case selectedTabID
+        case selectedSpaceID
         case sidebarMode
         case tabs
         case folders
+        case spaces
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         selectedTabID = try container.decodeIfPresent(TabID.self, forKey: .selectedTabID)
+        selectedSpaceID = try container.decodeIfPresent(
+            TabSpaceID.self,
+            forKey: .selectedSpaceID
+        ) ?? .default
         sidebarMode = try container.decode(SidebarMode.self, forKey: .sidebarMode)
         tabs = try container.decode([PersistedTab].self, forKey: .tabs)
         folders = try container.decodeIfPresent(
             [PersistedTabFolder].self,
             forKey: .folders
         ) ?? []
+        spaces = try container.decodeIfPresent(
+            [PersistedTabSpace].self,
+            forKey: .spaces
+        ) ?? [.default]
+        if spaces.isEmpty { spaces = [.default] }
+        if !spaces.contains(where: { $0.id == selectedSpaceID }) {
+            selectedSpaceID = spaces[0].id
+        }
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(selectedTabID, forKey: .selectedTabID)
+        try container.encode(selectedSpaceID, forKey: .selectedSpaceID)
         try container.encode(sidebarMode, forKey: .sidebarMode)
         try container.encode(tabs, forKey: .tabs)
         try container.encode(folders, forKey: .folders)
+        try container.encode(spaces, forKey: .spaces)
     }
 }
 

@@ -222,6 +222,10 @@
 	<string>Move Selected Here</string>
 	<key>move_to_folder</key>
 	<string>Move to Folder</string>
+	<key>move_to_space</key>
+	<string>Move to Space</string>
+	<key>move_selected_to_space</key>
+	<string>Move Selected Tabs Here</string>
 	<key>move_to_new_window</key>
 	<string>Move to New Window</string>
 	<key>move_to_top_level</key>
@@ -238,6 +242,8 @@
 	<string>New Nested Folder</string>
 	<key>new_private_window</key>
 	<string>New Private Window</string>
+	<key>new_space</key>
+	<string>New Space</string>
 	<key>new_tab</key>
 	<string>New Tab</string>
 	<key>new_window</key>
@@ -250,6 +256,8 @@
 	<string>No Saved Permissions</string>
 	<key>ok</key>
 	<string>OK</string>
+	<key>done</key>
+	<string>Done</string>
 	<key>open</key>
 	<string>Open</string>
 	<key>open_in_other_app</key>
@@ -362,6 +370,14 @@
 	<string>Sign In to %@</string>
 	<key>site_permissions</key>
 	<string>Site Permissions…</string>
+	<key>space_default_name</key>
+	<string>Space %d</string>
+	<key>space_icon</key>
+	<string>Space Icon</string>
+	<key>space_name_placeholder</key>
+	<string>Space Name</string>
+	<key>delete_space</key>
+	<string>Delete Space</string>
 	<key>site_permissions_detail</key>
 	<string>Saved camera and microphone decisions</string>
 	<key>site_permissions_unavailable</key>
@@ -398,5 +414,45 @@
 	<string>Web Page</string>
 	<key>work</key>
 	<string>Work</string>
+	<key>later</key>
+	<string>Later</string>
+	<key>check_for_updates</key>
+	<string>Check for Updates</string>
+	<key>checking_for_updates</key>
+	<string>Checking for Updates…</string>
+	<key>update</key>
+	<string>Update</string>
+	<key>updates</key>
+	<string>Updates</string>
+	<key>updates_detail</key>
+	<string>Point checks GitHub Releases no more than once every 24 hours while it is running.</string>
+	<key>update_check_available</key>
+	<string>An update is available.</string>
+	<key>update_check_failed</key>
+	<string>Could not check for updates. Try again later.</string>
+	<key>update_check_not_configured</key>
+	<string>Update checks are not configured for this build.</string>
+	<key>update_check_recently</key>
+	<string>Checked recently. Point checks once every 24 hours.</string>
+	<key>update_check_up_to_date</key>
+	<string>You’re up to date.</string>
+	<key>update_available_message</key>
+	<string>Point %@ is ready to download.</string>
+	<key>update_available_title</key>
+	<string>Update Available</string>
+	<key>update_download_failed</key>
+	<string>The update could not be downloaded. Check your connection and try again later.</string>
+	<key>update_download_failed_title</key>
+	<string>Download Failed</string>
+	<key>update_downloading_message</key>
+	<string>Point is downloading the disk image. You can cancel at any time.</string>
+	<key>update_downloading_title</key>
+	<string>Downloading Update…</string>
+	<key>update_ready_instructions</key>
+	<string>The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point.</string>
+	<key>update_ready_title</key>
+	<string>Ready to Install</string>
+	<key>whats_new</key>
+	<string>What’s New</string>
 </dict>
 </plist>

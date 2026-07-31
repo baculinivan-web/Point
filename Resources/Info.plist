@@ -48,10 +48,21 @@
         </dict>
     </array>
     <key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>0.2.5</string>
 	<key>CFBundleVersion</key>
-	<string>28</string>
-    <key>LSMinimumSystemVersion</key>
+	<string>33</string>
+	<!--
+	 Release source configuration. Keep the asset name stable for every beta
+	 release; replace the notes URL with the GitHub Pages format when Pages is
+	 published.
+	-->
+	<key>BrowserGitHubReleasesAPIURL</key>
+	<string>https://api.github.com/repos/baculinivan-web/Point/releases/latest</string>
+	<key>BrowserReleaseNotesURLFormat</key>
+	<string>https://github.com/baculinivan-web/Point/releases/tag/v{version}</string>
+	<key>BrowserReleaseAssetName</key>
+	<string>Point.dmg</string>
+	<key>LSMinimumSystemVersion</key>
     <string>26.0</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>

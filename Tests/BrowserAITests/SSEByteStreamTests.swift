@@ -156,7 +156,7 @@ struct SSEEndToEndTests {
             guard let event = parser.consume(line: line) else { continue }
             events.append(contentsOf: assembler.handle(event))
         }
-        if let final = assembler.finish() { events.append(final) }
+        events.append(contentsOf: assembler.finish())
 
         #expect(text(of: events) == "Hi there")
         guard case let .finished(reason)? = events.last else {

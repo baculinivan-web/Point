@@ -160,7 +160,10 @@ public final class AIChatSettings {
             return OpenAICompatibleProvider(
                 apiKey: "",
                 baseURL: OllamaRuntime.openAICompatibleBaseURL,
-                requiresAPIKey: false
+                requiresAPIKey: false,
+                // A local model bills nothing and caches nothing, and older
+                // Ollama builds reject the option outright.
+                reportsStreamingUsage: false
             )
         }
     }

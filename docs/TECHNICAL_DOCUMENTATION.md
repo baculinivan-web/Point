@@ -166,14 +166,25 @@ make run
 
 `make run` builds a locally signed app bundle at `dist/Point.app`. The package can also be opened in Xcode through `Package.swift`.
 
-For a production release, store a `notarytool` profile and run:
+For this trusted beta distribution, create the DMG with:
 
 ```bash
-xcrun notarytool store-credentials point-notary
-NOTARY_PROFILE=point-notary make release
+make release
 ```
 
-The release pipeline builds the Release configuration, enables Hardened Runtime and a secure timestamp, validates the signature, submits the zip to Apple, staples the ticket, and runs final `stapler` and Gatekeeper checks. It exits before publication if a Developer ID Application identity or notary profile is missing.
+This produces `dist/Point.dmg` with ad-hoc signing only. It does not use Sparkle, Developer ID signing, notarization, or an update backend. Upload that exact DMG as every GitHub Release asset.
+
+### Manual update configuration
+
+The release source is configured in one place: [`Resources/Info.plist`](../Resources/Info.plist).
+
+- `BrowserGitHubReleasesAPIURL` — `https://api.github.com/repos/<owner>/<repository>/releases/latest`.
+- `BrowserReleaseAssetName` — the exact DMG asset name uploaded to every release, for example `Point.dmg`.
+- `BrowserReleaseNotesURLFormat` — the release-notes format, with a required `{version}` token. Point temporarily uses the exact GitHub Release URL until its GitHub Pages changelog exists; replace it with `https://<owner>.github.io/<repository>/releases/{version}` when Pages is published.
+
+When configured, Point's background check asks GitHub for `releases/latest` no more than once per 24 hours while it is running. An explicit Settings check always makes a fresh request, so a person can check a just-published beta without waiting for the background interval. The Settings control visibly reports a check in progress, an available update, an up-to-date result, a recent background check, or an error. It offers a newer numeric version only if the configured DMG asset is present, downloads it to Downloads, reveals it in Finder, and explains the manual replacement steps. A failed network request, invalid response, missing asset, or cancelled download is quiet and eligible for the next daily check. The same release is not prompted repeatedly after “Later.”
+
+After a replacement changes `CFBundleShortVersionString`, Point opens that version’s configured notes once. The last installed and last-opened-notes versions are stored in `UserDefaults`; the first ever launch does not open notes.
 
 The local fixture server exercises downloads, camera and microphone permissions, JavaScript prompts, HTTP Basic authentication (`browser` / `test`), and `mailto` confirmation without relying on public websites:
 
@@ -195,7 +206,7 @@ Performance checks use Instruments signposts for launch, tab switching, eviction
 
 ## 11. Current beta scope and known limitations
 
-The public-beta scope includes private windows, SwiftData migration, live tab transfer between regular windows, periodic cleanup, production signing and notarization, downloads, native web dialogs and authentication, the camera/microphone permission queue, browsing history, and Clear Browsing Data.
+The public-beta scope includes private windows, SwiftData migration, live tab transfer between regular windows, periodic cleanup, ad-hoc packaged DMG releases with manual updates, downloads, native web dialogs and authentication, the camera/microphone permission queue, browsing history, and Clear Browsing Data.
 
 Remaining local integration checks include OAuth popups, blob downloads, fullscreen, and TLS flows. WebAuthn and payment flows do not yet have separate protected lifecycle reasons. Persistent trackpad-swipe behavior at a restored-history boundary may be less predictable than the Back/Forward buttons and keyboard shortcuts.
 

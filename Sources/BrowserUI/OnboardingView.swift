@@ -9,9 +9,9 @@ import SwiftUI
 @MainActor
 public enum BrowserOnboarding {
     private static let completedVersionKey = "CompletedOnboardingVersion"
-    /// Raised for 0.2.0 so people who finished the earlier tour are shown the
-    /// chat once, rather than having to discover it on their own.
-    private static let currentVersion = 2
+    /// Raised when the tour gains a material new capability people should see
+    /// once, rather than having to discover it on their own.
+    private static let currentVersion = 3
 
     /// Posted when Settings asks for the tour again. The first standard window
     /// to claim the request presents it, so it never opens twice.
@@ -50,6 +50,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
     case split
     case search
     case chatTools
+    case browserUse
     case assistant
     case folders
     case defaultBrowser
@@ -62,6 +63,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .split: BrowserLocalization.string("onboarding_split_title")
         case .search: BrowserLocalization.string("onboarding_search_title")
         case .chatTools: BrowserLocalization.string("onboarding_chat_tools_title")
+        case .browserUse: BrowserLocalization.string("onboarding_browser_use_title")
         case .assistant: BrowserLocalization.string("onboarding_assistant_title")
         case .folders: BrowserLocalization.string("onboarding_folders_title")
         case .defaultBrowser: BrowserLocalization.string("onboarding_default_title")
@@ -74,6 +76,7 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
         case .split: BrowserLocalization.string("onboarding_split_detail")
         case .search: BrowserLocalization.string("onboarding_search_detail")
         case .chatTools: BrowserLocalization.string("onboarding_chat_tools_detail")
+        case .browserUse: BrowserLocalization.string("onboarding_browser_use_detail")
         case .assistant: BrowserLocalization.string("onboarding_assistant_detail")
         case .folders: BrowserLocalization.string("onboarding_folders_detail")
         case .defaultBrowser: BrowserLocalization.string("default_browser_detail")
@@ -90,6 +93,8 @@ private enum OnboardingPage: Int, CaseIterable, Identifiable {
             [Color(red: 1.00, green: 0.48, blue: 0.35), Color(red: 0.96, green: 0.24, blue: 0.55)]
         case .chatTools:
             [Color(red: 0.36, green: 0.31, blue: 0.86), Color(red: 0.14, green: 0.56, blue: 0.90)]
+        case .browserUse:
+            [Color(red: 0.10, green: 0.64, blue: 0.72), Color(red: 0.12, green: 0.35, blue: 0.92)]
         case .assistant:
             [Color(red: 0.98, green: 0.62, blue: 0.15), Color(red: 0.91, green: 0.32, blue: 0.45)]
         case .folders:
@@ -414,6 +419,7 @@ private struct OnboardingArtwork: View {
         case .split: SplitArtwork()
         case .search: SearchArtwork()
         case .chatTools: ChatToolsArtwork()
+        case .browserUse: BrowserUseArtwork()
         case .assistant: AssistantArtwork()
         case .folders: FoldersArtwork()
         case .defaultBrowser: DefaultBrowserArtwork()
@@ -490,6 +496,79 @@ private struct ChatToolsArtwork: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     highlighted = (highlighted + 1) % capabilities.count
+                }
+            }
+        }
+    }
+}
+
+private struct BrowserUseArtwork: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var activeStep = 0
+
+    private let steps = [
+        ("magnifyingglass", "onboarding_browser_use_step_search"),
+        ("cursorarrow.click.2", "onboarding_browser_use_step_click"),
+        ("cart.badge.plus", "onboarding_browser_use_step_cart"),
+        ("checkmark.shield", "onboarding_browser_use_step_ask")
+    ]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            MockWindowFrame(width: 246, height: 150) {
+                VStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.22))
+                        .frame(height: 22)
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.58))
+                                .frame(width: 82, height: 6)
+                                .padding(.leading, 9)
+                        }
+
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.white.opacity(index == 1 ? 0.32 : 0.18))
+                                .frame(height: 70)
+                        }
+                    }
+
+                    Capsule()
+                        .fill(Color.white.opacity(0.38))
+                        .frame(width: 96, height: 10)
+                }
+                .padding(12)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    HStack(spacing: 7) {
+                        Image(systemName: step.0)
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 18)
+                        Text(BrowserLocalization.string(step.1))
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .frame(height: 27)
+                    .background(
+                        Color.white.opacity(index == activeStep ? 0.28 : 0.14),
+                        in: Capsule()
+                    )
+                    .scaleEffect(index == activeStep ? 1.06 : 1)
+                }
+            }
+        }
+        .task {
+            guard !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(850))
+                guard !Task.isCancelled else { return }
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) {
+                    activeStep = (activeStep + 1) % steps.count
                 }
             }
         }

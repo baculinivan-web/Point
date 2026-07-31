@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.2.5 — Immediate Manual Check
+
+- Made the explicit Settings update check query GitHub immediately instead of waiting for the daily background-check interval.
+- Updated the bundle version to `0.2.5` (`33`).
+
+## 0.2.4 — Update Check Verification
+
+- Published a follow-up beta release to verify manual update detection from Point 0.2.3.
+- Updated the bundle version to `0.2.4` (`32`).
+
+## 0.2.3 — Update Check Feedback
+
+- Made the Settings update check show checking, available, up-to-date, recent-check, and failure states.
+- Configured the Point GitHub Releases source and version-specific release-notes fallback.
+- Updated the bundle version to `0.2.3` (`31`).
+
+## 0.2.2 — Manual Updates
+
+- Added a lightweight GitHub Releases manual-update flow for trusted beta builds: daily checks, native update choices, DMG download and Finder reveal, and one-time versioned release notes after replacement.
+- Added a manual update check in Settings.
+- Updated the bundle version to `0.2.2` (`30`).
+
+## 0.2.1 — Spaces and Browser Control
+
+- Added Spaces for organizing tabs into named workspaces, with a split-view layout that can show two spaces side by side.
+- Kept tab close controls available while a page is loading.
+- Added browser-use control for the built-in AI assistant.
+- Updated the bundle version to `0.2.1` (`29`).
+
 ## 0.2.0 — Chat
 
 - Added a built-in chat that opens beside the page (`⇧⌘A` or the sparkle button in the sidebar), can be hidden, resized by dragging its edge, or detached into its own window.

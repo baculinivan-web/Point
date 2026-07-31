@@ -1,5 +1,6 @@
 import AppKit
 import BrowserAI
+import BrowserAutomation
 import BrowserCore
 import BrowserEngine
 import SwiftUI
@@ -501,6 +502,13 @@ private struct WebSurface: View {
                 }
             )
 
+            // Sits above the page, never inside it: the site must not be able
+            // to see, restyle, or counterfeit the "an agent is driving" cue.
+            // Deliberately not inset for an overlaying sidebar: the page keeps
+            // its full width there, and insetting the halo made it look like
+            // the page had been resized.
+            AgentControlOverlay(activity: model.agentActivity, tabID: tab.id)
+
             if tab.isShowingRestorationPlaceholder {
                 RestoringTabPlaceholder()
                     .transition(.opacity)
@@ -531,7 +539,8 @@ private struct SplitWebSurface: View {
             HStack(spacing: 0) {
                 SplitWebPane(
                     tab: tabs[0],
-                    blockedLeadingWidth: blockedLeadingWidth
+                    blockedLeadingWidth: blockedLeadingWidth,
+                    agentActivity: model.agentActivity
                 )
                 .frame(width: leftWidth)
 
@@ -547,7 +556,11 @@ private struct SplitWebSurface: View {
                 )
                 .frame(width: dividerWidth)
 
-                SplitWebPane(tab: tabs[1], blockedLeadingWidth: 0)
+                SplitWebPane(
+                    tab: tabs[1],
+                    blockedLeadingWidth: 0,
+                    agentActivity: model.agentActivity
+                )
                     .frame(width: max(0, contentWidth - leftWidth))
             }
         }
@@ -557,6 +570,7 @@ private struct SplitWebSurface: View {
 private struct SplitWebPane: View {
     let tab: BrowserTab
     let blockedLeadingWidth: CGFloat
+    var agentActivity: AgentActivityCenter?
 
     var body: some View {
         ZStack {
@@ -567,6 +581,10 @@ private struct SplitWebPane: View {
                     onSwipeBack: { false },
                     onSwipeForward: { false }
                 )
+
+                if let agentActivity {
+                    AgentControlOverlay(activity: agentActivity, tabID: tab.id)
+                }
             } else {
                 Color(nsColor: .textBackgroundColor)
             }

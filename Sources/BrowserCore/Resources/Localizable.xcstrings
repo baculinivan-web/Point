@@ -1332,6 +1332,40 @@
         }
       }
     },
+    "check_for_updates" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверить обновления"
+          }
+        }
+      }
+    },
+    "checking_for_updates" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking for Updates…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка обновлений…"
+          }
+        }
+      }
+    },
     "choose_location" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1701,6 +1735,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete Folder and Contents"
+          }
+        }
+      }
+    },
+    "delete_space" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Space"
           }
         }
       }
@@ -2145,6 +2190,23 @@
         }
       }
     },
+    "later" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Later"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Позже"
+          }
+        }
+      }
+    },
     "load_bookmarks_failed" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2288,6 +2350,17 @@
         }
       }
     },
+    "move_selected_to_space" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Selected to Space"
+          }
+        }
+      }
+    },
     "move_to_folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2306,6 +2379,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move to New Window"
+          }
+        }
+      }
+    },
+    "move_to_space" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to Space"
           }
         }
       }
@@ -2383,6 +2467,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New Private Window"
+          }
+        }
+      }
+    },
+    "new_space" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Space"
           }
         }
       }
@@ -3463,6 +3558,28 @@
         }
       }
     },
+    "space_default_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
+    },
+    "space_icon" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Space Icon"
+          }
+        }
+      }
+    },
     "stop" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3572,6 +3689,278 @@
         }
       }
     },
+    "update" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить"
+          }
+        }
+      }
+    },
+    "update_available_message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point %@ is ready to download."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point %@ готов к загрузке."
+          }
+        }
+      }
+    },
+    "update_available_title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Available"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно обновление"
+          }
+        }
+      }
+    },
+    "update_check_available" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An update is available."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно обновление."
+          }
+        }
+      }
+    },
+    "update_check_failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not check for updates. Try again later."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось проверить обновления. Повторите попытку позже."
+          }
+        }
+      }
+    },
+    "update_check_not_configured" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update checks are not configured for this build."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка обновлений не настроена для этой сборки."
+          }
+        }
+      }
+    },
+    "update_check_recently" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked recently. Point checks once every 24 hours."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка уже выполнялась недавно. Point проверяет обновления раз в 24 часа."
+          }
+        }
+      }
+    },
+    "update_check_up_to_date" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’re up to date."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установлена актуальная версия."
+          }
+        }
+      }
+    },
+    "update_download_failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The update could not be downloaded. Check your connection and try again later."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить обновление. Проверьте подключение и повторите попытку позже."
+          }
+        }
+      }
+    },
+    "update_download_failed_title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download Failed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибка загрузки"
+          }
+        }
+      }
+    },
+    "update_downloading_message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point is downloading the disk image. You can cancel at any time."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point загружает образ диска. Загрузку можно отменить в любой момент."
+          }
+        }
+      }
+    },
+    "update_downloading_title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading Update…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка обновления…"
+          }
+        }
+      }
+    },
+    "update_ready_instructions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The disk image is open in Finder. Quit Point, open the downloaded DMG, drag Point into Applications, replace the old copy, then reopen Point."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Образ диска открыт в Finder. Закройте Point, откройте загруженный DMG, перетащите Point в «Программы», замените старую копию и снова откройте Point."
+          }
+        }
+      }
+    },
+    "update_ready_title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to Install"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово к установке"
+          }
+        }
+      }
+    },
+    "updates" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновления"
+          }
+        }
+      }
+    },
+    "updates_detail" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point checks GitHub Releases no more than once every 24 hours while it is running."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point проверяет GitHub Releases не чаще одного раза в 24 часа во время работы."
+          }
+        }
+      }
+    },
     "username" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3612,6 +4001,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Web Page"
+          }
+        }
+      }
+    },
+    "whats_new" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What’s New"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что нового"
           }
         }
       }

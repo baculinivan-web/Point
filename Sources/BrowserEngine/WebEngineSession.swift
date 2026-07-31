@@ -46,6 +46,8 @@ public final class WebEngineSession: NSObject {
     private var mediaSuspensionTransitionInFlight = false
     private var captureStopOperationsRemaining = 0
     private var pendingMainFrameNavigationWasBackForward = false
+    private var lastMainFrameRequest: URLRequest?
+    private var provisionalNavigationNeedsExplicitReload = false
 
     public var title: String {
         webView.title ?? BrowserLocalization.string("new_tab")
@@ -146,15 +148,17 @@ public final class WebEngineSession: NSObject {
     }
 
     public func load(_ url: URL) {
-        webView.load(URLRequest(url: url))
+        load(URLRequest(url: url))
     }
 
     public func load(_ request: URLRequest) {
+        lastMainFrameRequest = request
+        provisionalNavigationNeedsExplicitReload = false
         webView.load(request)
     }
 
     public func loadHistoryEntry(_ url: URL) {
-        webView.load(URLRequest(url: url))
+        load(URLRequest(url: url))
     }
 
     public func setNativeBackForwardGesturesEnabled(_ enabled: Bool) {
@@ -171,9 +175,23 @@ public final class WebEngineSession: NSObject {
         webView.goForward()
     }
 
-    public func reload(bypassingCache: Bool = false) {
+    public func reload(
+        bypassingCache: Bool = false,
+        fallbackURL: URL? = nil
+    ) {
+        if let recoveryRequest = WebEngineReloadRecovery.request(
+            currentURL: webView.url,
+            lastMainFrameRequest: lastMainFrameRequest,
+            fallbackURL: fallbackURL,
+            provisionalNavigationFailed: provisionalNavigationNeedsExplicitReload,
+            bypassingCache: bypassingCache
+        ) {
+            load(recoveryRequest)
+            return
+        }
+
         if bypassingCache, let url = webView.url {
-            webView.load(
+            load(
                 URLRequest(
                     url: url,
                     cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
@@ -434,6 +452,12 @@ extension WebEngineSession: WKNavigationDelegate {
             return
         }
 
+        if disposition == .allowInWebView,
+           navigationAction.targetFrame?.isMainFrame == true {
+            lastMainFrameRequest = navigationAction.request
+            provisionalNavigationNeedsExplicitReload = false
+        }
+
         switch disposition {
         case .allowInWebView where ["http", "https", "blob"].contains(scheme):
             let shouldDownload = navigationAction.shouldPerformDownload
@@ -502,6 +526,7 @@ extension WebEngineSession: WKNavigationDelegate {
     }
 
     public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        provisionalNavigationNeedsExplicitReload = false
         committedNavigationWasBackForward = pendingMainFrameNavigationWasBackForward
         pendingMainFrameNavigationWasBackForward = false
         eventSink?.webEngineDidCommit(self)
@@ -530,6 +555,7 @@ extension WebEngineSession: WKNavigationDelegate {
         didFailProvisionalNavigation navigation: WKNavigation!,
         withError error: any Error
     ) {
+        provisionalNavigationNeedsExplicitReload = true
         pendingMainFrameNavigationWasBackForward = false
         eventSink?.webEngineDidFailNavigation(self)
         eventSink?.webEngineDidChange(self)

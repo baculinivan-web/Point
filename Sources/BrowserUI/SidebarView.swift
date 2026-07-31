@@ -1,4 +1,5 @@
-import AppKit
+@preconcurrency import AppKit
+import BrowserAutomation
 import BrowserCore
 import Observation
 import SwiftUI
@@ -8,8 +9,11 @@ struct SidebarView: View {
     let model: BrowserWindowModel
     let isFullScreen: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var reorderState = SidebarReorderState()
+    @State private var spaceSwipeTranslation: CGFloat = 0
+    @State private var spaceSwipeCompletionTask: Task<Void, Never>?
 
     private var pinnedColumns: [GridItem] {
         let columnCount = model.pinnedTabs.count.isMultiple(of: 3) ? 3 : 2
@@ -40,10 +44,18 @@ struct SidebarView: View {
             .coordinateSpace(name: SidebarCoordinateSpace.name)
             .background {
                 GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: SidebarWindowFramePreferenceKey.self,
-                        value: proxy.frame(in: .global)
-                    )
+                    ZStack {
+                        Color.clear.preference(
+                            key: SidebarWindowFramePreferenceKey.self,
+                            value: proxy.frame(in: .global)
+                        )
+                        SpaceSwipeMonitor(
+                            onChanged: updateSpaceSwipe,
+                            onEnded: finishSpaceSwipe
+                        )
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .allowsHitTesting(false)
+                    }
                 }
             }
             .onPreferenceChange(SidebarItemLayoutPreferenceKey.self) { layouts in
@@ -99,6 +111,7 @@ struct SidebarView: View {
                     onResume: model.resumeDownload
                 )
             } else {
+                VStack(spacing: 0) {
                 Button {
                     model.presentOmnibox(clearText: false)
                 } label: {
@@ -174,6 +187,11 @@ struct SidebarView: View {
                         }
                     }
                 }
+                }
+                .frame(maxHeight: .infinity)
+                .offset(x: -spaceSwipeTranslation)
+                .opacity(spacePageOpacity)
+                .clipped()
             }
 
             if model.showsMemoryUsage {
@@ -192,6 +210,76 @@ struct SidebarView: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 8)
                     .padding(.bottom, 10)
+            }
+
+            SpaceSwitcher(model: model)
+                .padding(.horizontal, 10)
+                .padding(.top, 7)
+                .padding(.bottom, 10)
+        }
+        .onDisappear {
+            spaceSwipeCompletionTask?.cancel()
+        }
+    }
+
+    private var spacePageWidth: CGFloat {
+        model.sidebarMode == .pinned ? 300 : 280
+    }
+
+    private var spacePageOpacity: Double {
+        1 - min(Double(abs(spaceSwipeTranslation) / spacePageWidth) * 0.16, 0.16)
+    }
+
+    private func updateSpaceSwipe(_ deltaX: CGFloat, _ deltaY: CGFloat) {
+        guard abs(deltaX) > abs(deltaY), deltaX != 0 else { return }
+        spaceSwipeCompletionTask?.cancel()
+        let direction = deltaX > 0 ? 1 : -1
+        let resistance: CGFloat = model.canSwitchSpace(by: direction) ? 1 : 0.18
+        let proposed = deltaX * 2.2 * resistance
+        let limit = spacePageWidth * (model.canSwitchSpace(by: direction) ? 0.48 : 0.12)
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            spaceSwipeTranslation = min(max(proposed, -limit), limit)
+        }
+    }
+
+    private func finishSpaceSwipe(_ deltaX: CGFloat, _ deltaY: CGFloat) {
+        let direction = deltaX > 0 ? 1 : -1
+        guard abs(deltaX) >= 34,
+              abs(deltaX) > abs(deltaY),
+              model.canSwitchSpace(by: direction)
+        else {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82)) {
+                spaceSwipeTranslation = 0
+            }
+            return
+        }
+
+        spaceSwipeCompletionTask?.cancel()
+        spaceSwipeCompletionTask = Task { @MainActor in
+            if reduceMotion {
+                _ = model.switchSpace(by: direction)
+                spaceSwipeTranslation = 0
+                return
+            }
+
+            withAnimation(.easeOut(duration: 0.13)) {
+                spaceSwipeTranslation = CGFloat(direction) * spacePageWidth
+            }
+            try? await Task.sleep(for: .milliseconds(130))
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.snappy(duration: 0.22)) {
+                _ = model.switchSpace(by: direction)
+            }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                spaceSwipeTranslation = -CGFloat(direction) * spacePageWidth
+            }
+            withAnimation(.snappy(duration: 0.24)) {
+                spaceSwipeTranslation = 0
             }
         }
     }
@@ -342,6 +430,294 @@ struct SidebarView: View {
         }
     }
 
+}
+
+private struct SpaceSwitcher: View {
+    let model: BrowserWindowModel
+
+    @State private var editingSpaceID: TabSpaceID?
+    @State private var draftName = ""
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 9) {
+                ForEach(model.sortedSpaces) { space in
+                    spaceButton(space)
+                }
+            }
+            .frame(minWidth: 0)
+            .padding(.horizontal, 3)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    @ViewBuilder
+    private func spaceButton(_ space: TabSpace) -> some View {
+        let button = Button {
+            withAnimation(.snappy(duration: 0.22)) {
+                model.selectSpace(space.id)
+            }
+        } label: {
+            ZStack {
+                if space.id == model.selectedSpaceID {
+                    Image(systemName: space.symbolName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.primary.opacity(0.72))
+                        .transition(.scale(scale: 0.65).combined(with: .opacity))
+                } else {
+                    Circle()
+                        .fill(.primary.opacity(0.2))
+                        .frame(width: 7, height: 7)
+                        .transition(.scale(scale: 0.65).combined(with: .opacity))
+                }
+            }
+            .frame(width: 20, height: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(space.name)
+        .accessibilityLabel(space.name)
+        .contextMenu {
+            if model.selectedTabCount > 0, space.id != model.selectedSpaceID {
+                Button(BrowserLocalization.string("move_selected_to_space")) {
+                    model.moveSelectedTabs(toSpace: space.id)
+                }
+                Divider()
+            }
+            Button(BrowserLocalization.string("new_space")) {
+                let id = model.createSpace()
+                beginEditing(id)
+            }
+            Divider()
+            Button(BrowserLocalization.string("rename")) {
+                beginEditing(space.id)
+            }
+            Menu(BrowserLocalization.string("space_icon")) {
+                ForEach(SpaceSymbolOption.popular) { option in
+                    Button {
+                        model.setSpaceSymbol(option.symbolName, for: space.id)
+                    } label: {
+                        Label(option.title, systemImage: option.symbolName)
+                    }
+                }
+            }
+            if model.spaces.count > 1 {
+                Divider()
+                Button(BrowserLocalization.string("delete_space"), role: .destructive) {
+                    model.deleteSpace(space.id)
+                }
+            }
+        }
+        .popover(isPresented: editingBinding(for: space.id), arrowEdge: .bottom) {
+            SpaceEditor(
+                model: model,
+                space: space,
+                draftName: $draftName,
+                onDone: finishEditing
+            )
+        }
+
+        button
+    }
+
+    private func beginEditing(_ id: TabSpaceID) {
+        draftName = model.spaces.first(where: { $0.id == id })?.name ?? ""
+        editingSpaceID = id
+    }
+
+    private func finishEditing() {
+        guard let editingSpaceID else { return }
+        model.renameSpace(editingSpaceID, to: draftName)
+        self.editingSpaceID = nil
+    }
+
+    private func editingBinding(for id: TabSpaceID) -> Binding<Bool> {
+        Binding(
+            get: { editingSpaceID == id },
+            set: { if !$0, editingSpaceID == id { editingSpaceID = nil } }
+        )
+    }
+}
+
+private struct SpaceEditor: View {
+    let model: BrowserWindowModel
+    let space: TabSpace
+    @Binding var draftName: String
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(BrowserLocalization.string("space_name_placeholder"), text: $draftName)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(onDone)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(32), spacing: 7), count: 6),
+                spacing: 7
+            ) {
+                ForEach(SpaceSymbolOption.popular) { option in
+                    symbolButton(option)
+                }
+            }
+
+            Button(BrowserLocalization.string("done"), action: onDone)
+                .buttonStyle(.glassProminent)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(14)
+        .frame(width: 248)
+    }
+
+    @ViewBuilder
+    private func symbolButton(_ option: SpaceSymbolOption) -> some View {
+        let button = Button {
+            model.setSpaceSymbol(option.symbolName, for: space.id)
+        } label: {
+            Image(systemName: option.symbolName)
+                .frame(width: 28, height: 28)
+        }
+        .help(option.title)
+
+        if space.symbolName == option.symbolName {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
+    }
+}
+
+private struct SpaceSymbolOption: Identifiable {
+    let symbolName: String
+    let title: String
+
+    var id: String { symbolName }
+
+    static let popular: [SpaceSymbolOption] = [
+        .init(symbolName: "circle.grid.2x2.fill", title: "Grid"),
+        .init(symbolName: "briefcase.fill", title: BrowserLocalization.string("work")),
+        .init(symbolName: "house.fill", title: BrowserLocalization.string("personal")),
+        .init(symbolName: "book.closed.fill", title: BrowserLocalization.string("reading")),
+        .init(symbolName: "graduationcap.fill", title: BrowserLocalization.string("study")),
+        .init(symbolName: "star.fill", title: BrowserLocalization.string("favorites")),
+        .init(symbolName: "heart.fill", title: BrowserLocalization.string("personal")),
+        .init(symbolName: "person.2.fill", title: BrowserLocalization.string("team")),
+        .init(symbolName: "cart.fill", title: BrowserLocalization.string("shopping")),
+        .init(symbolName: "airplane", title: BrowserLocalization.string("travel")),
+        .init(symbolName: "gamecontroller.fill", title: BrowserLocalization.string("games")),
+        .init(symbolName: "play.rectangle.fill", title: BrowserLocalization.string("video")),
+        .init(symbolName: "terminal.fill", title: BrowserLocalization.string("development")),
+        .init(symbolName: "paintpalette.fill", title: "Creative"),
+        .init(symbolName: "music.note", title: "Music"),
+        .init(symbolName: "leaf.fill", title: "Life"),
+        .init(symbolName: "globe.europe.africa.fill", title: "World"),
+        .init(symbolName: "sparkles", title: "Ideas")
+    ]
+}
+
+private struct SpaceSwipeMonitor: NSViewRepresentable {
+    let onChanged: @MainActor (CGFloat, CGFloat) -> Void
+    let onEnded: @MainActor (CGFloat, CGFloat) -> Void
+
+    func makeNSView(context: Context) -> SpaceSwipeView {
+        let view = SpaceSwipeView()
+        view.onChanged = onChanged
+        view.onEnded = onEnded
+        return view
+    }
+
+    func updateNSView(_ view: SpaceSwipeView, context: Context) {
+        view.onChanged = onChanged
+        view.onEnded = onEnded
+    }
+}
+
+@MainActor
+private final class SpaceSwipeView: NSView {
+    var onChanged: (@MainActor (CGFloat, CGFloat) -> Void)?
+    var onEnded: (@MainActor (CGFloat, CGFloat) -> Void)?
+    private var monitor: Any?
+    private var accumulatedDelta = CGSize.zero
+    private var isHorizontalScroll = false
+    private var isConsumingMomentum = false
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil {
+            removeMonitor()
+        } else if monitor == nil {
+            monitor = NSEvent.addLocalMonitorForEvents(
+                matching: .scrollWheel
+            ) { [weak self] event in
+                self?.handle(event) ?? event
+            }
+        }
+    }
+
+    private func handle(_ event: NSEvent) -> NSEvent? {
+        guard event.window === window,
+              bounds.contains(convert(event.locationInWindow, from: nil))
+        else { return event }
+
+        guard event.type == .scrollWheel,
+              event.hasPreciseScrollingDeltas
+        else { return event }
+
+        if !event.momentumPhase.isEmpty {
+            guard isConsumingMomentum else { return event }
+            if event.momentumPhase.contains(.ended)
+                || event.momentumPhase.contains(.cancelled) {
+                isConsumingMomentum = false
+            }
+            return nil
+        }
+
+        if event.phase.contains(.began) {
+            accumulatedDelta = .zero
+            isHorizontalScroll = false
+            isConsumingMomentum = false
+        }
+
+        let deviceDirection: CGFloat = event.isDirectionInvertedFromDevice ? -1 : 1
+        accumulatedDelta.width += event.scrollingDeltaX * deviceDirection
+        accumulatedDelta.height += event.scrollingDeltaY * deviceDirection
+
+        if !isHorizontalScroll,
+           abs(accumulatedDelta.width) >= 4,
+           abs(accumulatedDelta.width) > abs(accumulatedDelta.height) * 1.25 {
+            isHorizontalScroll = true
+        }
+
+        if isHorizontalScroll {
+            onChanged?(accumulatedDelta.width, accumulatedDelta.height)
+        }
+
+        var result: NSEvent? = isHorizontalScroll ? nil : event
+        if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            if isHorizontalScroll {
+                if event.phase.contains(.cancelled) {
+                    onEnded?(0, 0)
+                } else {
+                    onEnded?(accumulatedDelta.width, accumulatedDelta.height)
+                }
+                isConsumingMomentum = true
+                result = nil
+            }
+            accumulatedDelta = .zero
+            isHorizontalScroll = false
+        }
+        return result
+    }
+
+    private func removeMonitor() {
+        guard let monitor else { return }
+        NSEvent.removeMonitor(monitor)
+        self.monitor = nil
+        accumulatedDelta = .zero
+        isHorizontalScroll = false
+        isConsumingMomentum = false
+    }
 }
 
 private struct PreviewTipCard: View {
@@ -815,11 +1191,7 @@ private struct PinnedTabCard: View {
             }
             .buttonStyle(.plain)
 
-            if tab.isLoading {
-                ProgressView()
-                    .controlSize(.mini)
-                    .padding(7)
-            } else if isHovering {
+            if isHovering {
                 Button {
                     model.closeTab(tab.id)
                 } label: {
@@ -893,6 +1265,17 @@ private struct PinnedTabCard: View {
                 }
             }
         }
+        if model.spaces.count > 1 {
+            Menu(BrowserLocalization.string("move_to_space")) {
+                ForEach(model.sortedSpaces.filter { $0.id != tab.spaceID }) { space in
+                    Button {
+                        model.moveTab(tab.id, toSpace: space.id)
+                    } label: {
+                        Label(space.name, systemImage: space.symbolName)
+                    }
+                }
+            }
+        }
         Divider()
         if !model.isPrivate, tab.url != nil {
             Button(BrowserLocalization.string("bookmark_tab")) {
@@ -916,7 +1299,7 @@ private struct PinnedTabCard: View {
     }
 
     private var sortedFolders: [TabFolder] {
-        model.folders.sorted { model.folderPath($0.id) < model.folderPath($1.id) }
+        model.currentSpaceFolders.sorted { model.folderPath($0.id) < model.folderPath($1.id) }
     }
 
     private var itemLayoutReader: some View {
@@ -977,6 +1360,24 @@ private struct TabRow: View {
         .frame(minHeight: 36)
         .contentShape(Rectangle())
         .background { selectionBackground }
+        .overlay { agentControlBorder }
+    }
+
+    /// Marks the tab the assistant is working in. It usually runs in the
+    /// background, so the sidebar is the only place the person can see which
+    /// tab that is without opening each one.
+    @ViewBuilder
+    private var agentControlBorder: some View {
+        if model.agentActivity.controlledTabID == tab.id {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.accentAgent, lineWidth: 1.5)
+                .shadow(color: Color.accentAgent.opacity(0.55), radius: 5)
+                .transition(.opacity)
+                .animation(
+                    reduceMotion ? nil : .easeOut(duration: 0.25),
+                    value: model.agentActivity.controlledTabID
+                )
+        }
     }
 
     private var tabTitle: some View {
@@ -994,9 +1395,7 @@ private struct TabRow: View {
 
     @ViewBuilder
     private var trailingControl: some View {
-        if tab.isLoading {
-            ProgressView().controlSize(.mini)
-        } else if showsCloseButton {
+        if showsCloseButton {
             Button {
                 model.closeTab(tab.id)
             } label: {
@@ -1038,6 +1437,17 @@ private struct TabRow: View {
             ForEach(sortedFolders.filter { !$0.isSplit }) { folder in
                 Button(model.folderPath(folder.id)) {
                     model.moveTab(tab.id, to: folder.id)
+                }
+            }
+        }
+        if model.spaces.count > 1 {
+            Menu(BrowserLocalization.string("move_to_space")) {
+                ForEach(model.sortedSpaces.filter { $0.id != tab.spaceID }) { space in
+                    Button {
+                        model.moveTab(tab.id, toSpace: space.id)
+                    } label: {
+                        Label(space.name, systemImage: space.symbolName)
+                    }
                 }
             }
         }
@@ -1090,7 +1500,7 @@ private struct TabRow: View {
     }
 
     private var sortedFolders: [TabFolder] {
-        model.folders.sorted { model.folderPath($0.id) < model.folderPath($1.id) }
+        model.currentSpaceFolders.sorted { model.folderPath($0.id) < model.folderPath($1.id) }
     }
 
     private var itemLayoutReader: some View {
@@ -1316,6 +1726,17 @@ private struct FolderRow: View {
                     ) { destination in
                         Button(model.folderPath(destination.id)) {
                             model.moveFolder(folder.id, inside: destination.id)
+                        }
+                    }
+                }
+                if model.spaces.count > 1 {
+                    Menu(BrowserLocalization.string("move_to_space")) {
+                        ForEach(model.sortedSpaces.filter { $0.id != folder.spaceID }) { space in
+                            Button {
+                                model.moveFolder(folder.id, toSpace: space.id)
+                            } label: {
+                                Label(space.name, systemImage: space.symbolName)
+                            }
                         }
                     }
                 }

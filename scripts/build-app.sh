@@ -4,33 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
 CONFIGURATION="${CONFIGURATION:-debug}"
-RELEASE="${RELEASE:-0}"
 APP_DIR="${PROJECT_DIR}/dist/Point.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 APP_ICON="${PROJECT_DIR}/icon.icon"
 APP_ICON_INFO="${PROJECT_DIR}/.build/BrowserAppIcon-Info.plist"
-CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
-
-if [[ -z "${CODESIGN_IDENTITY}" && "${RELEASE}" == "1" ]]; then
-    CODESIGN_IDENTITY="$(
-        security find-identity -v -p codesigning 2>/dev/null \
-            | awk '/"Developer ID Application:/{ print $2; exit }'
-    )"
-fi
-if [[ -z "${CODESIGN_IDENTITY}" && "${RELEASE}" != "1" ]]; then
-    CODESIGN_IDENTITY="$(
-        security find-identity -v -p codesigning 2>/dev/null \
-            | awk '/"Apple Development:|"Developer ID Application:/{ print $2; exit }'
-    )"
-fi
-if [[ "${RELEASE}" == "1" && -z "${CODESIGN_IDENTITY}" ]]; then
-    print -u2 "RELEASE=1 requires a Developer ID Application identity."
-    exit 1
-fi
-CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
-
 cd "${PROJECT_DIR}"
 swift build -c "${CONFIGURATION}"
 
@@ -68,13 +47,10 @@ xcrun actool \
 
 codesign_arguments=(
     --force
-    --sign "${CODESIGN_IDENTITY}"
+    --sign -
     --entitlements "Resources/Browser.entitlements"
 )
-if [[ "${RELEASE}" == "1" ]]; then
-    codesign_arguments+=(--options runtime --timestamp)
-fi
 codesign "${codesign_arguments[@]}" "${APP_DIR}"
 codesign --verify --deep --strict --verbose=2 "${APP_DIR}"
 
-print "Built ${APP_DIR} (signed with ${CODESIGN_IDENTITY})"
+print "Built ${APP_DIR} (ad-hoc signed)"
