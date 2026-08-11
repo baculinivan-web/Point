@@ -14,18 +14,20 @@ struct NavigationSchemePolicyTests {
         #expect(policy.disposition(for: URL(string: "blob:https://example.com/id")!) == .allowInWebView)
     }
 
-    @Test("Known external schemes require confirmation")
+    @Test("External and authentication callback schemes require confirmation")
     func externalSchemes() {
         #expect(policy.disposition(for: URL(string: "mailto:test@example.com")!) == .confirmExternalApplication)
         #expect(policy.disposition(for: URL(string: "tel:+10000000000")!) == .confirmExternalApplication)
         #expect(policy.disposition(for: URL(string: "facetime:test@example.com")!) == .confirmExternalApplication)
+        #expect(policy.disposition(for: URL(string: "custom-app://oauth/callback?code=abc")!) == .confirmExternalApplication)
+        #expect(policy.disposition(for: URL(string: "com.example.desktop:/callback?code=abc")!) == .confirmExternalApplication)
     }
 
-    @Test("Unknown and privileged schemes are blocked")
+    @Test("Privileged schemes are blocked")
     func blockedSchemes() {
         #expect(policy.disposition(for: URL(string: "javascript:alert(1)")!) == .block)
+        #expect(policy.disposition(for: URL(string: "data:text/html,unsafe")!) == .block)
         #expect(policy.disposition(for: URL(fileURLWithPath: "/tmp/test")) == .block)
-        #expect(policy.disposition(for: URL(string: "custom-app://payload")!) == .block)
     }
 }
 
