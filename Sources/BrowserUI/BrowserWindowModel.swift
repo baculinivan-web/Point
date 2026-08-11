@@ -206,6 +206,12 @@ public enum BrowsingDataCategory: String, CaseIterable, Identifiable, Sendable {
     public var id: Self { self }
 }
 
+public struct BookmarkSaveAnimation: Identifiable {
+    public let id = UUID()
+    public let sourcePoint: CGPoint?
+    public let favicon: NSImage?
+}
+
 @MainActor
 private struct PendingMediaPermissionRequest {
     let prompt: MediaPermissionPrompt
@@ -281,6 +287,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var isClearingBrowsingData = false
     public var clearBrowsingDataStatus: String?
     public private(set) var toastMessage: String?
+    public private(set) var bookmarkSaveAnimation: BookmarkSaveAnimation?
     public private(set) var showsMemoryUsage: Bool
     @ObservationIgnored public let memoryStatus = BrowserMemoryStatus()
     public private(set) var searchEngine: SearchEngine
@@ -389,6 +396,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
         spaces.sorted { $0.position < $1.position }
     }
 
+    public var isBookmarksSpace: Bool { selectedSpaceID == .bookmarks }
+
     public var currentSpaceFolders: [TabFolder] {
         folders.filter { $0.spaceID == selectedSpaceID }
     }
@@ -456,6 +465,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 where space.name == "space_default_name"
                     || (space.id == .default && space.name == "Space 1") {
                     space.name = BrowserLocalization.string("space_default_name", index + 1)
+                }
+                if let bookmarks = space(.bookmarks) {
+                    bookmarks.name = BrowserLocalization.string("bookmarks_space")
+                    bookmarks.symbolName = "bookmark.fill"
                 }
                 selectedSpaceID = spaces.contains { $0.id == snapshot.selectedSpaceID }
                     ? snapshot.selectedSpaceID
@@ -873,7 +886,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func renameSpace(_ id: TabSpaceID, to proposedName: String) {
-        guard let space = space(id) else { return }
+        guard id != .bookmarks, let space = space(id) else { return }
         let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         space.name = name
@@ -881,13 +894,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func setSpaceSymbol(_ symbolName: String, for id: TabSpaceID) {
-        guard let space = space(id), !symbolName.isEmpty else { return }
+        guard id != .bookmarks, let space = space(id), !symbolName.isEmpty else { return }
         space.symbolName = symbolName
         persist()
     }
 
     public func deleteSpace(_ id: TabSpaceID) {
-        guard spaces.count > 1, let removed = space(id) else { return }
+        guard id != .bookmarks, spaces.count > 1, let removed = space(id) else { return }
         let destination = sortedSpaces.first { $0.id != id }!
         let movingFolderIDs = Set(folders.filter { $0.spaceID == id }.map(\.id))
         for folder in folders where movingFolderIDs.contains(folder.id) {
@@ -1104,8 +1117,98 @@ public final class BrowserWindowModel: WebEngineEventSink {
         moveTabs([id], before: targetID)
     }
 
+    /// Saves a copy of an existing tab without moving or closing the source tab.
+    public func saveTabAsBookmark(_ id: TabID, sourcePoint: CGPoint? = nil) {
+        guard let tab = tab(id), let url = tab.url else { return }
+        saveBookmark(
+            url: url,
+            title: tab.displayTitle,
+            favicon: tab.favicon,
+            faviconURL: tab.faviconURL,
+            sourcePoint: sourcePoint
+        )
+    }
+
+    public func saveLinkAsBookmark(
+        _ url: URL,
+        title: String? = nil,
+        sourcePoint: CGPoint? = nil
+    ) {
+        saveBookmark(
+            url: url,
+            title: title,
+            favicon: nil,
+            faviconURL: nil,
+            sourcePoint: sourcePoint
+        )
+    }
+
+    private func saveBookmark(
+        url: URL,
+        title: String?,
+        favicon: NSImage?,
+        faviconURL: URL?,
+        sourcePoint: CGPoint?
+    ) {
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        let bookmarkSpaceID = ensureBookmarksSpace()
+        let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bookmarkTitle = trimmedTitle.flatMap { $0.isEmpty ? nil : $0 }
+            ?? url.host
+            ?? url.absoluteString
+        let saved = BrowserTab(
+            snapshot: PersistedTab(
+                id: TabID(),
+                title: bookmarkTitle,
+                url: url,
+                faviconURL: faviconURL,
+                isPinned: false,
+                spaceID: bookmarkSpaceID,
+                position: nextPosition(in: nil, spaceID: bookmarkSpaceID),
+                navigationHistory: TabNavigationHistory(
+                    url: url,
+                    title: bookmarkTitle
+                )
+            )
+        )
+        // A bookmark has no web process until the person intentionally opens it.
+        saved.lifecycleState = .evicted
+        saved.favicon = favicon
+        tabs.append(saved)
+        loadRestoredFavicon(for: saved)
+        showAutoHideSidebar()
+        bookmarkSaveAnimation = BookmarkSaveAnimation(
+            sourcePoint: sourcePoint,
+            favicon: favicon
+        )
+        showToast(BrowserLocalization.string("bookmark_saved"))
+        persist()
+    }
+
+    public func completeBookmarkSaveAnimation(_ id: UUID) {
+        guard bookmarkSaveAnimation?.id == id else { return }
+        bookmarkSaveAnimation = nil
+    }
+
+    private func ensureBookmarksSpace() -> TabSpaceID {
+        if spaces.contains(where: { $0.id == .bookmarks }) { return .bookmarks }
+        let homePosition = space(.default)?.position ?? 1024
+        spaces.append(
+            TabSpace(
+                snapshot: PersistedTabSpace(
+                    id: .bookmarks,
+                    name: BrowserLocalization.string("bookmarks_space"),
+                    symbolName: "bookmark.fill",
+                    position: homePosition - 1024
+                )
+            )
+        )
+        return .bookmarks
+    }
+
     public func setPinned(_ isPinned: Bool, for id: TabID) {
         guard let tab = tab(id) else { return }
+        guard !isPinned || tab.spaceID != .bookmarks else { return }
         dissolveSplitContaining(id)
         tab.isPinned = isPinned
         if isPinned {
@@ -1285,6 +1388,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
         for tab in tabs where tab.folderID.map(folderIDs.contains) == true {
             tab.spaceID = spaceID
+            if spaceID == .bookmarks { tab.isPinned = false }
         }
         if selectedTabID.flatMap({ tab($0) })?.spaceID != selectedSpaceID {
             selectedTabID = tabs.first(where: { $0.spaceID == selectedSpaceID })?.id
@@ -2009,6 +2113,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 size: NSSize(width: image.width, height: image.height)
             )
         }
+    }
+
+    public func webEngine(
+        _ session: WebEngineSession,
+        requestsSaveBookmarkFor url: URL,
+        title: String?,
+        sourcePoint: CGPoint?
+    ) {
+        saveLinkAsBookmark(url, title: title, sourcePoint: sourcePoint)
     }
 
     public func webEngine(
@@ -2998,9 +3111,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
         for tab in movingTabs {
             tab.spaceID = spaceID
             tab.folderID = nil
-            if tab.isPinned {
+            if tab.isPinned && spaceID != .bookmarks {
                 tab.position = nextPinnedPosition(in: spaceID)
             } else {
+                tab.isPinned = false
                 tab.position = regularPosition
                 regularPosition += 1024
             }
@@ -3206,6 +3320,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
             }
         }
         for tab in tabs {
+            if tab.spaceID == .bookmarks { tab.isPinned = false }
             if tab.isPinned || tab.folderID.map({ folderID in
                 !validIDs.contains(folderID) || self.folder(folderID)?.spaceID != tab.spaceID
             }) == true {

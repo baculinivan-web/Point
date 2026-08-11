@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 struct SidebarView: View {
     let model: BrowserWindowModel
     let isFullScreen: Bool
+    let width: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -220,7 +221,7 @@ struct SidebarView: View {
     }
 
     private var spacePageWidth: CGFloat {
-        model.sidebarMode == .pinned ? 300 : 280
+        width
     }
 
     private var spacePageOpacity: Double {
@@ -422,6 +423,7 @@ struct SidebarView: View {
 private struct SpaceSwitcher: View {
     let model: BrowserWindowModel
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editingSpaceID: TabSpaceID?
     @State private var draftName = ""
 
@@ -441,17 +443,20 @@ private struct SpaceSwitcher: View {
 
     @ViewBuilder
     private func spaceButton(_ space: TabSpace) -> some View {
+        let isReceivingBookmark = space.id == .bookmarks
+            && model.bookmarkSaveAnimation != nil
         let button = Button {
             withAnimation(.snappy(duration: 0.22)) {
                 model.selectSpace(space.id)
             }
         } label: {
             ZStack {
-                if space.id == model.selectedSpaceID {
+                if space.id == model.selectedSpaceID || isReceivingBookmark {
                     Image(systemName: space.symbolName)
                         .font(.system(size: 12, weight: .semibold))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.primary.opacity(0.72))
+                        .scaleEffect(isReceivingBookmark ? 1.22 : 1)
                         .transition(.scale(scale: 0.65).combined(with: .opacity))
                 } else {
                     Circle()
@@ -464,7 +469,23 @@ private struct SpaceSwitcher: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(space.name)
+        .animation(
+            reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0.16),
+            value: model.bookmarkSaveAnimation?.id
+        )
+        .background {
+            if space.id == .bookmarks {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: BookmarkSpaceFramePreferenceKey.self,
+                        value: proxy.frame(in: .global)
+                    )
+                }
+            }
+        }
+        .help(space.id == .bookmarks
+            ? BrowserLocalization.string("bookmarks_space_help")
+            : space.name)
         .accessibilityLabel(space.name)
         .contextMenu {
             if model.selectedTabCount > 0, space.id != model.selectedSpaceID {
@@ -477,20 +498,22 @@ private struct SpaceSwitcher: View {
                 let id = model.createSpace()
                 beginEditing(id)
             }
-            Divider()
-            Button(BrowserLocalization.string("rename")) {
-                beginEditing(space.id)
-            }
-            Menu(BrowserLocalization.string("space_icon")) {
-                ForEach(SpaceSymbolOption.popular) { option in
-                    Button {
-                        model.setSpaceSymbol(option.symbolName, for: space.id)
-                    } label: {
-                        Label(option.title, systemImage: option.symbolName)
+            if space.id != .bookmarks {
+                Divider()
+                Button(BrowserLocalization.string("rename")) {
+                    beginEditing(space.id)
+                }
+                Menu(BrowserLocalization.string("space_icon")) {
+                    ForEach(SpaceSymbolOption.popular) { option in
+                        Button {
+                            model.setSpaceSymbol(option.symbolName, for: space.id)
+                        } label: {
+                            Label(option.title, systemImage: option.symbolName)
+                        }
                     }
                 }
             }
-            if model.spaces.count > 1 {
+            if model.spaces.count > 1, space.id != .bookmarks {
                 Divider()
                 Button(BrowserLocalization.string("delete_space"), role: .destructive) {
                     model.deleteSpace(space.id)
@@ -525,6 +548,15 @@ private struct SpaceSwitcher: View {
             get: { editingSpaceID == id },
             set: { if !$0, editingSpaceID == id { editingSpaceID = nil } }
         )
+    }
+}
+
+struct BookmarkSpaceFramePreferenceKey: PreferenceKey {
+    static let defaultValue = CGRect.zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero { value = next }
     }
 }
 
@@ -1148,6 +1180,15 @@ private struct PinnedTabCard: View {
                         .fill(cardFill)
 
                     TabFavicon(tab: tab, size: 24)
+                        .highPriorityGesture(
+                            SpatialTapGesture(coordinateSpace: .global).onEnded { event in
+                                model.saveTabAsBookmark(
+                                    tab.id,
+                                    sourcePoint: event.location
+                                )
+                            }
+                        )
+                        .help(BrowserLocalization.string("save_tab_to_bookmarks_help"))
                         .offset(y: isHovering && tab.domain != nil ? -7 : 0)
 
                     if tab.lifecycleState == .evicted {
@@ -1327,6 +1368,15 @@ private struct TabRow: View {
     private var rowLabel: some View {
         HStack(spacing: 9) {
             TabFavicon(tab: tab, size: 22)
+                .highPriorityGesture(
+                    SpatialTapGesture(coordinateSpace: .global).onEnded { event in
+                        model.saveTabAsBookmark(
+                            tab.id,
+                            sourcePoint: event.location
+                        )
+                    }
+                )
+                .help(BrowserLocalization.string("save_tab_to_bookmarks_help"))
             tabTitle
             Spacer(minLength: 4)
             if tab.lifecycleState == .evicted {

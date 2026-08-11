@@ -71,7 +71,7 @@ private final class BrowserRuntime {
         browsingHistoryRepository: browsingHistoryRepository
     )
     private var privateDownloadManagers: [WeakDownloadManager] = []
-    private var standardWindowCount = 0
+    private var standardWindowModels: [WeakBrowserWindowModel] = []
     private var hasClaimedOnboarding = false
 
     init() {
@@ -102,11 +102,11 @@ private final class BrowserRuntime {
             )
         }
 
-        let isPrimaryWindow = standardWindowCount == 0
+        standardWindowModels.removeAll { $0.value == nil }
+        let isPrimaryWindow = standardWindowModels.isEmpty
         let windowID = isPrimaryWindow
             ? BrowserPersistenceController.primaryWindowID
             : UUID()
-        standardWindowCount += 1
         let sessionRepository: any SessionRepository
         if let persistenceController {
             sessionRepository = persistenceController.sessionRepository(
@@ -121,7 +121,7 @@ private final class BrowserRuntime {
             )
         }
 
-        return BrowserWindowModel(
+        let model = BrowserWindowModel(
             repository: sessionRepository,
             sitePermissionRepository: FileSitePermissionRepository(),
             browsingHistoryRepository: browsingHistoryRepository,
@@ -129,6 +129,14 @@ private final class BrowserRuntime {
             isPrivate: false,
             websiteDataStore: .default()
         )
+        standardWindowModels.append(WeakBrowserWindowModel(model))
+        return model
+    }
+
+    func releaseWindowModel(_ model: BrowserWindowModel) {
+        standardWindowModels.removeAll {
+            $0.value == nil || $0.value === model
+        }
     }
 
     /// Decides whether this window presents the welcome tour.
@@ -167,6 +175,15 @@ private final class WeakDownloadManager {
     }
 }
 
+@MainActor
+private final class WeakBrowserWindowModel {
+    weak var value: BrowserWindowModel?
+
+    init(_ value: BrowserWindowModel) {
+        self.value = value
+    }
+}
+
 private struct BrowserWindowScene: View {
     @Environment(\.openWindow) private var openWindow
     @State private var model: BrowserWindowModel
@@ -187,6 +204,10 @@ private struct BrowserWindowScene: View {
             model: model,
             isOnboardingPresented: $isOnboardingPresented
         )
+            .handlesExternalEvents(
+                preferring: isPrivate ? [] : ["*"],
+                allowing: isPrivate ? [] : ["*"]
+            )
             .task {
                 model.openWindowRequest = { shouldOpenPrivateWindow in
                     openWindow(
@@ -216,6 +237,10 @@ private struct BrowserWindowScene: View {
             .onOpenURL { url in
                 guard !isPrivate else { return }
                 model.openExternalURL(url)
+            }
+            .onDisappear {
+                guard !isPrivate else { return }
+                runtime.releaseWindowModel(model)
             }
     }
 }

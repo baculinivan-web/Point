@@ -34,6 +34,12 @@
 	<string>Сервер запрашивает имя пользователя и пароль.</string>
 	<key>back</key>
 	<string>Назад</string>
+	<key>bookmark_saved</key>
+	<string>Сохранено в закладки</string>
+	<key>bookmarks_space</key>
+	<string>Закладки</string>
+	<key>bookmarks_space_help</key>
+	<string>Закладки. Нажмите на значок сайта во вкладке или выберите «Сохранить в закладки» в меню ссылки.</string>
 	<key>browser_memory_usage</key>
 	<string>Память, используемая браузером</string>
 	<key>browser_memory_usage_estimated_help</key>
@@ -323,6 +329,8 @@
 	<string>Переименовать</string>
 	<key>reopen_closed_tab</key>
 	<string>Открыть закрытую вкладку</string>
+	<key>resize_sidebar</key>
+	<string>Изменить ширину боковой панели</string>
 	<key>resume_download</key>
 	<string>Продолжить загрузку</string>
 	<key>resume_downloads</key>
@@ -371,6 +379,20 @@
 	<string>Разрешения сайтов…</string>
 	<key>space_default_name</key>
 	<string>Пространство %d</string>
+	<key>open_link</key>
+	<string>Открыть ссылку</string>
+	<key>open_link_in_new_window</key>
+	<string>Открыть ссылку в новом окне</string>
+	<key>download_linked_file</key>
+	<string>Скачать файл по ссылке</string>
+	<key>copy_link</key>
+	<string>Копировать ссылку</string>
+	<key>share_link</key>
+	<string>Поделиться…</string>
+	<key>save_link_to_bookmarks</key>
+	<string>Сохранить в закладки</string>
+	<key>save_tab_to_bookmarks_help</key>
+	<string>Нажмите на значок сайта, чтобы сохранить вкладку в закладки</string>
 	<key>space_icon</key>
 	<string>Значок пространства</string>
 	<key>space_name_placeholder</key>

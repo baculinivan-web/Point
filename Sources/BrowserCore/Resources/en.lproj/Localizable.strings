@@ -34,6 +34,12 @@
 	<string>The server requests a username and password.</string>
 	<key>back</key>
 	<string>Back</string>
+	<key>bookmark_saved</key>
+	<string>Saved to Bookmarks</string>
+	<key>bookmarks_space</key>
+	<string>Bookmarks</string>
+	<key>bookmarks_space_help</key>
+	<string>Bookmarks. Click a tab’s site icon or choose “Save to Bookmarks” from a link’s menu.</string>
 	<key>browser_memory_usage</key>
 	<string>Browser memory usage</string>
 	<key>browser_memory_usage_estimated_help</key>
@@ -323,6 +329,8 @@
 	<string>Rename</string>
 	<key>reopen_closed_tab</key>
 	<string>Reopen Closed Tab</string>
+	<key>resize_sidebar</key>
+	<string>Resize the sidebar</string>
 	<key>resume_download</key>
 	<string>Resume Download</string>
 	<key>resume_downloads</key>
@@ -371,6 +379,20 @@
 	<string>Site Permissions…</string>
 	<key>space_default_name</key>
 	<string>Space %d</string>
+	<key>open_link</key>
+	<string>Open Link</string>
+	<key>open_link_in_new_window</key>
+	<string>Open Link in New Window</string>
+	<key>download_linked_file</key>
+	<string>Download Linked File</string>
+	<key>copy_link</key>
+	<string>Copy Link</string>
+	<key>share_link</key>
+	<string>Share…</string>
+	<key>save_link_to_bookmarks</key>
+	<string>Save to Bookmarks</string>
+	<key>save_tab_to_bookmarks_help</key>
+	<string>Click the site icon to save this tab to Bookmarks</string>
 	<key>space_icon</key>
 	<string>Space Icon</string>
 	<key>space_name_placeholder</key>

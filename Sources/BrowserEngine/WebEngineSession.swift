@@ -14,6 +14,12 @@ public protocol WebEngineEventSink: AnyObject {
     func webEngine(_ session: WebEngineSession, didDiscoverFaviconAt url: URL)
     func webEngine(
         _ session: WebEngineSession,
+        requestsSaveBookmarkFor url: URL,
+        title: String?,
+        sourcePoint: CGPoint?
+    )
+    func webEngine(
+        _ session: WebEngineSession,
         requestsMediaPermissionFor origin: SiteOrigin,
         topLevelOrigin: SiteOrigin,
         kind: MediaPermissionKind,
@@ -48,6 +54,8 @@ public final class WebEngineSession: NSObject {
     private var pendingMainFrameNavigationWasBackForward = false
     private var lastMainFrameRequest: URLRequest?
     private var provisionalNavigationNeedsExplicitReload = false
+    private var contextMenuBookmark: ContextMenuBookmark?
+    private var sharingServicePicker: NSSharingServicePicker?
 
     public var title: String {
         webView.title ?? BrowserLocalization.string("new_tab")
@@ -90,6 +98,7 @@ public final class WebEngineSession: NSObject {
         self.downloadManager = downloadManager
         let configuration = suppliedConfiguration
             ?? Self.makeConfiguration(websiteDataStore: websiteDataStore)
+        BookmarkWebExtension.shared.configure(configuration)
         webView = WKWebView(frame: .zero, configuration: configuration)
 
         super.init()
@@ -99,6 +108,7 @@ public final class WebEngineSession: NSObject {
         webView.allowsMagnification = true
         webView.allowsBackForwardNavigationGestures = true
         webView.isInspectable = _isDebugAssertConfiguration()
+        BookmarkWebExtension.shared.register(self)
         observeState()
     }
 
@@ -144,6 +154,7 @@ public final class WebEngineSession: NSObject {
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         webView.removeFromSuperview()
+        BookmarkWebExtension.shared.unregister(self)
         eventSink = nil
     }
 
@@ -358,6 +369,13 @@ public final class WebEngineSession: NSObject {
             driveMediaSuspensionTransition()
         }
     }
+}
+
+private struct ContextMenuBookmark {
+    let url: URL
+    let title: String?
+    let sourcePoint: CGPoint?
+    let pointInView: CGPoint
 }
 
 extension WebEngineSession: WKNavigationDelegate {
@@ -733,6 +751,155 @@ extension WebEngineSession: WKUIDelegate {
         }
     }
 
+}
+
+extension WebEngineSession {
+    func captureContextMenuBookmark(from body: Any) {
+        guard let payload = body as? [String: Any],
+              let address = payload["url"] as? String,
+              let url = URL(string: address),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else {
+            contextMenuBookmark = nil
+            return
+        }
+
+        let title = payload["title"] as? String
+        let x = payload["x"] as? CGFloat ?? webView.bounds.midX
+        let y = payload["y"] as? CGFloat ?? webView.bounds.midY
+        let pointInView = NSPoint(x: x, y: webView.bounds.height - y)
+        let pointInWindow = webView.convert(pointInView, to: nil)
+        let contentHeight = webView.window?.contentView?.bounds.height ?? webView.bounds.height
+        contextMenuBookmark = ContextMenuBookmark(
+            url: url,
+            title: title,
+            sourcePoint: CGPoint(
+                x: pointInWindow.x,
+                y: contentHeight - pointInWindow.y
+            ),
+            pointInView: pointInView
+        )
+        presentLinkContextMenu()
+    }
+}
+
+extension WebEngineSession {
+    private func presentLinkContextMenu() {
+        guard let bookmark = contextMenuBookmark,
+              let window = webView.window,
+              let event = NSEvent.mouseEvent(
+                with: .rightMouseDown,
+                location: webView.convert(bookmark.pointInView, to: nil),
+                modifierFlags: NSApp.currentEvent?.modifierFlags ?? [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+              )
+        else { return }
+
+        let menu = NSMenu()
+        menu.addItem(contextMenuItem(
+            title: "open_link",
+            action: #selector(openContextMenuLink)
+        ))
+        menu.addItem(contextMenuItem(
+            title: "open_link_in_new_window",
+            action: #selector(openContextMenuLinkInNewWindow)
+        ))
+        menu.addItem(.separator())
+        let bookmarkItem = contextMenuItem(
+            title: "save_link_to_bookmarks",
+            action: #selector(saveContextMenuLinkAsBookmark)
+        )
+        bookmarkItem.image = NSImage(
+            systemSymbolName: "bookmark",
+            accessibilityDescription: nil
+        )
+        menu.addItem(bookmarkItem)
+        menu.addItem(.separator())
+        menu.addItem(contextMenuItem(
+            title: "download_linked_file",
+            action: #selector(downloadContextMenuLink)
+        ))
+        menu.addItem(contextMenuItem(
+            title: "copy_link",
+            action: #selector(copyContextMenuLink)
+        ))
+        menu.addItem(contextMenuItem(
+            title: "share_link",
+            action: #selector(shareContextMenuLink)
+        ))
+        NSMenu.popUpContextMenu(menu, with: event, for: webView)
+    }
+
+    private func contextMenuItem(
+        title localizationKey: String,
+        action: Selector
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: BrowserLocalization.string(localizationKey),
+            action: action,
+            keyEquivalent: ""
+        )
+        item.target = self
+        return item
+    }
+
+    @objc private func openContextMenuLink(_ sender: NSMenuItem) {
+        guard let url = contextMenuBookmark?.url else { return }
+        load(url)
+    }
+
+    @objc private func openContextMenuLinkInNewWindow(_ sender: NSMenuItem) {
+        guard let url = contextMenuBookmark?.url else { return }
+        _ = eventSink?.webEngine(
+            self,
+            createNewTabWith: webView.configuration,
+            request: URLRequest(url: url)
+        )
+    }
+
+    @objc private func saveContextMenuLinkAsBookmark(_ sender: NSMenuItem) {
+        guard let bookmark = contextMenuBookmark else { return }
+        eventSink?.webEngine(
+            self,
+            requestsSaveBookmarkFor: bookmark.url,
+            title: bookmark.title,
+            sourcePoint: bookmark.sourcePoint
+        )
+    }
+
+    @objc private func downloadContextMenuLink(_ sender: NSMenuItem) {
+        guard let url = contextMenuBookmark?.url else { return }
+        webView.startDownload(using: URLRequest(url: url)) { [weak self] download in
+            self?.downloadManager?.begin(download)
+        }
+    }
+
+    @objc private func copyContextMenuLink(_ sender: NSMenuItem) {
+        guard let url = contextMenuBookmark?.url else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+
+    @objc private func shareContextMenuLink(_ sender: NSMenuItem) {
+        guard let bookmark = contextMenuBookmark else { return }
+        let picker = NSSharingServicePicker(items: [bookmark.url])
+        sharingServicePicker = picker
+        picker.show(
+            relativeTo: NSRect(
+                x: bookmark.pointInView.x,
+                y: bookmark.pointInView.y,
+                width: 1,
+                height: 1
+            ),
+            of: webView,
+            preferredEdge: .minY
+        )
+    }
 }
 
 @MainActor

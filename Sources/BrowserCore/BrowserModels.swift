@@ -20,6 +20,11 @@ public struct TabSpaceID: Hashable, Codable, Sendable, Identifiable {
         UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     )
 
+    /// The dedicated, lazily-created space which contains saved bookmarks.
+    public static let bookmarks = TabSpaceID(
+        UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    )
+
     public init(_ rawValue: UUID = UUID()) {
         self.rawValue = rawValue
     }
@@ -315,6 +320,13 @@ public struct PersistedTabSpace: Codable, Equatable, Identifiable, Sendable {
         id: .default,
         name: "Space 1",
         position: 1024
+    )
+
+    public static let bookmarks = PersistedTabSpace(
+        id: .bookmarks,
+        name: "Bookmarks",
+        symbolName: "bookmark.fill",
+        position: 0
     )
 }
 
