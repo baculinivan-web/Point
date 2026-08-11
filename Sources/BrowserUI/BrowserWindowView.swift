@@ -17,9 +17,21 @@ enum SidebarLayout {
     }
 }
 
+public enum BrowserUpdateDownloadState: Equatable, Sendable {
+    case idle
+    case downloading(progress: Double?)
+    case ready
+    case failed
+}
+
 public struct BrowserWindowView: View {
     @Bindable private var model: BrowserWindowModel
     @Binding private var isOnboardingPresented: Bool
+    private let availableUpdate: AvailableRelease?
+    private let updateDownloadState: BrowserUpdateDownloadState
+    private let onInstallUpdate: (AvailableRelease) -> Void
+    private let onCancelUpdateDownload: () -> Void
+    private let onRevealDownloadedUpdate: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SidebarLayout.defaultsKey) private var storedSidebarWidth =
@@ -33,13 +45,24 @@ public struct BrowserWindowView: View {
     @State private var bookmarkFlightProgress: CGFloat = 0
     @State private var animatingBookmarkID: UUID?
     @State private var bookmarkAnimationTask: Task<Void, Never>?
+    @State private var isUpdateDetailsPresented = false
 
     public init(
         model: BrowserWindowModel,
-        isOnboardingPresented: Binding<Bool> = .constant(false)
+        isOnboardingPresented: Binding<Bool> = .constant(false),
+        availableUpdate: AvailableRelease? = nil,
+        updateDownloadState: BrowserUpdateDownloadState = .idle,
+        onInstallUpdate: @escaping (AvailableRelease) -> Void = { _ in },
+        onCancelUpdateDownload: @escaping () -> Void = {},
+        onRevealDownloadedUpdate: @escaping () -> Void = {}
     ) {
         self.model = model
         _isOnboardingPresented = isOnboardingPresented
+        self.availableUpdate = availableUpdate
+        self.updateDownloadState = updateDownloadState
+        self.onInstallUpdate = onInstallUpdate
+        self.onCancelUpdateDownload = onCancelUpdateDownload
+        self.onRevealDownloadedUpdate = onRevealDownloadedUpdate
     }
 
     public var body: some View {
@@ -73,8 +96,13 @@ public struct BrowserWindowView: View {
             SidebarView(
                 model: model,
                 isFullScreen: isFullScreen,
-                width: sidebarWidth
-            )
+                width: sidebarWidth,
+                availableUpdate: availableUpdate,
+                updateDownloadState: updateDownloadState,
+                onCancelUpdateDownload: onCancelUpdateDownload
+            ) {
+                isUpdateDetailsPresented = true
+            }
                 .frame(width: sidebarWidth)
                 .overlay(alignment: .trailing) {
                     SidebarResizeHandle(
@@ -247,7 +275,28 @@ public struct BrowserWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .zIndex(60)
+                    .zIndex(60)
+            }
+
+            if let availableUpdate, isUpdateDetailsPresented {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { isUpdateDetailsPresented = false }
+                    .zIndex(70)
+
+                ReleaseUpdateOverlay(
+                    release: availableUpdate,
+                    downloadState: updateDownloadState,
+                    onUpdate: {
+                        onInstallUpdate(availableUpdate)
+                        isUpdateDetailsPresented = false
+                    },
+                    onCancelDownload: onCancelUpdateDownload,
+                    onRevealDownloadedUpdate: onRevealDownloadedUpdate,
+                    onClose: { isUpdateDetailsPresented = false }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(71)
             }
 
         }
@@ -482,6 +531,157 @@ private struct BookmarkFlightView: View {
         return CGPoint(
             x: x,
             y: linearY - sin(.pi * progress) * arcHeight
+        )
+    }
+}
+
+private struct ReleaseUpdateOverlay: View {
+    let release: AvailableRelease
+    let downloadState: BrowserUpdateDownloadState
+    let onUpdate: () -> Void
+    let onCancelDownload: () -> Void
+    let onRevealDownloadedUpdate: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(BrowserLocalization.string(
+                        "update_details_title",
+                        release.version.description
+                    ))
+                    .font(.headline)
+                    Text(BrowserLocalization.string("release_notes"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(BrowserLocalization.string("close"))
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 64)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    downloadStatusCard
+
+                    if release.releaseNotes.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty {
+                        ContentUnavailableView(
+                            BrowserLocalization.string("release_notes"),
+                            systemImage: "note.text",
+                            description: Text(BrowserLocalization.string(
+                                "release_notes_unavailable"
+                            ))
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(32)
+                    } else {
+                        ChatMarkdownView(text: release.releaseNotes)
+                    }
+                }
+                .padding(20)
+            }
+            .frame(maxHeight: .infinity)
+
+            Divider()
+
+            HStack {
+                Button(BrowserLocalization.string("later"), action: onClose)
+                Spacer()
+                switch downloadState {
+                case .idle, .failed:
+                    Button(BrowserLocalization.string("update"), action: onUpdate)
+                        .buttonStyle(.borderedProminent)
+                case .downloading:
+                    Button(
+                        BrowserLocalization.string("cancel"),
+                        role: .destructive,
+                        action: onCancelDownload
+                    )
+                case .ready:
+                    Button(
+                        BrowserLocalization.string("update_show_in_finder"),
+                        action: onRevealDownloadedUpdate
+                    )
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 62)
+        }
+        .frame(width: 500, height: 470)
+        .browserGlassSurface(cornerRadius: 20)
+        .shadow(color: .black.opacity(0.2), radius: 30, y: 16)
+        .onExitCommand(perform: onClose)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(BrowserLocalization.string(
+            "update_details_title",
+            release.version.description
+        ))
+    }
+
+    @ViewBuilder
+    private var downloadStatusCard: some View {
+        switch downloadState {
+        case .idle:
+            EmptyView()
+        case let .downloading(progress):
+            VStack(alignment: .leading, spacing: 8) {
+                Text(downloadProgressText(progress))
+                    .font(.subheadline.weight(.semibold))
+                if let progress {
+                    ProgressView(value: progress)
+                } else {
+                    ProgressView()
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case .ready:
+            Label {
+                Text(BrowserLocalization.string("update_ready_instructions"))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+            .font(.subheadline)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        case .failed:
+            Label(
+                BrowserLocalization.string("update_download_failed"),
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.red)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    private func downloadProgressText(_ progress: Double?) -> String {
+        guard let progress else {
+            return BrowserLocalization.string("update_downloading_title")
+        }
+        return BrowserLocalization.string(
+            "update_downloading_percent",
+            Int((progress * 100).rounded())
         )
     }
 }

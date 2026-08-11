@@ -18,7 +18,7 @@ The first release prioritizes a reliable browser vertical slice, a sidebar that 
 - Private windows with isolated non-persistent WebKit stores.
 - SwiftData migration and privacy-safe persistence.
 - Liquid Glass with accessibility and Reduce Transparency/Reduce Motion fallbacks.
-- Tests, diagnostics, signing, notarization, and a reproducible release build.
+- Tests, diagnostics, ad-hoc signing, and a reproducible trusted-beta DMG build.
 
 ### P1 — after beta stability
 
@@ -80,7 +80,7 @@ Exit when private data cannot appear after restart, the last private window rele
 
 ### Phase 8 — beta stabilization
 
-Dogfood on M1 8 GB hardware, run the compatibility matrix, triage crashes and hangs, repeat Instruments regressions, test clean install and update, package TestFlight or Developer ID builds, and document release notes and known limitations.
+Dogfood on M1 8 GB hardware, run the compatibility matrix, triage crashes and hangs, repeat Instruments regressions, test clean install and update, package the trusted-beta DMG, and document release notes and known limitations.
 
 Exit when no known P0 data-loss, security, or crash bugs remain; memory is not monotonic in an eight-hour session benchmark; and Point works for core daily scenarios as the default browser.
 

@@ -4,6 +4,7 @@ import BrowserCore
 import BrowserEngine
 import BrowserPersistence
 import BrowserUI
+import Observation
 import SwiftUI
 import WebKit
 
@@ -64,6 +65,7 @@ struct BrowserApp: App {
 @MainActor
 private final class BrowserRuntime {
     let downloadManager: DownloadManager
+    let manualUpdateCoordinator: ManualUpdateCoordinator
 
     private let persistenceController: BrowserPersistenceController?
     private let browsingHistoryRepository: any BrowsingHistoryRepository
@@ -78,6 +80,7 @@ private final class BrowserRuntime {
         downloadManager = DownloadManager(
             historyRepository: FileDownloadHistoryRepository()
         )
+        manualUpdateCoordinator = ManualUpdateCoordinator()
         let controller = try? BrowserPersistenceController()
         persistenceController = controller
         browsingHistoryRepository = controller?.browsingHistoryRepository()
@@ -158,6 +161,14 @@ private final class BrowserRuntime {
         await maintenance.start()
     }
 
+    func startManualUpdateChecks() async {
+        await manualUpdateCoordinator.start()
+    }
+
+    func checkForUpdatesFromSettings() async -> BrowserManualUpdate.CheckStatus {
+        await manualUpdateCoordinator.checkFromSettings()
+    }
+
     var activeDownloadCount: Int {
         privateDownloadManagers.removeAll { $0.value == nil }
         return downloadManager.activeDownloadCount
@@ -202,7 +213,20 @@ private struct BrowserWindowScene: View {
     var body: some View {
         BrowserWindowView(
             model: model,
-            isOnboardingPresented: $isOnboardingPresented
+            isOnboardingPresented: $isOnboardingPresented,
+            availableUpdate: isPrivate
+                ? nil
+                : runtime.manualUpdateCoordinator.availableRelease,
+            updateDownloadState: runtime.manualUpdateCoordinator.downloadPresentationState,
+            onInstallUpdate: { release in
+                runtime.manualUpdateCoordinator.beginDownload(release)
+            },
+            onCancelUpdateDownload: {
+                runtime.manualUpdateCoordinator.cancelDownload()
+            },
+            onRevealDownloadedUpdate: {
+                runtime.manualUpdateCoordinator.revealDownloadedUpdate()
+            }
         )
             .handlesExternalEvents(
                 preferring: isPrivate ? [] : ["*"],
@@ -221,6 +245,7 @@ private struct BrowserWindowScene: View {
                 }
                 if !isPrivate {
                     await runtime.performMaintenanceIfNeeded()
+                    await runtime.startManualUpdateChecks()
                 }
                 await model.restoreSession()
                 if !isPrivate,
@@ -242,7 +267,341 @@ private struct BrowserWindowScene: View {
                 guard !isPrivate else { return }
                 runtime.releaseWindowModel(model)
             }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: BrowserManualUpdate.checkRequested
+                )
+            ) { _ in
+                guard !isPrivate else { return }
+                Task {
+                    let status = await runtime.checkForUpdatesFromSettings()
+                    NotificationCenter.default.post(
+                        name: BrowserManualUpdate.checkFinished,
+                        object: nil,
+                        userInfo: [
+                            BrowserManualUpdate.statusUserInfoKey: status.rawValue
+                        ]
+                    )
+                }
+            }
+            .manualUpdateAlerts(
+                coordinator: runtime.manualUpdateCoordinator,
+                isEnabled: !isPrivate
+            )
     }
+}
+
+@MainActor
+@Observable
+private final class ManualUpdateCoordinator {
+    private static let lastCheckKey = "ManualUpdateLastCheck"
+    private static let lastPromptedVersionKey = "ManualUpdateLastPromptedVersion"
+    private static let lastInstalledVersionKey = "ManualUpdateLastInstalledVersion"
+    private static let lastNotesVersionKey = "ManualUpdateLastNotesVersion"
+    private static let checkInterval: TimeInterval = 24 * 60 * 60
+
+    private let configuration: ReleaseUpdateConfiguration
+    private let service: ReleaseUpdateService
+    private let defaults: UserDefaults
+    private var isChecking = false
+    private var scheduledCheckTask: Task<Void, Never>?
+    private var downloadTask: Task<Void, Never>?
+
+    private(set) var availableRelease: AvailableRelease?
+    private(set) var isUpdatePromptPresented = false
+    private(set) var isDownloading = false
+    private(set) var downloadProgress: Double?
+    private(set) var downloadedUpdateURL: URL?
+    private(set) var downloadErrorMessage: String?
+
+    var downloadPresentationState: BrowserUpdateDownloadState {
+        if isDownloading {
+            return .downloading(progress: downloadProgress)
+        }
+        if downloadedUpdateURL != nil {
+            return .ready
+        }
+        if downloadErrorMessage != nil {
+            return .failed
+        }
+        return .idle
+    }
+
+    init(
+        configuration: ReleaseUpdateConfiguration = .appBundle,
+        defaults: UserDefaults = .standard
+    ) {
+        self.configuration = configuration
+        self.service = ReleaseUpdateService(configuration: configuration)
+        self.defaults = defaults
+    }
+
+    func start() async {
+        openNotesAfterVersionChangeIfNeeded()
+        _ = await checkForUpdateIfNeeded()
+        guard scheduledCheckTask == nil else { return }
+        scheduledCheckTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.checkInterval))
+                guard !Task.isCancelled, let self else { return }
+                _ = await self.checkForUpdateIfNeeded()
+            }
+        }
+    }
+
+    func checkFromSettings() async -> BrowserManualUpdate.CheckStatus {
+        await checkForUpdateIfNeeded(force: true)
+    }
+
+    func openReleaseNotes(for release: AvailableRelease) {
+        guard let url = configuration.releaseNotesURL(for: release.version) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func dismissUpdatePrompt() {
+        isUpdatePromptPresented = false
+    }
+
+    func beginDownload(_ release: AvailableRelease) {
+        guard downloadTask == nil else { return }
+        downloadedUpdateURL = nil
+        downloadErrorMessage = nil
+        downloadProgress = 0
+        downloadTask = Task { @MainActor [weak self] in
+            await self?.download(release)
+        }
+    }
+
+    func cancelDownload() {
+        downloadTask?.cancel()
+    }
+
+    func revealDownloadedUpdate() {
+        guard let downloadedUpdateURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([downloadedUpdateURL])
+    }
+
+    private func download(_ release: AvailableRelease) async {
+        guard !isDownloading else { return }
+        isDownloading = true
+        defer {
+            isDownloading = false
+            downloadTask = nil
+        }
+
+        do {
+            let progressDelegate = ManualUpdateDownloadProgressDelegate {
+                [weak self] progress in
+                guard self?.isDownloading == true else { return }
+                self?.downloadProgress = progress
+            }
+            let (temporaryURL, response) = try await URLSession.shared.download(
+                from: release.asset.downloadURL,
+                delegate: progressDelegate
+            )
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200 ... 299).contains(httpResponse.statusCode)
+            else {
+                throw URLError(.badServerResponse)
+            }
+            let downloadedURL = try moveDownloadToDownloadsFolder(
+                temporaryURL,
+                filename: release.asset.name
+            )
+            downloadProgress = 1
+            downloadedUpdateURL = downloadedURL
+        } catch is CancellationError {
+            // A cancelled download is intentional and should not create a
+            // persistent or repeated error prompt.
+            downloadProgress = nil
+        } catch let error as URLError where error.code == .cancelled {
+            downloadProgress = nil
+        } catch {
+            downloadProgress = nil
+            downloadErrorMessage = BrowserLocalization.string("update_download_failed")
+        }
+    }
+
+    private func checkForUpdateIfNeeded(
+        now: Date = Date(),
+        force: Bool = false
+    ) async -> BrowserManualUpdate.CheckStatus {
+        guard configuration.isConfigured else {
+            return .configurationMissing
+        }
+        guard !isChecking else { return .checkInProgress }
+        let lastCheck = defaults.object(forKey: Self.lastCheckKey) as? Date
+        guard force || lastCheck.map({
+            now.timeIntervalSince($0) >= Self.checkInterval
+        }) ?? true else {
+            return availableRelease == nil ? .checkedRecently : .updateAvailable
+        }
+
+        // Record every attempt before starting network work. This keeps a
+        // transient offline or malformed-response state from being retried on
+        // every new window during the same 24-hour period.
+        defaults.set(now, forKey: Self.lastCheckKey)
+        isChecking = true
+        defer { isChecking = false }
+
+        guard let installedVersion = installedVersion else { return .unavailable }
+        do {
+            guard let release = try await service.latestUpdate(
+                installedVersion: installedVersion
+            ) else { return .upToDate }
+            let version = release.version.description
+            // Keep the sidebar entry available on every launch, even after a
+            // person has already dismissed the one-time native prompt.
+            availableRelease = release
+            guard defaults.string(forKey: Self.lastPromptedVersionKey) != version else {
+                return .updateAvailable
+            }
+            defaults.set(version, forKey: Self.lastPromptedVersionKey)
+            isUpdatePromptPresented = true
+            return .updateAvailable
+        } catch {
+            // Network, JSON, and missing-asset failures intentionally stay
+            // quiet; the next eligible daily check can recover automatically.
+            return .unavailable
+        }
+    }
+
+    private var installedVersion: ReleaseVersion? {
+        guard let value = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String else {
+            return nil
+        }
+        return ReleaseVersion(value)
+    }
+
+    private func openNotesAfterVersionChangeIfNeeded() {
+        guard let installedVersion else { return }
+        let version = installedVersion.description
+        defer { defaults.set(version, forKey: Self.lastInstalledVersionKey) }
+        guard let previousVersion = defaults.string(
+            forKey: Self.lastInstalledVersionKey
+        ), previousVersion != version,
+           defaults.string(forKey: Self.lastNotesVersionKey) != version,
+           let notesURL = configuration.releaseNotesURL(for: installedVersion)
+        else {
+            return
+        }
+        defaults.set(version, forKey: Self.lastNotesVersionKey)
+        NSWorkspace.shared.open(notesURL)
+    }
+
+    private func moveDownloadToDownloadsFolder(
+        _ temporaryURL: URL,
+        filename: String
+    ) throws -> URL {
+        let downloadsDirectory = FileManager.default.urls(
+            for: .downloadsDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+        let destination = uniqueDownloadURL(
+            in: downloadsDirectory,
+            preferredFilename: filename
+        )
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        return destination
+    }
+
+    private func uniqueDownloadURL(
+        in directory: URL,
+        preferredFilename: String
+    ) -> URL {
+        let original = directory.appending(path: preferredFilename)
+        guard FileManager.default.fileExists(atPath: original.path) else {
+            return original
+        }
+        let base = original.deletingPathExtension().lastPathComponent
+        let ext = original.pathExtension
+        var suffix = 2
+        while true {
+            let candidate = directory.appending(
+                path: "\(base) \(suffix)"
+            ).appendingPathExtension(ext)
+            guard !FileManager.default.fileExists(atPath: candidate.path) else {
+                suffix += 1
+                continue
+            }
+            return candidate
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func manualUpdateAlerts(
+        coordinator: ManualUpdateCoordinator,
+        isEnabled: Bool
+    ) -> some View {
+        if isEnabled {
+            modifier(ManualUpdateAlertModifier(coordinator: coordinator))
+        } else {
+            self
+        }
+    }
+}
+
+private struct ManualUpdateAlertModifier: ViewModifier {
+    let coordinator: ManualUpdateCoordinator
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                BrowserLocalization.string("update_available_title"),
+                isPresented: Binding(
+                    get: { coordinator.isUpdatePromptPresented },
+                    set: { if !$0 { coordinator.dismissUpdatePrompt() } }
+                ),
+                presenting: coordinator.availableRelease
+            ) { release in
+                Button(BrowserLocalization.string("update")) {
+                    coordinator.beginDownload(release)
+                }
+                Button(BrowserLocalization.string("whats_new")) {
+                    coordinator.openReleaseNotes(for: release)
+                }
+                Button(BrowserLocalization.string("later"), role: .cancel) {}
+            } message: { release in
+                Text(BrowserLocalization.string(
+                    "update_available_message",
+                    release.version.description
+                ))
+            }
+    }
+}
+
+private final class ManualUpdateDownloadProgressDelegate: NSObject,
+    URLSessionDownloadDelegate, @unchecked Sendable {
+    private let progressHandler: @MainActor @Sendable (Double?) -> Void
+
+    init(progressHandler: @escaping @MainActor @Sendable (Double?) -> Void) {
+        self.progressHandler = progressHandler
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let progress = totalBytesExpectedToWrite > 0
+            ? min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+            : nil
+        Task { @MainActor [progressHandler] in
+            progressHandler(progress)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {}
 }
 
 @MainActor

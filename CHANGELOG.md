@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.2.9 — Bookmarks and Sidebar Refinements
+
+- Added bookmark support with a dedicated sidebar section and page controls.
+- Made the sidebar width adjustable and preserved the chosen width between launches.
+- Returned OAuth and other external authentication callbacks to their registered apps.
+- Updated the bundle version to `0.2.9` (`37`).
+
+## 0.2.8 — Background Update Downloads
+
+- Moved update-download progress and errors into the persistent blue sidebar entry.
+- Removed blocking download alerts from every open browser window.
+- Kept Finder reveal and manual installation instructions available after download without interrupting browsing.
+- Updated the bundle version to `0.2.8` (`36`).
+
+## 0.2.7 — Update Details Test Release
+
+- Published the update-details experience for beta verification from Point 0.2.6.
+- Shows a persistent blue update entry at the bottom of the sidebar and rendered release notes in its modal.
+- Updated the bundle version to `0.2.7` (`35`).
+
+## 0.2.6 — Update Details
+
+- Added a persistent blue update entry at the bottom of the sidebar.
+- Added a release-details modal with rendered GitHub Release notes and an update action.
+- Updated the bundle version to `0.2.6` (`34`).
+
+## 0.2.5 — Immediate Manual Check
+
+- Made the explicit Settings update check query GitHub immediately instead of waiting for the daily background-check interval.
+- Updated the bundle version to `0.2.5` (`33`).
+
+## 0.2.4 — Update Check Verification
+
+- Published a follow-up beta release to verify manual update detection from Point 0.2.3.
+- Updated the bundle version to `0.2.4` (`32`).
+
+## 0.2.3 — Update Check Feedback
+
+- Made the Settings update check show checking, available, up-to-date, recent-check, and failure states.
+- Configured the Point GitHub Releases source and version-specific release-notes fallback.
+- Updated the bundle version to `0.2.3` (`31`).
+
+## 0.2.2 — Manual Updates
+
+- Added a lightweight GitHub Releases manual-update flow for trusted beta builds: daily checks, native update choices, DMG download and Finder reveal, and one-time versioned release notes after replacement.
+- Added a manual update check in Settings.
+- Updated the bundle version to `0.2.2` (`30`).
+
 ## 0.2.1 — Spaces and Browser Control
 
 - Added Spaces for organizing tabs into named workspaces, with a split-view layout that can show two spaces side by side.
