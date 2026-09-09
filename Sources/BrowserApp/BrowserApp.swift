@@ -55,10 +55,6 @@ struct BrowserApp: App {
         }
         .defaultSize(width: 440, height: 640)
         .windowResizability(.contentMinSize)
-
-        Settings {
-            BrowserSettingsView()
-        }
     }
 }
 

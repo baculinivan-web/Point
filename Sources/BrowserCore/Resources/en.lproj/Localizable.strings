@@ -39,7 +39,7 @@
 	<key>bookmarks_space</key>
 	<string>Bookmarks</string>
 	<key>bookmarks_space_help</key>
-	<string>Bookmarks. Click a tab’s site icon or choose “Save to Bookmarks” from a link’s menu.</string>
+	<string>Bookmarks. Choose “Save to Bookmarks” from a tab or link menu.</string>
 	<key>browser_memory_usage</key>
 	<string>Browser memory usage</string>
 	<key>browser_memory_usage_estimated_help</key>
@@ -379,20 +379,12 @@
 	<string>Site Permissions…</string>
 	<key>space_default_name</key>
 	<string>Space %d</string>
-	<key>open_link</key>
-	<string>Open Link</string>
-	<key>open_link_in_new_window</key>
-	<string>Open Link in New Window</string>
-	<key>download_linked_file</key>
-	<string>Download Linked File</string>
-	<key>copy_link</key>
-	<string>Copy Link</string>
-	<key>share_link</key>
-	<string>Share…</string>
-	<key>save_link_to_bookmarks</key>
-	<string>Save to Bookmarks</string>
 	<key>save_tab_to_bookmarks_help</key>
-	<string>Click the site icon to save this tab to Bookmarks</string>
+	<string>Save this tab to Bookmarks</string>
+	<key>save_to_bookmarks</key>
+	<string>Save to Bookmarks</string>
+	<key>sleep_tab</key>
+	<string>Sleep Tab</string>
 	<key>space_icon</key>
 	<string>Space Icon</string>
 	<key>space_name_placeholder</key>
@@ -491,5 +483,7 @@
 	<string>No release notes were provided for this version.</string>
 	<key>whats_new</key>
 	<string>What’s New</string>
+	<key>wake_tab</key>
+	<string>Wake Tab</string>
 </dict>
 </plist>

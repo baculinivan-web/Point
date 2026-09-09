@@ -15,6 +15,7 @@ enum AIChatLayout {
 /// and the transcript scrolls beneath a floating glass composer.
 struct AIChatPanelView: View {
     let model: BrowserWindowModel
+    let isFullScreen: Bool
 
     @Bindable private var settings = AIChatSettings.shared
     @State private var widthAtDragStart: Double?
@@ -29,11 +30,19 @@ struct AIChatPanelView: View {
                     onDetach: { model.detachAIChat() },
                     onClose: { model.dismissAIChat() }
                 )
-                AIChatConversationView(session: model.aiChat)
+                AIChatConversationView(
+                    session: model.aiChat,
+                    onOpenSettings: { model.presentSettings(.assistant) }
+                )
             }
         }
         .frame(width: settings.panelWidth)
         .browserTintedGlass(tint: Color.accentColor.opacity(0.05))
+        .background {
+            if isFullScreen {
+                FullScreenPanelBackdropView()
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(BrowserLocalization.string("ai_chat_title"))
     }
@@ -215,6 +224,7 @@ private struct AIChatHeaderView: View {
 /// Transcript plus composer; shared by the docked panel and detached window.
 struct AIChatConversationView: View {
     @Bindable var session: AIChatSession
+    var onOpenSettings: (() -> Void)? = nil
     @Bindable private var settings = AIChatSettings.shared
 
     @State private var draft = ""
@@ -226,7 +236,7 @@ struct AIChatConversationView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if !settings.isConfigured {
-                AIChatSetupView()
+                AIChatSetupView(onOpenSettings: onOpenSettings)
             } else if session.isEmpty {
                 emptyState
             } else {
@@ -921,6 +931,7 @@ private struct AIChatTypingIndicator: View {
 /// Shown inside the panel until a provider is configured, so setup can be
 /// finished without leaving the chat.
 struct AIChatSetupView: View {
+    var onOpenSettings: (() -> Void)?
     @Bindable private var settings = AIChatSettings.shared
 
     var body: some View {
@@ -937,10 +948,12 @@ struct AIChatSetupView: View {
 
                 AIProviderSetupControls()
 
-                SettingsLink {
-                    Text(BrowserLocalization.string("ai_setup_open_settings"))
+                if let onOpenSettings {
+                    Button(BrowserLocalization.string("ai_setup_open_settings")) {
+                        onOpenSettings()
+                    }
+                    .controlSize(.small)
                 }
-                .controlSize(.small)
             }
             .padding(16)
             .padding(.bottom, 60)

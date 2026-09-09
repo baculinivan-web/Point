@@ -241,6 +241,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
+    /// The tab whose existing WebKit surface is currently hosted by the
+    /// floating Picture-in-Picture window.
+    public private(set) var pictureInPictureTabID: TabID?
     public private(set) var spaces: [TabSpace] = [
         TabSpace(snapshot: .default)
     ]
@@ -283,6 +286,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public private(set) var isLoadingBrowsingHistory = false
     public private(set) var browsingHistoryError: String?
     public var isClearBrowsingDataPresented = false
+    public var presentedSettingsSection: BrowserSettingsSection?
     public var selectedBrowsingDataCategories = Set(BrowsingDataCategory.allCases)
     public private(set) var isClearingBrowsingData = false
     public var clearBrowsingDataStatus: String?
@@ -331,6 +335,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     @ObservationIgnored private var toastDismissTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleTimerTask: Task<Void, Never>?
+    @ObservationIgnored private let pictureInPictureController = PictureInPictureController()
     @ObservationIgnored private var memoryUsageTask: Task<Void, Never>?
     @ObservationIgnored private var currentBrowserMemoryBytes: UInt64 = 0
     @ObservationIgnored private var pressureRecoveryTask: Task<Void, Never>?
@@ -346,6 +351,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     @ObservationIgnored private var sitePermissionManagementTask: Task<Void, Never>?
     @ObservationIgnored private var browsingHistoryManagementTask: Task<Void, Never>?
     @ObservationIgnored private var clearBrowsingDataTask: Task<Void, Never>?
+    /// Most-recently-used tab order. This is intentionally independent from
+    /// sidebar positions so closing a tab returns to browsing context.
+    @ObservationIgnored private var tabActivationHistory: [TabID] = []
 
     public init(
         repository: any SessionRepository,
@@ -679,6 +687,18 @@ public final class BrowserWindowModel: WebEngineEventSink {
         clearBrowsingDataTask = nil
     }
 
+    public func presentSettings(_ section: BrowserSettingsSection = .general) {
+        dismissOmnibox()
+        dismissSitePermissions()
+        dismissBrowsingHistory()
+        isClearBrowsingDataPresented = false
+        presentedSettingsSection = section
+    }
+
+    public func dismissSettings() {
+        presentedSettingsSection = nil
+    }
+
     public func clearSelectedBrowsingData() {
         guard !selectedBrowsingDataCategories.isEmpty,
               !isClearingBrowsingData
@@ -981,6 +1001,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         cancelMediaPermissionRequests(for: id)
         dispose(tab: tabs[index])
         tabs.remove(at: index)
+        tabActivationHistory.removeAll { $0 == id }
         selectedTabIDs.remove(id)
         if selectionAnchorID == id {
             selectionAnchorID = nil
@@ -997,9 +1018,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
 
         if wasSelected {
-            let nextIndex = min(index, max(tabs.count - 1, 0))
-            let next = tabs[nextIndex...].first { $0.spaceID == selectedSpaceID }
-                ?? tabs[..<nextIndex].last { $0.spaceID == selectedSpaceID }
+            let next = mostRecentlyActiveTab(in: selectedSpaceID)
                 ?? remainingSpaceTabs.first
             if let next { selectTab(next.id) }
         }
@@ -1094,6 +1113,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
         let now = Date()
         if let activeTab, activeTab.id != id, activeTab.lifecycleState != .crashed {
+            presentPictureInPictureIfNeeded(for: activeTab)
             activeTab.lifecycleState = .liveBackground
             activeTab.evictionGraceUntil = max(
                 activeTab.evictionGraceUntil,
@@ -1401,16 +1421,54 @@ public final class BrowserWindowModel: WebEngineEventSink {
         persist()
     }
 
-    public func moveFolder(_ id: TabFolderID, inside parentID: TabFolderID?) {
-        guard let moving = folder(id), id != parentID else { return }
-        guard parentID.flatMap(folder)?.isSplit != true else { return }
+    @discardableResult
+    public func moveFolder(
+        _ id: TabFolderID,
+        inside parentID: TabFolderID?,
+        persistChange: Bool = true
+    ) -> Bool {
+        guard let moving = folder(id), id != parentID else { return false }
+        guard parentID.flatMap(folder)?.isSplit != true else { return false }
         guard parentID.flatMap(folder)?.spaceID == nil
                 || parentID.flatMap(folder)?.spaceID == moving.spaceID
-        else { return }
-        if let parentID, isFolder(parentID, descendantOf: id) { return }
+        else { return false }
+        if let parentID, isFolder(parentID, descendantOf: id) { return false }
         moving.parentID = parentID
         moving.position = nextPosition(in: parentID, excludingFolderID: id)
-        persist()
+        if persistChange { persist() }
+        return true
+    }
+
+    /// Places a folder beside a regular tab so folders and tabs share one
+    /// ordered sidebar tree.
+    @discardableResult
+    func moveFolder(
+        _ id: TabFolderID,
+        relativeTo targetTabID: TabID,
+        insertAfter: Bool,
+        persistChange: Bool = true
+    ) -> Bool {
+        guard let moving = folder(id),
+              let target = tab(targetTabID),
+              !target.isPinned,
+              moving.spaceID == target.spaceID,
+              target.folderID.map({ isFolder($0, descendantOf: id) }) != true
+        else { return false }
+        let parentID = target.folderID
+        moving.parentID = parentID
+        var items = sidebarItems(in: parentID).filter { item in
+            if case let .folder(folder) = item { return folder.id != id }
+            return true
+        }
+        var insertionIndex = items.firstIndex { item in
+            if case let .tab(tab) = item { return tab.id == targetTabID }
+            return false
+        } ?? items.endIndex
+        if insertAfter, insertionIndex < items.endIndex { insertionIndex += 1 }
+        items.insert(.folder(moving), at: insertionIndex)
+        assignPositions(to: items)
+        if persistChange { persist() }
+        return true
     }
 
     public func deleteFolder(_ id: TabFolderID) {
@@ -1706,6 +1764,21 @@ public final class BrowserWindowModel: WebEngineEventSink {
         guard !isPreviewTipDismissed else { return }
         isPreviewTipDismissed = true
         UserDefaults.standard.set(true, forKey: Self.previewTipDismissedKey)
+    }
+
+    /// Pauses a resident background tab until it is selected or explicitly woken.
+    public func sleepTab(_ id: TabID) {
+        guard id != selectedTabID,
+              tab(id)?.lifecycleState == .liveBackground
+        else { return }
+        suspend(tabID: id)
+        persist()
+    }
+
+    public func wakeTab(_ id: TabID) {
+        guard tab(id)?.lifecycleState == .suspended else { return }
+        resume(tabID: id)
+        persist()
     }
 
     public func showAutoHideSidebar() {
@@ -2117,15 +2190,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public func webEngine(
         _ session: WebEngineSession,
-        requestsSaveBookmarkFor url: URL,
-        title: String?,
-        sourcePoint: CGPoint?
-    ) {
-        saveLinkAsBookmark(url, title: title, sourcePoint: sourcePoint)
-    }
-
-    public func webEngine(
-        _ session: WebEngineSession,
         createNewTabWith configuration: WKWebViewConfiguration,
         request: URLRequest?
     ) -> WKWebView? {
@@ -2385,6 +2449,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     private func activateSelectedTabIfNeeded() {
         guard let tab = activeTab else { return }
+        recordTabActivation(tab.id)
+        expandFolderPath(containing: tab)
         let engine = ensureEngine(for: tab)
         engine.setMediaPlaybackSuspended(false)
         tab.lifecycleState = .active
@@ -2410,6 +2476,32 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
     }
 
+    private func recordTabActivation(_ id: TabID) {
+        tabActivationHistory.removeAll { $0 == id }
+        tabActivationHistory.insert(id, at: 0)
+        if tabActivationHistory.count > 100 {
+            tabActivationHistory.removeLast(tabActivationHistory.count - 100)
+        }
+    }
+
+    private func mostRecentlyActiveTab(in spaceID: TabSpaceID) -> BrowserTab? {
+        tabActivationHistory.lazy
+            .compactMap(tab)
+            .first { $0.spaceID == spaceID }
+    }
+
+    /// Selecting a nested tab should always reveal it in the sidebar.
+    private func expandFolderPath(containing tab: BrowserTab) {
+        var currentID = tab.folderID
+        var visited: Set<TabFolderID> = []
+        while let id = currentID,
+              visited.insert(id).inserted,
+              let current = folder(id) {
+            current.isExpanded = true
+            currentID = current.parentID
+        }
+    }
+
     private func backgroundVisibleTabs() {
         let now = Date()
         for tab in tabs where tab.lifecycleState == .active {
@@ -2425,10 +2517,43 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func setApplicationActive(_ isActive: Bool) {
         guard applicationIsActive != isActive else { return }
         applicationIsActive = isActive
+        if !isActive {
+            enterPictureInPictureForVisiblePlayback()
+        }
         if isActive {
             passkeyAccessManager.refreshState()
         }
         reconcileLifecycle()
+    }
+
+    /// A macOS space switch deactivates the browsing scene. Move any playing
+    /// video from the visible browser pane into the system PiP window before
+    /// the lifecycle policy can suspend background tabs.
+    private func enterPictureInPictureForVisiblePlayback() {
+        if let activeTab { presentPictureInPictureIfNeeded(for: activeTab) }
+    }
+
+    public func isInPictureInPicture(_ tab: BrowserTab) -> Bool {
+        pictureInPictureTabID == tab.id
+    }
+
+    private func presentPictureInPictureIfNeeded(for tab: BrowserTab) {
+        guard pictureInPictureTabID == nil,
+              let engine = tab.engine,
+              engine.isPlayingMedia
+        else { return }
+
+        pictureInPictureTabID = tab.id
+        pictureInPictureController.present(
+            webView: engine.webView,
+            title: tab.displayTitle
+        ) { [weak self, weak tab] reason in
+            guard let self else { return }
+            pictureInPictureTabID = nil
+            if reason == .returnedToTab, let tab {
+                selectTab(tab.id)
+            }
+        }
     }
 
     public func stopLifecycleMonitoring() {
@@ -2456,6 +2581,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
             self.thermalObserver = nil
         }
         cancelAllMediaPermissionRequests()
+        pictureInPictureController.stop()
+        pictureInPictureTabID = nil
     }
 
     private func startLifecycleMonitoring() {
@@ -2480,9 +2607,14 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
 
         lifecycleTimerTask = Task { @MainActor [weak self] in
+            var secondsSinceBackgroundRefresh = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
+                self?.refreshVisibleMediaState()
+                secondsSinceBackgroundRefresh += 1
+                guard secondsSinceBackgroundRefresh >= 30 else { continue }
+                secondsSinceBackgroundRefresh = 0
                 self?.refreshBackgroundMediaState { [weak self] in
                     self?.reconcileLifecycle(mediaStateIsFresh: true)
                 }
@@ -2804,6 +2936,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
         refreshMediaState(for: backgroundIDs, completion: completion)
     }
 
+    private func refreshVisibleMediaState() {
+        for tab in activeSplitTabs {
+            tab.engine?.refreshMediaPlaybackState()
+        }
+    }
+
     private func refreshMediaState(
         for tabIDs: [TabID],
         completion: (@MainActor () -> Void)? = nil
@@ -2938,6 +3076,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private func dispose(tab: BrowserTab) {
         tab.faviconTask?.cancel()
         tab.interactionState = nil
+        if let engine = tab.engine {
+            pictureInPictureController.stopIfPresenting(engine.webView)
+        }
+        if pictureInPictureTabID == tab.id {
+            pictureInPictureTabID = nil
+        }
         tab.engine?.setMediaPlaybackSuspended(false)
         tab.engine?.invalidate()
         tab.engine = nil
@@ -2949,6 +3093,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
     ) -> TabProtectionReason {
         var reasons = tab.engineProtectionReasons
         if isVisibleSplitTab(tab.id) {
+            reasons.insert(.active)
+        }
+        if pictureInPictureTabID == tab.id {
             reasons.insert(.active)
         }
         // Evicting the tab the agent is working in would discard the page

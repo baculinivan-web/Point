@@ -2,7 +2,30 @@ import BrowserAI
 import BrowserCore
 import SwiftUI
 
+public enum BrowserSettingsSection: String, CaseIterable, Identifiable {
+    case general
+    case appearance
+    case assistant
+    case performance
+
+    public var id: Self { self }
+
+    var title: String {
+        BrowserLocalization.string("settings_section_\(rawValue)")
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .appearance: "paintpalette"
+        case .assistant: "sparkles"
+        case .performance: "memorychip"
+        }
+    }
+}
+
 public struct BrowserSettingsView: View {
+    @Bindable private var model: BrowserWindowModel
     @AppStorage(BrowserMemoryLimitSettings.defaultsKey)
     private var memoryLimitFraction = BrowserMemoryLimitSettings.defaultFraction
     @Bindable private var aiSettings = AIChatSettings.shared
@@ -16,9 +39,137 @@ public struct BrowserSettingsView: View {
 
     private let physicalMemoryBytes = ProcessInfo.processInfo.physicalMemory
 
-    public init() {}
+    public init(model: BrowserWindowModel) {
+        self.model = model
+    }
 
     public var body: some View {
+        HStack(spacing: 0) {
+            settingsSidebar
+                .frame(width: 158)
+
+            Divider()
+
+            VStack(spacing: 0) {
+                settingsHeader
+                Divider()
+                selectedSettings
+            }
+        }
+        .browserTintedGlass(
+            cornerRadius: 22,
+            tint: Color(nsColor: .windowBackgroundColor).opacity(0.08)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(.primary.opacity(0.10), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.28), radius: 30, y: 14)
+        .onExitCommand { model.dismissSettings() }
+        .onAppear(perform: refreshDefaultBrowserStatus)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSApplication.didBecomeActiveNotification
+            )
+        ) { _ in
+            refreshDefaultBrowserStatus()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: BrowserManualUpdate.checkFinished
+            )
+        ) { notification in
+            guard let rawValue = notification.userInfo?[
+                BrowserManualUpdate.statusUserInfoKey
+            ] as? String,
+            let status = BrowserManualUpdate.CheckStatus(rawValue: rawValue)
+            else { return }
+            updateCheckStatus = status
+            isCheckingForUpdates = false
+        }
+        .onChange(of: memoryLimitFraction) { _, newValue in
+            let normalized = BrowserMemoryLimitSettings.normalizedFraction(newValue)
+            if normalized != newValue {
+                memoryLimitFraction = normalized
+            }
+        }
+    }
+
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(BrowserLocalization.string("settings_title"))
+                .font(.title3.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+
+            ForEach(BrowserSettingsSection.allCases) { section in
+                Button {
+                    model.presentedSettingsSection = section
+                } label: {
+                    Label(section.title, systemImage: section.symbol)
+                        .font(.callout.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .background(
+                            selection == section
+                                ? Color.accentColor.opacity(0.88)
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .foregroundStyle(selection == section ? .white : .primary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(.primary.opacity(0.035))
+    }
+
+    private var settingsHeader: some View {
+        HStack {
+            Label(selection.title, systemImage: selection.symbol)
+                .font(.headline)
+
+            Spacer()
+
+            Button {
+                model.dismissSettings()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.glass)
+            .help(BrowserLocalization.string("close"))
+            .accessibilityLabel(BrowserLocalization.string("close"))
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+    }
+
+    @ViewBuilder
+    private var selectedSettings: some View {
+        switch selection {
+        case .general:
+            generalSettings
+        case .appearance:
+            appearanceSettings
+        case .assistant:
+            assistantSettings
+        case .performance:
+            performanceSettings
+        }
+    }
+
+    private var selection: BrowserSettingsSection {
+        model.presentedSettingsSection ?? .general
+    }
+
+    private var generalSettings: some View {
         Form {
             Section(BrowserLocalization.string("default_browser")) {
                 Text(BrowserLocalization.string("default_browser_detail"))
@@ -39,8 +190,7 @@ public struct BrowserSettingsView: View {
                 }
 
                 if isDefaultBrowserUpdateInProgress {
-                    ProgressView()
-                        .controlSize(.small)
+                    ProgressView().controlSize(.small)
                 }
 
                 if let defaultBrowserError {
@@ -68,8 +218,7 @@ public struct BrowserSettingsView: View {
 
                 if isCheckingForUpdates {
                     HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
+                        ProgressView().controlSize(.small)
                         Text(BrowserLocalization.string("checking_for_updates"))
                     }
                     .font(.caption)
@@ -92,10 +241,30 @@ public struct BrowserSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button(BrowserLocalization.string("onboarding_replay")) {
+                    model.dismissSettings()
                     BrowserOnboarding.requestReplay()
                 }
             }
+        }
+        .settingsFormStyle()
+    }
 
+    private var appearanceSettings: some View {
+        Form {
+            Section(BrowserLocalization.string("fullscreen_panels")) {
+                Text(BrowserLocalization.string("fullscreen_panels_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                FullScreenPanelBackdropPicker()
+            }
+        }
+        .settingsFormStyle()
+    }
+
+    private var assistantSettings: some View {
+        Form {
             Section(BrowserLocalization.string("ai_settings_section")) {
                 Text(BrowserLocalization.string("ai_settings_detail"))
                     .font(.caption)
@@ -158,7 +327,7 @@ public struct BrowserSettingsView: View {
                         format: .number
                     )
                     .labelsHidden()
-                    .frame(width: 100)
+                    .frame(width: 90)
                 }
                 Text(BrowserLocalization.string("ai_settings_context_limit_detail"))
                     .font(.caption)
@@ -187,7 +356,12 @@ public struct BrowserSettingsView: View {
                     .disabled(memories.isEmpty)
                 }
             }
+        }
+        .settingsFormStyle()
+    }
 
+    private var performanceSettings: some View {
+        Form {
             Section(BrowserLocalization.string("memory_management")) {
                 LabeledContent(BrowserLocalization.string("memory_limit")) {
                     Text(memoryLimitFraction, format: .percent.precision(.fractionLength(0)))
@@ -201,11 +375,9 @@ public struct BrowserSettingsView: View {
                 ) {
                     Text(BrowserLocalization.string("memory_limit"))
                 } minimumValueLabel: {
-                    Text("25%")
-                        .font(.caption)
+                    Text("25%").font(.caption)
                 } maximumValueLabel: {
-                    Text("90%")
-                        .font(.caption)
+                    Text("90%").font(.caption)
                 }
 
                 Text(BrowserLocalization.string(
@@ -217,37 +389,7 @@ public struct BrowserSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 480, height: 670)
-        .onAppear(perform: refreshDefaultBrowserStatus)
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: NSApplication.didBecomeActiveNotification
-            )
-        ) { _ in
-            refreshDefaultBrowserStatus()
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: BrowserManualUpdate.checkFinished
-            )
-        ) { notification in
-            guard let rawValue = notification.userInfo?[
-                BrowserManualUpdate.statusUserInfoKey
-            ] as? String,
-            let status = BrowserManualUpdate.CheckStatus(rawValue: rawValue)
-            else {
-                return
-            }
-            updateCheckStatus = status
-            isCheckingForUpdates = false
-        }
-        .onChange(of: memoryLimitFraction) { _, newValue in
-            let normalized = BrowserMemoryLimitSettings.normalizedFraction(newValue)
-            if normalized != newValue {
-                memoryLimitFraction = normalized
-            }
-        }
+        .settingsFormStyle()
     }
 
     private var formattedMemoryLimit: String {
@@ -295,5 +437,12 @@ public struct BrowserSettingsView: View {
                 )
             }
         }
+    }
+}
+
+private extension View {
+    func settingsFormStyle() -> some View {
+        formStyle(.grouped)
+            .scrollContentBackground(.hidden)
     }
 }

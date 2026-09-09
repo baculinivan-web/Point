@@ -2422,13 +2422,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bookmarks. Click a tab’s site icon or choose “Save to Bookmarks” from a link’s menu."
+            "value": "Bookmarks. Choose “Save to Bookmarks” from a tab or link menu."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Закладки. Нажмите на значок сайта во вкладке или выберите «Сохранить в закладки» в меню ссылки."
+            "value": "Закладки. Выберите «Сохранить в закладки» в меню вкладки или ссылки."
           }
         }
       }
@@ -3503,6 +3503,60 @@
             "value": "Название папки"
           }
         }
+      }
+    },
+    "fullscreen_panel_backdrop_aurora": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Aurora" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Северное сияние" } }
+      }
+    },
+    "fullscreen_panel_backdrop_ocean": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Ocean" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Океан" } }
+      }
+    },
+    "fullscreen_panel_backdrop_picker": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Background" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Фон" } }
+      }
+    },
+    "fullscreen_panel_backdrop_sunset": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Sunset" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Закат" } }
+      }
+    },
+    "fullscreen_panel_backdrop_custom": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Custom Gradient" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Свой градиент" } }
+      }
+    },
+    "fullscreen_panel_custom_end": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "End Color" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Конечный цвет" } }
+      }
+    },
+    "fullscreen_panel_custom_start": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Start Color" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Начальный цвет" } }
+      }
+    },
+    "fullscreen_panels": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Full-Screen Side Panels" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Боковые панели во весь экран" } }
+      }
+    },
+    "fullscreen_panels_detail": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Choose the gradient that shows through the pinned sidebar and assistant panel in full screen. Floating panels are unchanged." } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выберите градиент, просвечивающий сквозь закреплённый сайдбар и панель ассистента в полноэкранном режиме. Вид плавающих панелей не меняется." } }
       }
     },
     "forward": {
@@ -5345,6 +5399,36 @@
         }
       }
     },
+    "settings_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Settings" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Настройки" } }
+      }
+    },
+    "settings_section_appearance": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Оформление" } }
+      }
+    },
+    "settings_section_assistant": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Assistant" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Ассистент" } }
+      }
+    },
+    "settings_section_general": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "General" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Основные" } }
+      }
+    },
+    "settings_section_performance": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Performance" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Производительность" } }
+      }
+    },
     "search_engine_help": {
       "localizations": {
         "en": {
@@ -5985,116 +6069,32 @@
         }
       }
     },
-    "copy_link": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy Link"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Копировать ссылку"
-          }
-        }
-      }
-    },
-    "download_linked_file": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Download Linked File"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Скачать файл по ссылке"
-          }
-        }
-      }
-    },
-    "open_link": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open Link"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Открыть ссылку"
-          }
-        }
-      }
-    },
-    "open_link_in_new_window": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open Link in New Window"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Открыть ссылку в новом окне"
-          }
-        }
-      }
-    },
-    "save_link_to_bookmarks": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save to Bookmarks"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сохранить в закладки"
-          }
-        }
-      }
-    },
-    "share_link": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Поделиться…"
-          }
-        }
-      }
-    },
     "save_tab_to_bookmarks_help": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Click the site icon to save this tab to Bookmarks"
+            "value": "Save this tab to Bookmarks"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Нажмите на значок сайта, чтобы сохранить вкладку в закладки"
+            "value": "Сохранить эту вкладку в закладки"
           }
         }
+      }
+    },
+    "save_to_bookmarks": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Save to Bookmarks" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Сохранить в закладки" } }
+      }
+    },
+    "sleep_tab": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Sleep Tab" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Усыпить вкладку" } }
       }
     },
     "space_icon": {
@@ -6321,6 +6321,12 @@
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "No release notes were provided for this version." } },
         "ru": { "stringUnit": { "state": "translated", "value": "Для этой версии заметки к релизу не указаны." } }
+      }
+    },
+    "wake_tab": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Wake Tab" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Разбудить вкладку" } }
       }
     },
     "whats_new": {

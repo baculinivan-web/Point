@@ -78,7 +78,10 @@ public struct BrowserWindowView: View {
                 .ignoresSafeArea()
 
             if model.isAIChatPanelVisible {
-                AIChatPanelView(model: model)
+                AIChatPanelView(
+                    model: model,
+                    isFullScreen: isFullScreen
+                )
                     .frame(
                         maxWidth: .infinity,
                         maxHeight: .infinity,
@@ -299,6 +302,26 @@ public struct BrowserWindowView: View {
                 .zIndex(71)
             }
 
+            if model.presentedSettingsSection != nil {
+                Color.black.opacity(0.22)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.dismissSettings() }
+                    .zIndex(80)
+
+                GeometryReader { proxy in
+                    BrowserSettingsView(model: model)
+                        .frame(
+                            width: min(640, max(520, proxy.size.width - 40)),
+                            height: min(500, max(420, proxy.size.height - 40))
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .ignoresSafeArea()
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .zIndex(81)
+            }
+
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(
@@ -326,6 +349,10 @@ public struct BrowserWindowView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: model.isClearBrowsingDataPresented)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: model.toastMessage)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: isOnboardingPresented)
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.18),
+            value: model.presentedSettingsSection
+        )
         .onPreferenceChange(BookmarkSpaceFramePreferenceKey.self) { frame in
             bookmarkTargetFrame = frame
             startBookmarkAnimationIfReady()
@@ -383,7 +410,10 @@ public struct BrowserWindowView: View {
             hideTask?.cancel()
             model.showAutoHideSidebar()
         }
-            .frame(width: 36)
+            // In full screen the reveal target must be the physical screen edge.
+            // A wider invisible hover strip makes the sidebar appear while the
+            // pointer is merely near the edge of the page.
+            .frame(width: isFullScreen ? 1 : 36)
             .frame(maxHeight: .infinity)
             .onTapGesture {
                 model.showAutoHideSidebar()
@@ -903,6 +933,9 @@ private struct WebSurface: View {
     @ViewBuilder
     private var singlePage: some View {
         if let tab = model.activeTab,
+           model.isInPictureInPicture(tab) {
+            PictureInPicturePlaceholder()
+        } else if let tab = model.activeTab,
            let engine = tab.engine {
             WKWebViewHost(
                 webView: engine.webView,
@@ -955,6 +988,7 @@ private struct SplitWebSurface: View {
                 SplitWebPane(
                     tab: tabs[0],
                     blockedLeadingWidth: blockedLeadingWidth,
+                    isInPictureInPicture: model.isInPictureInPicture(tabs[0]),
                     agentActivity: model.agentActivity
                 )
                 .frame(width: leftWidth)
@@ -974,6 +1008,7 @@ private struct SplitWebSurface: View {
                 SplitWebPane(
                     tab: tabs[1],
                     blockedLeadingWidth: 0,
+                    isInPictureInPicture: model.isInPictureInPicture(tabs[1]),
                     agentActivity: model.agentActivity
                 )
                     .frame(width: max(0, contentWidth - leftWidth))
@@ -985,11 +1020,14 @@ private struct SplitWebSurface: View {
 private struct SplitWebPane: View {
     let tab: BrowserTab
     let blockedLeadingWidth: CGFloat
+    let isInPictureInPicture: Bool
     var agentActivity: AgentActivityCenter?
 
     var body: some View {
         ZStack {
-            if let engine = tab.engine {
+            if isInPictureInPicture {
+                PictureInPicturePlaceholder()
+            } else if let engine = tab.engine {
                 WKWebViewHost(
                     webView: engine.webView,
                     blockedLeadingWidth: blockedLeadingWidth,
@@ -1010,6 +1048,20 @@ private struct SplitWebPane: View {
             }
         }
         .clipped()
+    }
+}
+
+private struct PictureInPicturePlaceholder: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "pip.fill")
+                .font(.system(size: 28, weight: .medium))
+            Text("Video is playing in Picture in Picture")
+                .font(.system(size: 14, weight: .medium))
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
     }
 }
 

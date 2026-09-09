@@ -39,7 +39,7 @@
 	<key>bookmarks_space</key>
 	<string>Закладки</string>
 	<key>bookmarks_space_help</key>
-	<string>Закладки. Нажмите на значок сайта во вкладке или выберите «Сохранить в закладки» в меню ссылки.</string>
+	<string>Закладки. Выберите «Сохранить в закладки» в меню вкладки или ссылки.</string>
 	<key>browser_memory_usage</key>
 	<string>Память, используемая браузером</string>
 	<key>browser_memory_usage_estimated_help</key>
@@ -379,20 +379,12 @@
 	<string>Разрешения сайтов…</string>
 	<key>space_default_name</key>
 	<string>Пространство %d</string>
-	<key>open_link</key>
-	<string>Открыть ссылку</string>
-	<key>open_link_in_new_window</key>
-	<string>Открыть ссылку в новом окне</string>
-	<key>download_linked_file</key>
-	<string>Скачать файл по ссылке</string>
-	<key>copy_link</key>
-	<string>Копировать ссылку</string>
-	<key>share_link</key>
-	<string>Поделиться…</string>
-	<key>save_link_to_bookmarks</key>
-	<string>Сохранить в закладки</string>
 	<key>save_tab_to_bookmarks_help</key>
-	<string>Нажмите на значок сайта, чтобы сохранить вкладку в закладки</string>
+	<string>Сохранить эту вкладку в закладки</string>
+	<key>save_to_bookmarks</key>
+	<string>Сохранить в закладки</string>
+	<key>sleep_tab</key>
+	<string>Усыпить вкладку</string>
 	<key>space_icon</key>
 	<string>Значок пространства</string>
 	<key>space_name_placeholder</key>
@@ -491,5 +483,7 @@
 	<string>Для этой версии заметки к релизу не указаны.</string>
 	<key>whats_new</key>
 	<string>Что нового</string>
+	<key>wake_tab</key>
+	<string>Разбудить вкладку</string>
 </dict>
 </plist>

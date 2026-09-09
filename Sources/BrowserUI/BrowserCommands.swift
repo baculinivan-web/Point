@@ -18,6 +18,14 @@ public struct BrowserCommands: Commands {
     public init() {}
 
     public var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button(BrowserLocalization.string("settings_title")) {
+                model?.presentSettings()
+            }
+            .keyboardShortcut(",")
+            .disabled(model == nil)
+        }
+
         CommandGroup(after: .appInfo) {
             Button(BrowserLocalization.string("make_default_browser")) {
                 model?.makeDefaultBrowser()
