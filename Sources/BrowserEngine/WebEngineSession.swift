@@ -139,10 +139,6 @@ public final class WebEngineSession: NSObject {
     }
 
     public func invalidate() {
-        // A native PiP window outlives the web view's place in the view
-        // hierarchy. Close it before tearing down a tab so its controls never
-        // point at an invalidated page.
-        webView.closeAllMediaPresentations { }
         observations.forEach { $0.invalidate() }
         observations.removeAll()
         webView.navigationDelegate = nil

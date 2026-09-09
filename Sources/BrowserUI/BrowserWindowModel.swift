@@ -241,9 +241,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     public let isPrivate: Bool
     public private(set) var tabs: [BrowserTab] = []
-    /// The tab whose existing WebKit surface is currently hosted by the
-    /// floating Picture-in-Picture window.
-    public private(set) var pictureInPictureTabID: TabID?
     public private(set) var spaces: [TabSpace] = [
         TabSpace(snapshot: .default)
     ]
@@ -335,7 +332,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
     @ObservationIgnored private var toastDismissTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleTimerTask: Task<Void, Never>?
-    @ObservationIgnored private let pictureInPictureController = PictureInPictureController()
     @ObservationIgnored private var memoryUsageTask: Task<Void, Never>?
     @ObservationIgnored private var currentBrowserMemoryBytes: UInt64 = 0
     @ObservationIgnored private var pressureRecoveryTask: Task<Void, Never>?
@@ -1113,7 +1109,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
         let now = Date()
         if let activeTab, activeTab.id != id, activeTab.lifecycleState != .crashed {
-            presentPictureInPictureIfNeeded(for: activeTab)
             activeTab.lifecycleState = .liveBackground
             activeTab.evictionGraceUntil = max(
                 activeTab.evictionGraceUntil,
@@ -2517,43 +2512,10 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func setApplicationActive(_ isActive: Bool) {
         guard applicationIsActive != isActive else { return }
         applicationIsActive = isActive
-        if !isActive {
-            enterPictureInPictureForVisiblePlayback()
-        }
         if isActive {
             passkeyAccessManager.refreshState()
         }
         reconcileLifecycle()
-    }
-
-    /// A macOS space switch deactivates the browsing scene. Move any playing
-    /// video from the visible browser pane into the system PiP window before
-    /// the lifecycle policy can suspend background tabs.
-    private func enterPictureInPictureForVisiblePlayback() {
-        if let activeTab { presentPictureInPictureIfNeeded(for: activeTab) }
-    }
-
-    public func isInPictureInPicture(_ tab: BrowserTab) -> Bool {
-        pictureInPictureTabID == tab.id
-    }
-
-    private func presentPictureInPictureIfNeeded(for tab: BrowserTab) {
-        guard pictureInPictureTabID == nil,
-              let engine = tab.engine,
-              engine.isPlayingMedia
-        else { return }
-
-        pictureInPictureTabID = tab.id
-        pictureInPictureController.present(
-            webView: engine.webView,
-            title: tab.displayTitle
-        ) { [weak self, weak tab] reason in
-            guard let self else { return }
-            pictureInPictureTabID = nil
-            if reason == .returnedToTab, let tab {
-                selectTab(tab.id)
-            }
-        }
     }
 
     public func stopLifecycleMonitoring() {
@@ -2581,8 +2543,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
             self.thermalObserver = nil
         }
         cancelAllMediaPermissionRequests()
-        pictureInPictureController.stop()
-        pictureInPictureTabID = nil
     }
 
     private func startLifecycleMonitoring() {
@@ -3076,12 +3036,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private func dispose(tab: BrowserTab) {
         tab.faviconTask?.cancel()
         tab.interactionState = nil
-        if let engine = tab.engine {
-            pictureInPictureController.stopIfPresenting(engine.webView)
-        }
-        if pictureInPictureTabID == tab.id {
-            pictureInPictureTabID = nil
-        }
         tab.engine?.setMediaPlaybackSuspended(false)
         tab.engine?.invalidate()
         tab.engine = nil
@@ -3093,9 +3047,6 @@ public final class BrowserWindowModel: WebEngineEventSink {
     ) -> TabProtectionReason {
         var reasons = tab.engineProtectionReasons
         if isVisibleSplitTab(tab.id) {
-            reasons.insert(.active)
-        }
-        if pictureInPictureTabID == tab.id {
             reasons.insert(.active)
         }
         // Evicting the tab the agent is working in would discard the page

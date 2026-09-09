@@ -933,9 +933,6 @@ private struct WebSurface: View {
     @ViewBuilder
     private var singlePage: some View {
         if let tab = model.activeTab,
-           model.isInPictureInPicture(tab) {
-            PictureInPicturePlaceholder()
-        } else if let tab = model.activeTab,
            let engine = tab.engine {
             WKWebViewHost(
                 webView: engine.webView,
@@ -988,7 +985,6 @@ private struct SplitWebSurface: View {
                 SplitWebPane(
                     tab: tabs[0],
                     blockedLeadingWidth: blockedLeadingWidth,
-                    isInPictureInPicture: model.isInPictureInPicture(tabs[0]),
                     agentActivity: model.agentActivity
                 )
                 .frame(width: leftWidth)
@@ -1008,7 +1004,6 @@ private struct SplitWebSurface: View {
                 SplitWebPane(
                     tab: tabs[1],
                     blockedLeadingWidth: 0,
-                    isInPictureInPicture: model.isInPictureInPicture(tabs[1]),
                     agentActivity: model.agentActivity
                 )
                     .frame(width: max(0, contentWidth - leftWidth))
@@ -1020,14 +1015,11 @@ private struct SplitWebSurface: View {
 private struct SplitWebPane: View {
     let tab: BrowserTab
     let blockedLeadingWidth: CGFloat
-    let isInPictureInPicture: Bool
     var agentActivity: AgentActivityCenter?
 
     var body: some View {
         ZStack {
-            if isInPictureInPicture {
-                PictureInPicturePlaceholder()
-            } else if let engine = tab.engine {
+            if let engine = tab.engine {
                 WKWebViewHost(
                     webView: engine.webView,
                     blockedLeadingWidth: blockedLeadingWidth,
@@ -1048,20 +1040,6 @@ private struct SplitWebPane: View {
             }
         }
         .clipped()
-    }
-}
-
-private struct PictureInPicturePlaceholder: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "pip.fill")
-                .font(.system(size: 28, weight: .medium))
-            Text("Video is playing in Picture in Picture")
-                .font(.system(size: 14, weight: .medium))
-        }
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
     }
 }
 

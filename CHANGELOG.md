@@ -2,7 +2,6 @@
 
 ## 0.3.0 — Sidebar and Window Polish
 
-- Added native Picture in Picture continuity when leaving a playing video tab.
 - Reworked Settings into an in-window panel with dedicated General, Appearance, Assistant, and Performance sections.
 - Added configurable full-screen side-panel backgrounds and made the hidden sidebar reveal only at the screen edge.
 - Added tab sleep and wake actions, explicit bookmark saving from tab menus, and removed bookmark actions from favicon clicks.
