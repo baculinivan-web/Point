@@ -1772,6 +1772,12 @@ public final class BrowserWindowModel: WebEngineEventSink {
         downloadManager.resume(id, using: engine.webView)
     }
 
+    public func presentDownloads() {
+        guard previewTab == nil else { return }
+        isSidebarVisible = true
+        isDownloadsPresented = true
+    }
+
     public func toggleDownloads() {
         guard previewTab == nil else { return }
         isDownloadsPresented.toggle()

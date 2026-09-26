@@ -5835,6 +5835,22 @@
         }
       }
     },
+    "open_file": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open File"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть файл"
+          }
+        }
+      }
+    },
     "show_in_finder": {
       "localizations": {
         "en": {

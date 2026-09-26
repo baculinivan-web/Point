@@ -485,5 +485,7 @@
 	<string>Что нового</string>
 	<key>wake_tab</key>
 	<string>Разбудить вкладку</string>
+	<key>open_file</key>
+	<string>Открыть файл</string>
 </dict>
 </plist>

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — Sidebar and Downloads
+
+- Reduced the top sidebar inset in full-screen mode.
+- Removed the copy-address toolbar button and updated the assistant icon.
+- Moved downloads into a popover without replacing the tab list.
+- Added Open File and Show in Finder actions for completed downloads.
+- Made the download progress bubble open downloads instead of dismissing itself.
+- Updated the bundle version to `0.3.2` (`40`).
+
 ## 0.3.0 — Sidebar and Window Polish
 
 - Reworked Settings into an in-window panel with dedicated General, Appearance, Assistant, and Performance sections.

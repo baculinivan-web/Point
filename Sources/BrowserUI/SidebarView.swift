@@ -88,7 +88,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             navigationHeader
                 .padding(.horizontal, 12)
-                .padding(.top, isFullScreen ? 24 : 38)
+                .padding(.top, isFullScreen ? 12 : 38)
                 .padding(.bottom, 10)
 
             if model.isPrivate {
@@ -108,13 +108,7 @@ struct SidebarView: View {
                     .padding(.bottom, 8)
             }
 
-            if model.isDownloadsPresented {
-                SidebarDownloadsView(
-                    manager: model.downloadManager,
-                    onResume: model.resumeDownload
-                )
-            } else {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                 Button {
                     model.presentOmnibox(clearText: false)
                 } label: {
@@ -185,12 +179,11 @@ struct SidebarView: View {
                         }
                     }
                 }
-                }
-                .frame(maxHeight: .infinity)
-                .offset(x: -spaceSwipeTranslation)
-                .opacity(spacePageOpacity)
-                .clipped()
             }
+            .frame(maxHeight: .infinity)
+            .offset(x: -spaceSwipeTranslation)
+            .opacity(spacePageOpacity)
+            .clipped()
 
             if model.showsMemoryUsage {
                 HStack {
@@ -389,23 +382,9 @@ struct SidebarView: View {
                 : BrowserLocalization.string("reload"))
 
             Button {
-                model.copyActivePageURL()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .frame(width: 24, height: 24)
-            }
-            .disabled(model.activeTab?.url == nil)
-            .help(BrowserLocalization.string("copy_page_address"))
-            .accessibilityLabel(BrowserLocalization.string("copy_page_address"))
-
-            Button {
                 model.toggleAIChat()
             } label: {
-                Image(
-                    systemName: model.isAIChatPanelVisible
-                        ? "sparkles.rectangle.stack.fill"
-                        : "sparkles"
-                )
+                Image(systemName: "sparkles.rectangle.stack")
                 .frame(width: 24, height: 24)
             }
             .help(BrowserLocalization.string("ai_chat_toggle_shortcut"))
@@ -425,6 +404,19 @@ struct SidebarView: View {
             }
             .help(BrowserLocalization.string("downloads_shortcut"))
             .accessibilityLabel(BrowserLocalization.string("downloads"))
+            .popover(
+                isPresented: Binding(
+                    get: { model.isDownloadsPresented },
+                    set: { model.isDownloadsPresented = $0 }
+                ),
+                arrowEdge: .bottom
+            ) {
+                DownloadsPopoverView(
+                    manager: model.downloadManager,
+                    onResume: model.resumeDownload
+                )
+                .frame(width: 380)
+            }
         }
         .buttonStyle(.borderless)
     }

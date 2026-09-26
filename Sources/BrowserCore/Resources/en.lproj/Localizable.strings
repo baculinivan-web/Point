@@ -485,5 +485,7 @@
 	<string>What’s New</string>
 	<key>wake_tab</key>
 	<string>Wake Tab</string>
+	<key>open_file</key>
+	<string>Open File</string>
 </dict>
 </plist>

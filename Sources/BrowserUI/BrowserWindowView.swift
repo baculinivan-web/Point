@@ -38,7 +38,6 @@ public struct BrowserWindowView: View {
         SidebarLayout.defaultWidth
     @State private var liveSidebarWidth: Double?
     @State private var hideTask: Task<Void, Never>?
-    @State private var dismissedDownloadIndicators: Set<UUID> = []
     @State private var isFullScreen = false
     @State private var hostWindow: NSWindow?
     @State private var bookmarkTargetFrame = CGRect.zero
@@ -160,7 +159,7 @@ public struct BrowserWindowView: View {
 
             if let download = indicatorDownload {
                 DownloadProgressBubble(download: download) {
-                    dismissedDownloadIndicators.insert(download.id)
+                    model.presentDownloads()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(
@@ -444,7 +443,7 @@ public struct BrowserWindowView: View {
 
     private var indicatorDownload: DownloadItem? {
         model.downloadManager.items.first { item in
-            item.state.isActive && !dismissedDownloadIndicators.contains(item.id)
+            item.state.isActive
         }
     }
 
@@ -851,20 +850,19 @@ private struct EdgeHoverSensor: NSViewRepresentable {
 
 private struct DownloadProgressBubble: View {
     let download: DownloadItem
-    let onDismiss: () -> Void
+    let onOpenDownloads: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @State private var isHovering = false
     @State private var rotates = false
 
     var body: some View {
-        Button(action: onDismiss) {
+        Button(action: onOpenDownloads) {
             ZStack {
                 glassCore
                 progressRing
 
-                Image(systemName: isHovering ? "xmark" : "arrow.down")
+                Image(systemName: "arrow.down")
                     .font(.system(size: 14, weight: .semibold))
                     .contentTransition(.symbolEffect(.replace))
             }
@@ -872,8 +870,7 @@ private struct DownloadProgressBubble: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .help(BrowserLocalization.string("hide_download_indicator"))
+        .help(BrowserLocalization.string("downloads"))
         .accessibilityLabel(BrowserLocalization.string(
             "download_progress_label",
             download.suggestedFilename,

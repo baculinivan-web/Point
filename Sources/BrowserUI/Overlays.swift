@@ -912,7 +912,7 @@ private extension BrowsingDataCategory {
     }
 }
 
-struct SidebarDownloadsView: View {
+struct DownloadsPopoverView: View {
     @Bindable var manager: DownloadManager
     let onResume: (UUID) -> Void
 
@@ -957,7 +957,7 @@ struct SidebarDownloadsView: View {
                 .frame(maxHeight: 420)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 
@@ -1028,16 +1028,29 @@ private struct DownloadRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(BrowserLocalization.string("cancel_download"))
         case .finished:
-            Button {
-                if let destination = item.destinationURL {
-                    NSWorkspace.shared.activateFileViewerSelecting([destination])
+            HStack(spacing: 12) {
+                Button {
+                    if let destination = item.destinationURL {
+                        NSWorkspace.shared.open(destination)
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.forward.square")
                 }
-            } label: {
-                Image(systemName: "magnifyingglass")
+                .help(BrowserLocalization.string("open_file"))
+                .accessibilityLabel(BrowserLocalization.string("open_file"))
+
+                Button {
+                    if let destination = item.destinationURL {
+                        NSWorkspace.shared.activateFileViewerSelecting([destination])
+                    }
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .help(BrowserLocalization.string("show_in_finder"))
+                .accessibilityLabel(BrowserLocalization.string("show_in_finder"))
             }
             .buttonStyle(.plain)
             .disabled(item.destinationURL == nil)
-            .accessibilityLabel(BrowserLocalization.string("show_in_finder"))
         case .cancelled, .failed:
             if item.resumeData != nil {
                 Button(action: onResume) {
