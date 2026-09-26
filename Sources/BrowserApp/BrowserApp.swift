@@ -97,7 +97,8 @@ private final class BrowserRuntime {
                 downloadManager: privateDownloadManager,
                 faviconRepository: FaviconRepository(persistsToDisk: false),
                 isPrivate: true,
-                websiteDataStore: .nonPersistent()
+                websiteDataStore: .nonPersistent(),
+                allowsExternalAgentAccess: false
             )
         }
 
@@ -126,15 +127,23 @@ private final class BrowserRuntime {
             browsingHistoryRepository: browsingHistoryRepository,
             downloadManager: downloadManager,
             isPrivate: false,
-            websiteDataStore: .default()
+            websiteDataStore: .default(),
+            allowsExternalAgentAccess: isPrimaryWindow
         )
         standardWindowModels.append(WeakBrowserWindowModel(model))
         return model
     }
 
     func releaseWindowModel(_ model: BrowserWindowModel) {
+        let shouldPromote = model.hasExternalAgentOwnership
+        if shouldPromote {
+            model.setExternalAgentOwnership(false)
+        }
         standardWindowModels.removeAll {
             $0.value == nil || $0.value === model
+        }
+        if shouldPromote {
+            standardWindowModels.first?.value?.setExternalAgentOwnership(true)
         }
     }
 
@@ -244,6 +253,7 @@ private struct BrowserWindowScene: View {
                     await runtime.startManualUpdateChecks()
                 }
                 await model.restoreSession()
+                model.startExternalAgentAccessIfNeeded()
                 if !isPrivate,
                    let transferredTabs = BrowserWindowTransferCenter.shared
                     .claimNextBatch() {

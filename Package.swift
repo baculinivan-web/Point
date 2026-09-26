@@ -9,7 +9,8 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "Browser", targets: ["BrowserApp"])
+        .executable(name: "Browser", targets: ["BrowserApp"]),
+        .executable(name: "point-browser-mcp", targets: ["PointBrowserMCP"])
     ],
     targets: [
         .target(
@@ -40,6 +41,9 @@ let package = Package(
         .executableTarget(
             name: "BrowserApp",
             dependencies: ["BrowserCore", "BrowserEngine", "BrowserPersistence", "BrowserUI", "BrowserAI", "BrowserAutomation"]
+        ),
+        .executableTarget(
+            name: "PointBrowserMCP"
         ),
         .testTarget(
             name: "BrowserCoreTests",

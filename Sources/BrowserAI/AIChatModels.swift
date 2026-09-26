@@ -27,6 +27,11 @@ public enum AIJSONValue: Sendable, Equatable {
         return nil
     }
 
+    public var arrayValue: [AIJSONValue]? {
+        if case let .array(value) = self { return value }
+        return nil
+    }
+
     public subscript(key: String) -> AIJSONValue? {
         objectValue?[key]
     }

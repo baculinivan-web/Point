@@ -1,3 +1,4 @@
+import AppKit
 import BrowserAI
 import BrowserCore
 import SwiftUI
@@ -6,6 +7,7 @@ public enum BrowserSettingsSection: String, CaseIterable, Identifiable {
     case general
     case appearance
     case assistant
+    case agents
     case performance
 
     public var id: Self { self }
@@ -19,6 +21,7 @@ public enum BrowserSettingsSection: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .appearance: "paintpalette"
         case .assistant: "sparkles"
+        case .agents: "network"
         case .performance: "memorychip"
         }
     }
@@ -36,6 +39,7 @@ public struct BrowserSettingsView: View {
     @State private var defaultBrowserError: String?
     @State private var isCheckingForUpdates = false
     @State private var updateCheckStatus: BrowserManualUpdate.CheckStatus?
+    @State private var didCopyMCPCommand = false
 
     private let physicalMemoryBytes = ProcessInfo.processInfo.physicalMemory
 
@@ -160,6 +164,8 @@ public struct BrowserSettingsView: View {
             appearanceSettings
         case .assistant:
             assistantSettings
+        case .agents:
+            agentSettings
         case .performance:
             performanceSettings
         }
@@ -317,6 +323,16 @@ public struct BrowserSettingsView: View {
                     BrowserLocalization.string("ai_settings_share_page"),
                     isOn: $aiSettings.includesPageContext
                 )
+                .disabled(!model.hasExternalAgentOwnership)
+
+                if !model.hasExternalAgentOwnership {
+                    Label(
+                        BrowserLocalization.string("agent_settings_owner_window"),
+                        systemImage: "macwindow"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
 
                 LabeledContent(
                     BrowserLocalization.string("ai_settings_context_limit")
@@ -358,6 +374,7 @@ public struct BrowserSettingsView: View {
             }
         }
         .settingsFormStyle()
+        .onAppear { aiSettings.loadAPIKeysIfNeeded() }
     }
 
     private var performanceSettings: some View {
@@ -390,6 +407,134 @@ public struct BrowserSettingsView: View {
             }
         }
         .settingsFormStyle()
+    }
+
+    private var agentSettings: some View {
+        Form {
+            Section {
+                Toggle(
+                    BrowserLocalization.string("agent_settings_enable_local"),
+                    isOn: Binding(
+                        get: { model.isExternalAgentAccessEnabled },
+                        set: { enabled in
+                            model.setExternalAgentAccessEnabled(enabled)
+                            if enabled {
+                                AgentConsentNotifier.prepare()
+                            }
+                        }
+                    )
+                )
+
+                Text(BrowserLocalization.string("agent_settings_local_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if model.isExternalAgentAccessEnabled {
+                    Toggle(
+                        BrowserLocalization.string("agent_settings_auto_approve"),
+                        isOn: Binding(
+                            get: { model.automaticallyAllowsExternalAgentControl },
+                            set: { model.setAutomaticallyAllowsExternalAgentControl($0) }
+                        )
+                    )
+
+                    Text(BrowserLocalization.string("agent_settings_auto_approve_detail"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    LabeledContent(BrowserLocalization.string("agent_settings_status")) {
+                        Label(agentStatusText, systemImage: agentStatusSymbol)
+                            .foregroundStyle(agentStatusColor)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(BrowserLocalization.string("agent_settings_command"))
+                            .font(.caption.weight(.medium))
+                        Text(model.pointMCPHelperPath)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(model.pointMCPHelperPath, forType: .string)
+                            didCopyMCPCommand = true
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1.5))
+                                didCopyMCPCommand = false
+                            }
+                        } label: {
+                            Label(
+                                BrowserLocalization.string(
+                                    didCopyMCPCommand ? "agent_settings_copied" : "agent_settings_copy"
+                                ),
+                                systemImage: didCopyMCPCommand ? "checkmark" : "doc.on.doc"
+                            )
+                        }
+                    }
+                }
+            } header: {
+                Text(BrowserLocalization.string("agent_settings_local"))
+            }
+
+            Section {
+                Label(
+                    BrowserLocalization.string("agent_settings_coming_soon"),
+                    systemImage: "clock.badge"
+                )
+                .font(.callout.weight(.medium))
+
+                Text(BrowserLocalization.string("agent_settings_remote_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text(BrowserLocalization.string("agent_settings_remote"))
+            }
+
+            Section {
+                Label(
+                    BrowserLocalization.string("agent_settings_safety_detail"),
+                    systemImage: "hand.raised.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text(BrowserLocalization.string("agent_settings_safety"))
+            }
+        }
+        .settingsFormStyle()
+    }
+
+    private var agentStatusText: String {
+        switch model.externalAgentServerState {
+        case .stopped: BrowserLocalization.string("agent_settings_status_stopped")
+        case .listening: BrowserLocalization.string("agent_settings_status_ready")
+        case .connected: BrowserLocalization.string("agent_settings_status_connected")
+        case .failed: BrowserLocalization.string("agent_settings_status_failed")
+        }
+    }
+
+    private var agentStatusSymbol: String {
+        switch model.externalAgentServerState {
+        case .connected: "checkmark.circle.fill"
+        case .listening: "circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        case .stopped: "circle"
+        }
+    }
+
+    private var agentStatusColor: Color {
+        switch model.externalAgentServerState {
+        case .connected: .green
+        case .listening: .blue
+        case .failed: .red
+        case .stopped: .secondary
+        }
     }
 
     private var formattedMemoryLimit: String {

@@ -8,6 +8,11 @@ import Observation
 public final class AIChatSettings {
     public static let shared = AIChatSettings()
 
+    @ObservationIgnored private let readAPIKey: (String) -> String?
+    @ObservationIgnored private let writeAPIKey: (String, String) -> Void
+    @ObservationIgnored private var didLoadAPIKeys = false
+    @ObservationIgnored private var isLoadingAPIKeys = false
+
     private enum DefaultsKey {
         static let provider = "AIChatProvider"
         static let anthropicModel = "AIChatAnthropicModel"
@@ -91,18 +96,25 @@ public final class AIChatSettings {
 
     public var anthropicAPIKey: String {
         didSet {
-            KeychainStore.set(anthropicAPIKey, for: KeychainAccount.anthropic)
+            guard !isLoadingAPIKeys else { return }
+            writeAPIKey(anthropicAPIKey, KeychainAccount.anthropic)
         }
     }
 
     public var openAIAPIKey: String {
         didSet {
-            KeychainStore.set(openAIAPIKey, for: KeychainAccount.openAI)
+            guard !isLoadingAPIKeys else { return }
+            writeAPIKey(openAIAPIKey, KeychainAccount.openAI)
         }
     }
 
-    private init() {
-        let defaults = UserDefaults.standard
+    init(
+        defaults: UserDefaults = .standard,
+        readAPIKey: @escaping (String) -> String? = { KeychainStore.string(for: $0) },
+        writeAPIKey: @escaping (String, String) -> Void = { KeychainStore.set($0, for: $1) }
+    ) {
+        self.readAPIKey = readAPIKey
+        self.writeAPIKey = writeAPIKey
         provider = defaults.string(forKey: DefaultsKey.provider)
             .flatMap(AIProviderKind.init(rawValue:)) ?? .anthropic
         anthropicModel = defaults.string(forKey: DefaultsKey.anthropicModel)
@@ -121,8 +133,23 @@ public final class AIChatSettings {
             max(storedWidth, Self.panelWidthRange.lowerBound),
             Self.panelWidthRange.upperBound
         )
-        anthropicAPIKey = KeychainStore.string(for: KeychainAccount.anthropic) ?? ""
-        openAIAPIKey = KeychainStore.string(for: KeychainAccount.openAI) ?? ""
+        anthropicAPIKey = ""
+        openAIAPIKey = ""
+    }
+
+    /// Read secrets only when the user opens the assistant or its settings.
+    /// Constructing settings during browser launch must never unlock Keychain.
+    public func loadAPIKeysIfNeeded() {
+        guard !didLoadAPIKeys else { return }
+        isLoadingAPIKeys = true
+        defer { isLoadingAPIKeys = false }
+        if let key = readAPIKey(KeychainAccount.anthropic) {
+            anthropicAPIKey = key
+        }
+        if let key = readAPIKey(KeychainAccount.openAI) {
+            openAIAPIKey = key
+        }
+        didLoadAPIKeys = true
     }
 
     public var activeModelName: String {
@@ -146,6 +173,7 @@ public final class AIChatSettings {
     }
 
     public func makeProvider() -> (any AIProvider)? {
+        loadAPIKeysIfNeeded()
         switch provider {
         case .anthropic:
             guard !anthropicAPIKey.isEmpty else { return nil }

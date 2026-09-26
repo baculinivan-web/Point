@@ -133,6 +133,38 @@ extension BrowserAIToolBridge {
                 required: ["tab_id"]
             ),
             spec(
+                "browser_run_actions",
+                "Run up to 25 already-planned browser actions in order. Each item "
+                    + "contains a tool name and its arguments. Every action uses the "
+                    + "same safety checks and confirmations as an individual call. "
+                    + "Use this for filling several fields or other predictable work; "
+                    + "do not include request_control, release_control, snapshot, or "
+                    + "another batch. Execution stops on the first failure.",
+                properties: [
+                    "actions": .object([
+                        "type": .string("array"),
+                        "description": .string("Ordered actions to perform."),
+                        "maxItems": .number(25),
+                        "items": .object([
+                            "type": .string("object"),
+                            "properties": .object([
+                                "tool": .object([
+                                    "type": .string("string"),
+                                    "enum": .array([
+                                        "browser_click", "browser_type", "browser_select",
+                                        "browser_scroll", "browser_navigate", "browser_switch_tab",
+                                        "browser_close_tab"
+                                    ].map(AIJSONValue.string))
+                                ]),
+                                "arguments": .object(["type": .string("object")])
+                            ]),
+                            "required": .array([.string("tool"), .string("arguments")])
+                        ])
+                    ])
+                ],
+                required: ["actions"]
+            ),
+            spec(
                 "browser_release_control",
                 "Hand control of the browser back when the task is done or you are "
                     + "stuck. Always call this before your final answer.",
@@ -159,16 +191,55 @@ extension BrowserAIToolBridge {
         }
 
         switch name {
+        case "browser_run_actions": return try await runActions(arguments)
         case "browser_snapshot": return try await runSnapshot(arguments)
         case "browser_click": return try await runClick(arguments)
         case "browser_type": return try await runType(arguments)
         case "browser_select": return try await runSelect(arguments)
         case "browser_scroll": return try await runScroll(arguments)
         case "browser_navigate": return try await runNavigate(arguments)
-        case "browser_switch_tab": return try runSwitchTab(arguments)
+        case "browser_switch_tab": return try await runSwitchTab(arguments)
         case "browser_close_tab": return try runCloseTab(arguments)
         default: throw AIToolBridgeError.unknownTool(name)
         }
+    }
+
+    private func runActions(_ arguments: AIJSONValue) async throws -> AIToolOutput {
+        guard let actions = arguments["actions"]?.arrayValue,
+              !actions.isEmpty, actions.count <= 25
+        else { throw AIToolBridgeError.invalidArguments }
+
+        let forbidden = Set([
+            "browser_request_control", "browser_release_control",
+            "browser_snapshot", "browser_run_actions"
+        ])
+        var completed: [String] = []
+        isRunningActionBatch = true
+        defer { isRunningActionBatch = false }
+
+        for (index, action) in actions.enumerated() {
+            guard let object = action.objectValue,
+                  let tool = object["tool"]?.stringValue,
+                  tool.hasPrefix("browser_"), !forbidden.contains(tool)
+            else { throw AIToolBridgeError.invalidArguments }
+
+            let actionArguments = object["arguments"] ?? .object([:])
+            let output = try await runAgentTool(name: tool, arguments: actionArguments)
+            let summary = output.text.split(separator: "\n", maxSplits: 1)
+                .first.map(String.init) ?? tool
+            completed.append("\(index + 1). \(summary)")
+        }
+
+        let summaries = completed.joined(separator: "\n")
+        isRunningActionBatch = false
+        guard agentTabID != nil else {
+            return AIToolOutput(
+                text: summaries + "\n\nBatch completed; the controlled tab was closed."
+            )
+        }
+        let tab = try resolveTab(nil)
+        let final = await actionResult("Batch completed (\(actions.count) actions).", tab: tab)
+        return AIToolOutput(text: summaries + "\n\n" + final.text)
     }
 
     // MARK: - Control
@@ -186,6 +257,15 @@ extension BrowserAIToolBridge {
         if hasBrowserControl {
             return AIToolOutput(text: "You already have control of the browser.")
         }
+        guard model.reserveAgentControl(controlReservationID) else {
+            throw AgentToolError.busy
+        }
+        var keepsReservation = false
+        defer {
+            if !keepsReservation {
+                model.releaseAgentControlReservation(controlReservationID)
+            }
+        }
 
         let startURL = arguments["url"]?.stringValue.flatMap { raw in
             try? Self.webURL(from: raw)
@@ -194,14 +274,19 @@ extension BrowserAIToolBridge {
             ?? model.activeTab?.url?.absoluteString
             ?? ""
 
-        let approved = await agentConsent.requestApproval(
-            AgentConsentRequest(
-                kind: .browserControl,
-                title: BrowserLocalization.string("agent_consent_control_title"),
-                detail: plan,
-                origin: origin
+        let approved: Bool
+        if automaticallyApprovesControl() {
+            approved = true
+        } else {
+            approved = await agentConsent.requestApproval(
+                AgentConsentRequest(
+                    kind: .browserControl,
+                    title: BrowserLocalization.string("agent_consent_control_title"),
+                    detail: plan,
+                    origin: origin
+                )
             )
-        )
+        }
         guard approved else {
             throw AgentToolError.declined(
                 "The person did not allow you to drive the browser. Do not ask "
@@ -230,6 +315,7 @@ extension BrowserAIToolBridge {
         }
 
         hasBrowserControl = true
+        keepsReservation = true
         agentTabID = tab.id
         agentActivity.clearSteps()
         agentActivity.beginControl(of: tab.id)
@@ -457,16 +543,26 @@ extension BrowserAIToolBridge {
 
     // MARK: - Tabs
 
-    private func runSwitchTab(_ arguments: AIJSONValue) throws -> AIToolOutput {
+    private func runSwitchTab(_ arguments: AIJSONValue) async throws -> AIToolOutput {
         guard let model else { throw AIToolBridgeError.windowClosed }
         let tab = try resolveTab(arguments["tab_id"]?.stringValue)
+        let expectedURL = tab.url
         agentTabID = tab.id
         agentActivity?.beginControl(of: tab.id)
+        let webView = model.webView(for: tab.id)
+        await settle(tab)
+        if webView?.url?.scheme == "about", let expectedURL,
+           ["http", "https"].contains(expectedURL.scheme?.lowercased() ?? "") {
+            model.agentLoad(expectedURL, in: tab.id)
+            await settle(tab)
+        }
         agentActivity?.record(
             BrowserLocalization.string("agent_step_switched", tab.displayTitle)
         )
+        let resolvedURL = webView?.url ?? tab.url
         return AIToolOutput(
-            text: "Now driving \(tab.displayTitle) — \(tab.url?.absoluteString ?? "")."
+            text: "Now driving \(tab.displayTitle) — "
+                + "\(resolvedURL?.absoluteString ?? "unknown URL")."
         )
     }
 
@@ -549,6 +645,9 @@ extension BrowserAIToolBridge {
         _ summary: String,
         tab: BrowserTab
     ) async -> AIToolOutput {
+        if isRunningActionBatch {
+            return AIToolOutput(text: summary)
+        }
         lastElements[tab.id] = nil
         guard let pageDriver = try? driver(for: tab),
               let snapshot = try? await pageDriver.snapshot()
@@ -590,6 +689,7 @@ extension BrowserAIToolBridge {
 }
 
 enum AgentToolError: LocalizedError {
+    case busy
     case controlNotGranted
     case declined(String)
     case blocked(String)
@@ -599,6 +699,9 @@ enum AgentToolError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .busy:
+            "Another assistant is already controlling this browser window. "
+                + "Wait until it releases control, then try again."
         case .controlNotGranted:
             "You do not have control of the browser. Call "
                 + "browser_request_control first and wait for the person to allow it."

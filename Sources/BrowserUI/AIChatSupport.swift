@@ -12,6 +12,8 @@ import Observation
 final class BrowserAIToolBridge: AIChatToolExecutor {
     let model: BrowserWindowModel?
     private let memories: AIMemoryStore
+    let automaticallyApprovesControl: @MainActor () -> Bool
+    let controlReservationID = UUID()
 
     /// True once the person has approved this conversation driving the browser.
     /// Reset whenever a new conversation starts, so consent never leaks between
@@ -22,12 +24,18 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
     /// The most recent snapshot per tab, so a click can be classified against
     /// the element the model actually saw.
     var lastElements: [TabID: [String: AgentElement]] = [:]
+    var isRunningActionBatch = false
 
     let classifier = AgentActionClassifier.shared
 
-    init(model: BrowserWindowModel, memories: AIMemoryStore = .shared) {
+    init(
+        model: BrowserWindowModel,
+        memories: AIMemoryStore = .shared,
+        automaticallyApprovesControl: @escaping @MainActor () -> Bool = { false }
+    ) {
         self.model = model
         self.memories = memories
+        self.automaticallyApprovesControl = automaticallyApprovesControl
     }
 
     var agentActivity: AgentActivityCenter? { model?.agentActivity }
@@ -44,6 +52,7 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
     }
 
     func releaseBrowserControl() {
+        model?.releaseAgentControlReservation(controlReservationID)
         hasBrowserControl = false
         agentTabID = nil
         lastElements.removeAll()
@@ -53,6 +62,13 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
 
     var toolSpecs: [AIToolSpec] {
         baseToolSpecs + agentToolSpecs
+    }
+
+    /// External agents get only the live-browser surface. Memory, Python, and
+    /// network fetch tools belong to Point's own chat and would unnecessarily
+    /// widen the authority of an MCP connection.
+    var externalAgentToolSpecs: [AIToolSpec] {
+        baseToolSpecs.filter { $0.name == "list_tabs" } + agentToolSpecs
     }
 
     private var baseToolSpecs: [AIToolSpec] {
@@ -106,7 +122,8 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
             ),
             spec(
                 "list_tabs",
-                "List the tabs open in this window with their ids, titles, and URLs.",
+                "List tabs with ids, titles, URLs, active state, favicon URLs, "
+                    + "and last interaction times.",
                 properties: [:],
                 required: []
             ),
@@ -286,8 +303,12 @@ final class BrowserAIToolBridge: AIChatToolExecutor {
         let listing = model.tabs.map { tab in
             let folder = tab.folderID.flatMap { model.folderPath($0) }
             let suffix = folder.map { " [folder: \($0)]" } ?? ""
+            let active = tab.id == model.selectedTabID ? " [active]" : ""
+            let favicon = tab.faviconURL.map { " [favicon: \($0.absoluteString)]" } ?? ""
+            let lastActive = ISO8601DateFormatter().string(from: tab.lastInteractionAt)
             return "\(tab.id.rawValue.uuidString) — \(tab.displayTitle) — "
-                + "\(tab.url?.absoluteString ?? "")\(suffix)"
+                + "\(tab.url?.absoluteString ?? "")\(active)\(suffix)\(favicon) "
+                + "[last interaction: \(lastActive)]"
         }.joined(separator: "\n")
         return AIToolOutput(text: listing)
     }

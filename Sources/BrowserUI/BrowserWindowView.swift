@@ -183,6 +183,19 @@ public struct BrowserWindowView: View {
                     .zIndex(20)
             }
 
+            if !model.isAIChatPanelVisible,
+               let request = model.agentConsent.current {
+                AgentConsentCard(request: request) { approved in
+                    model.agentConsent.resolve(request.id, approved: approved)
+                }
+                .frame(width: 360)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 18)
+                .padding(.bottom, 18)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(90)
+            }
+
             if let prompt = model.mediaPermissionPrompt {
                 MediaPermissionOverlay(prompt: prompt) { action in
                     model.resolveMediaPermission(action)
@@ -326,6 +339,7 @@ public struct BrowserWindowView: View {
         .frame(minWidth: 760, minHeight: 520)
         .background(
             WindowAccessor(
+                model: model,
                 showsTrafficLights: model.isSidebarVisible,
                 isPrivate: model.isPrivate,
                 isFullScreen: $isFullScreen,
@@ -362,6 +376,35 @@ public struct BrowserWindowView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             model.setApplicationActive(phase == .active)
+            refreshPictureInPictureVisibility()
+        }
+        .onChange(of: hostWindow) {
+            refreshPictureInPictureVisibility()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSWindow.didChangeOcclusionStateNotification
+            )
+        ) { notification in
+            guard let window = notification.object as? NSWindow,
+                  window === hostWindow else { return }
+            refreshPictureInPictureVisibility()
+        }
+        .onReceive(
+            NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.activeSpaceDidChangeNotification
+            )
+        ) { _ in
+            // The notification can arrive before AppKit updates occlusion.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                refreshPictureInPictureVisibility()
+            }
+        }
+        .onChange(of: model.agentConsent.current?.id) { _, requestID in
+            guard requestID != nil, !NSApp.isActive,
+                  let request = model.agentConsent.current else { return }
+            AgentConsentNotifier.notify(for: request)
         }
         .onReceive(
             NotificationCenter.default.publisher(for: BrowserOnboarding.replayRequest)
@@ -386,6 +429,13 @@ public struct BrowserWindowView: View {
     /// the panel edge is dragged.
     private var aiChatPanelWidth: CGFloat {
         model.isAIChatPanelVisible ? CGFloat(AIChatSettings.shared.panelWidth) : 0
+    }
+
+    private func refreshPictureInPictureVisibility() {
+        guard let hostWindow else { return }
+        let visible = NSApp.isActive &&
+            hostWindow.occlusionState.contains(.visible)
+        model.setPictureInPictureWindowVisible(visible)
     }
 
     private var sidebarWidth: CGFloat {
@@ -1278,6 +1328,7 @@ private struct LoadingBar: View {
 }
 
 private struct WindowAccessor: NSViewRepresentable {
+    let model: BrowserWindowModel
     let showsTrafficLights: Bool
     let isPrivate: Bool
     @Binding var isFullScreen: Bool
@@ -1398,6 +1449,7 @@ private struct WindowAccessor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
+            model.setHostWindow(view.window)
             context.coordinator.configure(
                 view.window,
                 showsTrafficLights: showsTrafficLights,
@@ -1413,6 +1465,7 @@ private struct WindowAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
+            model.setHostWindow(nsView.window)
             context.coordinator.configure(
                 nsView.window,
                 showsTrafficLights: showsTrafficLights,

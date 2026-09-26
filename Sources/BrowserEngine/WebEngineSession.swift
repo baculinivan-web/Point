@@ -6,6 +6,7 @@ import WebKit
 @MainActor
 public protocol WebEngineEventSink: AnyObject {
     func webEngineDidChange(_ session: WebEngineSession)
+    func webEngineRequestedPictureInPictureReturn(_ session: WebEngineSession)
     func webEngineDidCommit(_ session: WebEngineSession)
     func webEngineDidFinish(_ session: WebEngineSession)
     func webEngineDidFailNavigation(_ session: WebEngineSession)
@@ -31,6 +32,16 @@ public protocol WebEngineEventSink: AnyObject {
     func webEngineRequestedClose(_ session: WebEngineSession)
 }
 
+public struct WebMediaPlayback: Equatable, Sendable {
+    public enum Kind: String, Sendable {
+        case audio
+        case video
+    }
+
+    public let kind: Kind
+    public let isPlaying: Bool
+}
+
 @MainActor
 public final class WebEngineSession: NSObject {
     public let tabID: TabID
@@ -48,6 +59,21 @@ public final class WebEngineSession: NSObject {
     private var pendingMainFrameNavigationWasBackForward = false
     private var lastMainFrameRequest: URLRequest?
     private var provisionalNavigationNeedsExplicitReload = false
+    private let pictureInPictureHandlerName: String
+    private let pictureInPictureHandler: VideoPictureInPictureMessageHandler
+    private var videoFrames: [String: VideoFrame] = [:]
+    private var automaticPictureInPictureFrameID: String?
+    private var pictureInPictureRequestInFlight = false
+    private var pictureInPictureShouldBeVisible = false
+    private var pictureInPictureRestoreTask: Task<Void, Never>?
+
+    private struct VideoFrame {
+        let frameInfo: WKFrameInfo
+        let playing: Bool
+        let pictureInPicture: Bool
+        let mediaPlayback: WebMediaPlayback?
+        let updatedAt: Date
+    }
 
     public var title: String {
         webView.title ?? BrowserLocalization.string("new_tab")
@@ -58,6 +84,25 @@ public final class WebEngineSession: NSObject {
     public var canGoBack: Bool { webView.canGoBack }
     public var canGoForward: Bool { webView.canGoForward }
     public private(set) var isPlayingMedia = false
+    public var hasPlayingVideo: Bool {
+        videoFrames.values.contains {
+            $0.playing && Date().timeIntervalSince($0.updatedAt) < 20
+        }
+    }
+    public var isPresentingPictureInPicture: Bool {
+        videoFrames.values.contains { $0.pictureInPicture }
+    }
+    public var mediaPlayback: WebMediaPlayback? {
+        videoFrames.values
+            .filter { $0.mediaPlayback != nil }
+            .sorted {
+                if $0.mediaPlayback?.isPlaying != $1.mediaPlayback?.isPlaying {
+                    return $0.mediaPlayback?.isPlaying == true
+                }
+                return $0.updatedAt > $1.updatedAt
+            }
+            .first?.mediaPlayback
+    }
     public private(set) var hasActiveCapture = false
     public private(set) var isStoppingMediaCapture = false
     public private(set) var isElementFullscreen = false
@@ -88,11 +133,30 @@ public final class WebEngineSession: NSObject {
     ) {
         self.tabID = tabID
         self.downloadManager = downloadManager
+        let handlerName = "pointPictureInPicture_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        pictureInPictureHandlerName = handlerName
+        pictureInPictureHandler = VideoPictureInPictureMessageHandler()
         let configuration = suppliedConfiguration
             ?? Self.makeConfiguration(websiteDataStore: websiteDataStore)
+        let contentWorld = WKContentWorld.world(name: "PointPictureInPicture")
+        configuration.userContentController.add(
+            pictureInPictureHandler,
+            contentWorld: contentWorld,
+            name: handlerName
+        )
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: VideoPictureInPicture.observerScript(handlerName: handlerName),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false,
+                in: contentWorld
+            )
+        )
         webView = WKWebView(frame: .zero, configuration: configuration)
 
         super.init()
+
+        pictureInPictureHandler.session = self
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -139,12 +203,154 @@ public final class WebEngineSession: NSObject {
     }
 
     public func invalidate() {
+        pictureInPictureRestoreTask?.cancel()
         observations.forEach { $0.invalidate() }
         observations.removeAll()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         webView.removeFromSuperview()
+        webView.configuration.userContentController.removeScriptMessageHandler(
+            forName: pictureInPictureHandlerName,
+            contentWorld: WKContentWorld.world(name: "PointPictureInPicture")
+        )
+        videoFrames.removeAll()
         eventSink = nil
+    }
+
+    /// Keeps the system PiP presentation in sync with whether this tab is
+    /// visible. A failed or disallowed request leaves playback untouched.
+    public func setAutomaticPictureInPictureVisible(_ visible: Bool) {
+        pictureInPictureShouldBeVisible = visible
+        if visible {
+            restoreAutomaticPictureInPicture()
+        } else {
+            pictureInPictureRestoreTask?.cancel()
+            pictureInPictureRestoreTask = nil
+            requestAutomaticPictureInPicture()
+        }
+    }
+
+    public func toggleMediaPlayback() {
+        guard let frame = videoFrames.values
+            .filter({ $0.mediaPlayback != nil })
+            .sorted(by: {
+                if $0.mediaPlayback?.isPlaying != $1.mediaPlayback?.isPlaying {
+                    return $0.mediaPlayback?.isPlaying == true
+                }
+                return $0.updatedAt > $1.updatedAt
+            })
+            .first else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = try? await webView.callAsyncJavaScript(
+                VideoPictureInPicture.toggleMediaScript,
+                arguments: [:],
+                in: frame.frameInfo,
+                contentWorld: WKContentWorld.world(name: "PointPictureInPicture")
+            )
+        }
+    }
+
+    private func requestAutomaticPictureInPicture() {
+        guard !pictureInPictureRequestInFlight,
+              automaticPictureInPictureFrameID == nil,
+              !isElementFullscreen
+        else { return }
+
+        let candidates = videoFrames
+            .filter { $0.value.playing && !$0.value.pictureInPicture &&
+                Date().timeIntervalSince($0.value.updatedAt) < 20 }
+            .sorted { $0.value.updatedAt > $1.value.updatedAt }
+        guard !candidates.isEmpty else { return }
+
+        pictureInPictureRequestInFlight = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { pictureInPictureRequestInFlight = false }
+            for candidate in candidates {
+                guard !pictureInPictureShouldBeVisible else { return }
+                let value = try? await webView.callAsyncJavaScript(
+                    VideoPictureInPicture.enterScript,
+                    arguments: [:],
+                    in: candidate.value.frameInfo,
+                    contentWorld: WKContentWorld.world(name: "PointPictureInPicture")
+                )
+                if value as? Bool == true {
+                    automaticPictureInPictureFrameID = candidate.key
+                    if pictureInPictureShouldBeVisible {
+                        restoreAutomaticPictureInPicture()
+                    }
+                    return
+                }
+            }
+        }
+    }
+
+    private func restoreAutomaticPictureInPicture() {
+        guard automaticPictureInPictureFrameID != nil,
+              pictureInPictureRestoreTask == nil else { return }
+        pictureInPictureRestoreTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, pictureInPictureShouldBeVisible,
+                  let frameID = automaticPictureInPictureFrameID,
+                  let frame = videoFrames[frameID] else {
+                pictureInPictureRestoreTask = nil
+                return
+            }
+            automaticPictureInPictureFrameID = nil
+            _ = try? await webView.callAsyncJavaScript(
+                VideoPictureInPicture.exitScript,
+                arguments: [:],
+                in: frame.frameInfo,
+                contentWorld: WKContentWorld.world(name: "PointPictureInPicture")
+            )
+            pictureInPictureRestoreTask = nil
+        }
+    }
+
+    fileprivate func receiveVideoState(_ message: WKScriptMessage) {
+        guard let state = message.body as? [String: Any],
+              let frameID = state["frameID"] as? String,
+              let playing = state["playing"] as? Bool,
+              let pictureInPicture = state["pictureInPicture"] as? Bool
+        else { return }
+        let wasPresentingPictureInPicture = isPresentingPictureInPicture
+        let frameWasPresentingPictureInPicture =
+            videoFrames[frameID]?.pictureInPicture == true
+        let previousMediaPlayback = mediaPlayback
+        let mediaPlayback: WebMediaPlayback?
+        if state["mediaAvailable"] as? Bool == true,
+           let kindName = state["mediaKind"] as? String,
+           let kind = WebMediaPlayback.Kind(rawValue: kindName) {
+            mediaPlayback = WebMediaPlayback(
+                kind: kind,
+                isPlaying: state["mediaPlaying"] as? Bool == true
+            )
+        } else {
+            mediaPlayback = nil
+        }
+        if playing || pictureInPicture || mediaPlayback != nil {
+            videoFrames[frameID] = VideoFrame(
+                frameInfo: message.frameInfo,
+                playing: playing,
+                pictureInPicture: pictureInPicture,
+                mediaPlayback: mediaPlayback,
+                updatedAt: Date()
+            )
+        } else {
+            videoFrames.removeValue(forKey: frameID)
+        }
+        if automaticPictureInPictureFrameID == frameID && !pictureInPicture
+            && (state["pictureInPictureExited"] as? Bool == true
+                || frameWasPresentingPictureInPicture
+                || state["pageHidden"] as? Bool == true) {
+            automaticPictureInPictureFrameID = nil
+        }
+        if wasPresentingPictureInPicture != isPresentingPictureInPicture
+            || previousMediaPlayback != self.mediaPlayback {
+            eventSink?.webEngineDidChange(self)
+        }
     }
 
     public func load(_ url: URL) {
@@ -278,6 +484,15 @@ public final class WebEngineSession: NSObject {
         preferences.isFraudulentWebsiteWarningEnabled = true
         preferences.javaScriptCanOpenWindowsAutomatically = true
         preferences.isElementFullscreenEnabled = true
+        // Safari enables this WebKit preference, but WKWebView does not expose
+        // a public macOS setter. Without it both video PiP APIs reject even a
+        // playing local MP4. Check the selector so older WebKit versions keep
+        // their existing behavior instead of failing at runtime.
+        if preferences.responds(
+            to: NSSelectorFromString("_setAllowsPictureInPictureMediaPlayback:")
+        ) {
+            preferences.setValue(true, forKey: "allowsPictureInPictureMediaPlayback")
+        }
         configuration.preferences = preferences
 
         let webpagePreferences = WKWebpagePreferences()
@@ -357,6 +572,18 @@ public final class WebEngineSession: NSObject {
             mediaSuspensionTransitionInFlight = false
             driveMediaSuspensionTransition()
         }
+    }
+}
+
+@MainActor
+private final class VideoPictureInPictureMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var session: WebEngineSession?
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        session?.receiveVideoState(message)
     }
 }
 
@@ -525,6 +752,8 @@ extension WebEngineSession: WKNavigationDelegate {
 
     public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         provisionalNavigationNeedsExplicitReload = false
+        videoFrames.removeAll()
+        automaticPictureInPictureFrameID = nil
         committedNavigationWasBackForward = pendingMainFrameNavigationWasBackForward
         pendingMainFrameNavigationWasBackForward = false
         eventSink?.webEngineDidCommit(self)
@@ -586,6 +815,14 @@ extension WebEngineSession: WKNavigationDelegate {
 }
 
 extension WebEngineSession: WKUIDelegate {
+    /// WebKit calls this private delegate selector when the system PiP window's
+    /// Return to Tab button is pressed, before it dismisses the video window.
+    @objc(_webViewFullscreenMayReturnToInline:)
+    public func pictureInPictureMayReturnToInline(_ webView: WKWebView) {
+        guard webView === self.webView else { return }
+        eventSink?.webEngineRequestedPictureInPictureReturn(self)
+    }
+
     public func webView(
         _ webView: WKWebView,
         requestMediaCapturePermissionFor origin: WKSecurityOrigin,

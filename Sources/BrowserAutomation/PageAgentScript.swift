@@ -21,6 +21,7 @@ enum PageAgentScript {
         '[role="radio"]', '[role="tab"]', '[role="menuitem"]',
         '[role="menuitemcheckbox"]', '[role="switch"]', '[role="textbox"]',
         '[role="combobox"]', '[role="option"]', '[role="searchbox"]',
+        '[role="gridcell"]', '[role="spinbutton"]', '[aria-haspopup]',
         '[contenteditable=""]', '[contenteditable="true"]',
         '[onclick]', '[tabindex]'
       ].join(',');
@@ -171,10 +172,11 @@ enum PageAgentScript {
       ///
       /// Cross-origin iframes are unreachable from here; the driver reports
       /// them rather than pretending the page has no content inside them.
-      function collect(doc, offsetX, offsetY, depth, out, limit, blocked) {
+      function collect(root, offsetX, offsetY, depth, out, limit, blocked) {
+        const doc = root.ownerDocument || root;
         let candidates;
         try {
-          candidates = doc.querySelectorAll(INTERACTIVE);
+          candidates = root.querySelectorAll(INTERACTIVE);
         } catch (ignored) {
           return;
         }
@@ -238,7 +240,15 @@ enum PageAgentScript {
         }
 
         if (depth >= 3) { return; }
-        for (const frame of doc.querySelectorAll('iframe,frame')) {
+        let shadowHosts = [];
+        try { shadowHosts = root.querySelectorAll('*'); } catch (ignored) {}
+        for (const host of shadowHosts) {
+          if (out.length >= limit) { return; }
+          if (host.shadowRoot) {
+            collect(host.shadowRoot, offsetX, offsetY, depth + 1, out, limit, blocked);
+          }
+        }
+        for (const frame of root.querySelectorAll('iframe,frame')) {
           if (out.length >= limit) { return; }
           const frameRect = frame.getBoundingClientRect();
           if (frameRect.width < 8 || frameRect.height < 8) { continue; }

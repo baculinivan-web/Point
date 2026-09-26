@@ -210,6 +210,13 @@ struct SidebarView: View {
                     .padding(.bottom, 10)
             }
 
+            if let mediaTab = model.sidebarMediaTab {
+                SidebarMediaPlayer(model: model, tab: mediaTab)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 7)
+                    .padding(.bottom, 4)
+            }
+
             SpaceSwitcher(model: model)
                 .padding(.horizontal, 10)
                 .padding(.top, 7)
@@ -532,6 +539,65 @@ private struct UpdateAvailableSidebarRow: View {
             return BrowserLocalization.string("update_ready_sidebar")
         case .failed:
             return BrowserLocalization.string("update_retry_sidebar")
+        }
+    }
+}
+
+private struct SidebarMediaPlayer: View {
+    let model: BrowserWindowModel
+    let tab: BrowserTab
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Button {
+                model.selectTab(tab.id)
+            } label: {
+                HStack(spacing: 9) {
+                    TabFavicon(tab: tab, size: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tab.displayTitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        if let domain = tab.domain {
+                            Text(domain)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(BrowserLocalization.string("media_open_tab"))
+
+            Button {
+                model.toggleMediaPlayback(for: tab.id)
+            } label: {
+                Image(systemName: tab.mediaPlayback?.isPlaying == true
+                    ? "pause.fill" : "play.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help(BrowserLocalization.string(tab.mediaPlayback?.isPlaying == true
+                ? "media_pause" : "media_play"))
+            .accessibilityLabel(BrowserLocalization.string(
+                tab.mediaPlayback?.isPlaying == true ? "media_pause" : "media_play"
+            ))
+        }
+        .padding(.leading, 9)
+        .padding(.trailing, 5)
+        .frame(height: 48)
+        .background(.primary.opacity(0.18), in: RoundedRectangle(cornerRadius: 11))
+        .overlay {
+            RoundedRectangle(cornerRadius: 11)
+                .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
         }
     }
 }

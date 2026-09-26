@@ -126,6 +126,7 @@ struct TabLifecyclePolicyTests {
         let policy = TabLifecyclePolicy()
         let active = TabID()
         let media = TabID()
+        let pictureInPicture = TabID()
         let capture = TabID()
         let ordinary = TabID()
         let suspended = TabID()
@@ -133,6 +134,8 @@ struct TabLifecyclePolicyTests {
             for: [
                 snapshot(active, .active, age: 0, protection: .active),
                 snapshot(media, .liveBackground, age: 90, protection: .audibleMedia),
+                snapshot(pictureInPicture, .liveBackground, age: 85,
+                    protection: .pictureInPicture),
                 snapshot(capture, .liveBackground, age: 80, protection: .capture),
                 snapshot(ordinary, .liveBackground, age: 70),
                 snapshot(suspended, .suspended, age: 60)

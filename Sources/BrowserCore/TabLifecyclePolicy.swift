@@ -46,6 +46,7 @@ public struct TabProtectionReason: OptionSet, Sendable {
     public static let fullscreen = Self(rawValue: 1 << 3)
     public static let pendingUIFlow = Self(rawValue: 1 << 4)
     public static let gracePeriod = Self(rawValue: 1 << 5)
+    public static let pictureInPicture = Self(rawValue: 1 << 6)
 }
 
 public struct TabLifecycleSnapshot: Sendable {

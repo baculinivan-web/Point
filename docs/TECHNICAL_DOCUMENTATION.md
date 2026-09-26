@@ -29,6 +29,7 @@ The engine choice and live-tab model are recorded in [ADR-001](adr/ADR-001-web-e
 
 - Real web content is rendered through `WKWebView`.
 - Ordinary tab switching keeps a live web view and does not reload the page.
+- Playing HTML5 video in the page or an embedded frame is considered for system Picture in Picture when its tab or macOS Space stops being visible. Returning to the tab closes only a presentation started by Point. On macOS, Point enables WebKit's private `allowsPictureInPictureMediaPlayback` preference when present and grants its sandboxed app access to `com.apple.PIPAgent`. Both are required for PiP to start in `WKWebView` on the tested macOS version. This uses an undocumented preference and a temporary sandbox exception, so it may change in future macOS releases and may not be accepted by Mac App Store review. A site can still reject PiP for a particular video.
 - Multiple regular windows are supported.
 - Selected tabs can move to a new regular window without a reload. The live web view, media state, and scroll state move with the tab.
 - `target=_blank` and `window.open` create a new tab using the WebKit-provided configuration.
@@ -172,7 +173,9 @@ For this trusted beta distribution, create the DMG with:
 make release
 ```
 
-This produces `dist/Point.dmg` with ad-hoc signing only. It does not use Sparkle, Developer ID signing, notarization, or an update backend. Upload that exact DMG as every GitHub Release asset.
+This produces `dist/Point.dmg`. The build selects an available Developer ID Application identity, then Apple Development, or falls back to ad-hoc signing. Set `POINT_SIGNING_IDENTITY` to pin a specific identity. Keep the signing identity stable across builds: ad-hoc signatures identify a particular binary and can trigger repeated Keychain authorization after updates. Apple Development signing provides a stable local identity but does not provide Developer ID distribution or notarization. Upload that exact DMG as every GitHub Release asset.
+
+Assistant API keys remain in Keychain. Browser startup initializes assistant preferences without reading secrets; keys are loaded when the user opens the assistant or its settings. Loading never rewrites or removes saved items. Moving from an ad-hoc build to a certificate-signed build may require a one-time Keychain authorization.
 
 ### Manual update configuration
 
