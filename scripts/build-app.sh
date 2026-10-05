@@ -38,6 +38,7 @@ cp -R "${BUILD_ROOT}/${CONFIGURATION}/Browser_BrowserUI.bundle" "${RESOURCES_DIR
 rm -rf "${APP_DIR}/Browser_BrowserCore.bundle"
 rm -rf "${RESOURCES_DIR}/Browser_BrowserCore.bundle"
 cp -R "${BUILD_ROOT}/${CONFIGURATION}/Browser_BrowserCore.bundle" "${RESOURCES_DIR}/"
+cp -R "${BUILD_ROOT}/${CONFIGURATION}/Browser_BrowserEngine.bundle" "${RESOURCES_DIR}/"
 
 xcrun actool \
     --compile "${RESOURCES_DIR}" \

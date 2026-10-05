@@ -28,7 +28,9 @@ Private windows keep their local browsing data separate and disappear when the w
 
 ## Status
 
-Point 0.3.2 is a public beta. The core browsing experience, sidebar-first tab management, session restoration, private windows, downloads, browsing history, site permissions, link previews, split view, and macOS integration are available. Some advanced web compatibility and performance checks are still being validated on real hardware.
+Point 0.3.3 is a public beta. The core browsing experience, sidebar-first tab management, session restoration, private windows, downloads, browsing history, site permissions, link previews, split view, and macOS integration are available. Some advanced web compatibility and performance checks are still being validated on real hardware.
+
+Built-in ad blocking is enabled by default in regular and private tabs. Change it in Settings → General → Ad blocking, then reload open pages. Bundled AdGuard Base and Russian filters block advertising requests and hide banners using WebKit content rules. Filters ship with the app and do not update automatically. Advanced scriptlet rules are excluded, so this does not guarantee removal of video ads or all advertising. Filter sources, licenses, and regeneration details are bundled in `Sources/BrowserEngine/Resources/AdBlock`; maintainers can refresh them using `scripts/update-adblock-filters.sh` and AdGuard's ConverterTool v4.3.0.
 
 See the [technical documentation](docs/TECHNICAL_DOCUMENTATION.md) for implementation details, build instructions, testing, release requirements, and known limitations. The [product vision](docs/PRODUCT_VISION.md) explains the principles behind the experience.
 

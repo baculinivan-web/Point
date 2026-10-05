@@ -19,7 +19,8 @@ let package = Package(
         ),
         .target(
             name: "BrowserEngine",
-            dependencies: ["BrowserCore"]
+            dependencies: ["BrowserCore"],
+            resources: [.process("Resources")]
         ),
         .target(
             name: "BrowserPersistence",

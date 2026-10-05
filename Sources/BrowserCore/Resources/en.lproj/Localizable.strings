@@ -489,3 +489,9 @@
 	<string>Open File</string>
 </dict>
 </plist>
+
+// Ad blocking
+"adblock_section" = "Ad blocking";
+"adblock_enabled" = "Block ads";
+"adblock_detail" = "Blocks advertising requests and hides ad banners using AdGuard Base and Russian filters. Reload open pages after changing this setting.";
+"adblock_failed" = "Ad blocking could not start. Restart the browser to try again.";

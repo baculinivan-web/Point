@@ -1,6 +1,10 @@
 {
   "sourceLanguage": "ru",
   "strings": {
+    "adblock_section": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Ad blocking"}}, "ru": {"stringUnit": {"state": "translated", "value": "Блокировка рекламы"}}}},
+    "adblock_enabled": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Block ads"}}, "ru": {"stringUnit": {"state": "translated", "value": "Блокировать рекламу"}}}},
+    "adblock_detail": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Blocks advertising requests and hides ad banners using AdGuard Base and Russian filters. Reload open pages after changing this setting."}}, "ru": {"stringUnit": {"state": "translated", "value": "Блокирует рекламные запросы и скрывает баннеры с помощью базового и русского фильтров AdGuard. После изменения настройки перезагрузите открытые страницы."}}}},
+    "adblock_failed": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Ad blocking could not start. Restart the browser to try again."}}, "ru": {"stringUnit": {"state": "translated", "value": "Не удалось запустить блокировку рекламы. Перезапустите браузер, чтобы повторить попытку."}}}},
     "active_downloads": {
       "localizations": {
         "en": {

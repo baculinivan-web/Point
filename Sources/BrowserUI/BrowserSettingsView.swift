@@ -1,6 +1,7 @@
 import AppKit
 import BrowserAI
 import BrowserCore
+import BrowserEngine
 import SwiftUI
 
 public enum BrowserSettingsSection: String, CaseIterable, Identifiable {
@@ -33,6 +34,7 @@ public struct BrowserSettingsView: View {
     private var memoryLimitFraction = BrowserMemoryLimitSettings.defaultFraction
     @Bindable private var aiSettings = AIChatSettings.shared
     @Bindable private var memories = AIMemoryStore.shared
+    @Bindable private var adBlock = AdBlockController.shared
 
     @State private var isDefaultBrowser = false
     @State private var isDefaultBrowserUpdateInProgress = false
@@ -177,6 +179,17 @@ public struct BrowserSettingsView: View {
 
     private var generalSettings: some View {
         Form {
+            Section(BrowserLocalization.string("adblock_section")) {
+                Toggle(BrowserLocalization.string("adblock_enabled"), isOn: $adBlock.isEnabled)
+                Text(BrowserLocalization.string("adblock_detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if adBlock.hasFailed {
+                    Text(BrowserLocalization.string("adblock_failed"))
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
             Section(BrowserLocalization.string("default_browser")) {
                 Text(BrowserLocalization.string("default_browser_detail"))
                     .font(.caption)

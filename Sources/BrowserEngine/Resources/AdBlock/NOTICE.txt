@@ -1,0 +1,14 @@
+Point bundles AdGuard Base (including EasyList) and AdGuard Russian filters.
+Upstream: https://github.com/AdguardTeam/FiltersRegistry
+Filter authors and source: https://github.com/AdguardTeam/AdguardFilters
+License: GNU GPL v3; see LICENSE.txt. Original filter sources are included
+as base.txt and russian.txt, with their upstream version and date headers.
+
+rules.json is generated from base.txt followed by russian.txt using
+AdguardTeam/SafariConverterLib v4.3.0 (tag commit
+7a2e93f0afa70479cc59985f332025236c3f0c39), targeting Safari 26.0 with
+advanced-blocking=false. The converter is a development tool and is not
+linked into Point. See scripts/update-adblock-filters.sh to regenerate.
+
+Only native WebKit network and CSS content-blocking rules are included.
+Scriptlets, extended CSS, and other advanced rules are not executed.
