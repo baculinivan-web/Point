@@ -68,13 +68,27 @@ public struct BrowserWindowView: View {
         ZStack(alignment: .leading) {
             WebSurface(model: model, sidebarWidth: sidebarWidth)
                 .padding(.leading, model.sidebarMode == .pinned ? sidebarWidth : 0)
-                .padding(.trailing, aiChatPanelWidth)
+                .padding(.trailing, aiChatPanelWidth + extensionSidePanelWidth)
                 .clipShape(
                     LeadingRoundedRectangle(
                         radius: model.sidebarMode == .pinned ? 18 : 0
                     )
                 )
                 .ignoresSafeArea()
+
+            if let panel = model.extensionSidePanel, !model.isPrivate {
+                BrowserExtensionSidePanelView(model: model, panel: panel)
+                    .frame(width: extensionSidePanelWidth)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .ignoresSafeArea()
+                    .zIndex(6)
+            }
+
+            ChromeWebStoreInstallBanner(model: model)
+                .padding(.leading, model.sidebarMode == .pinned ? sidebarWidth : 0)
+                .padding(.trailing, aiChatPanelWidth + extensionSidePanelWidth)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .zIndex(5)
 
             if model.isAIChatPanelVisible {
                 AIChatPanelView(
@@ -426,6 +440,10 @@ public struct BrowserWindowView: View {
 
     /// Reading the observable width here keeps the page inset in sync while
     /// the panel edge is dragged.
+    private var extensionSidePanelWidth: CGFloat {
+        model.extensionSidePanel != nil && !model.isPrivate ? 380 : 0
+    }
+
     private var aiChatPanelWidth: CGFloat {
         model.isAIChatPanelVisible ? CGFloat(AIChatSettings.shared.panelWidth) : 0
     }

@@ -30,6 +30,11 @@ public protocol WebEngineEventSink: AnyObject {
         requestsPreviewFor request: URLRequest
     )
     func webEngineRequestedClose(_ session: WebEngineSession)
+    func webEngine(_ session: WebEngineSession, requestsConfigurationChangeFor request: URLRequest) -> Bool
+}
+
+public extension WebEngineEventSink {
+    func webEngine(_ session: WebEngineSession, requestsConfigurationChangeFor request: URLRequest) -> Bool { false }
 }
 
 public struct WebMediaPlayback: Equatable, Sendable {
@@ -50,6 +55,7 @@ public final class WebEngineSession: NSObject {
 
     private let downloadManager: DownloadManager?
     private let navigationSchemePolicy = NavigationSchemePolicy()
+    private let extensionBaseURL: URL?
     private var observations: [NSKeyValueObservation] = []
     private var pendingUIFlowCount = 0
     private var desiredMediaPlaybackSuspended = false
@@ -129,15 +135,20 @@ public final class WebEngineSession: NSObject {
         tabID: TabID,
         configuration suppliedConfiguration: WKWebViewConfiguration? = nil,
         websiteDataStore: WKWebsiteDataStore? = nil,
-        downloadManager: DownloadManager? = nil
+        downloadManager: DownloadManager? = nil,
+        webExtensionController: WKWebExtensionController? = nil,
+        initialURL: URL? = nil
     ) {
         self.tabID = tabID
         self.downloadManager = downloadManager
         let handlerName = "pointPictureInPicture_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         pictureInPictureHandlerName = handlerName
         pictureInPictureHandler = VideoPictureInPictureMessageHandler()
-        let configuration = suppliedConfiguration
+        let context = initialURL.flatMap { webExtensionController?.extensionContext(for: $0) }
+        extensionBaseURL = context?.baseURL
+        let configuration = context?.webViewConfiguration ?? suppliedConfiguration
             ?? Self.makeConfiguration(websiteDataStore: websiteDataStore)
+        configuration.webExtensionController = webExtensionController
         let contentWorld = WKContentWorld.world(name: "PointPictureInPicture")
         configuration.userContentController.add(
             pictureInPictureHandler,
@@ -359,9 +370,16 @@ public final class WebEngineSession: NSObject {
     }
 
     public func load(_ request: URLRequest) {
+        if needsConfigurationChange(for: request.url),
+           eventSink?.webEngine(self, requestsConfigurationChangeFor: request) == true { return }
         lastMainFrameRequest = request
         provisionalNavigationNeedsExplicitReload = false
         webView.load(request)
+    }
+
+    private func needsConfigurationChange(for url: URL?) -> Bool {
+        let destination = url.flatMap { webView.configuration.webExtensionController?.extensionContext(for: $0)?.baseURL }
+        return destination != extensionBaseURL
     }
 
     public func loadHistoryEntry(_ url: URL) {
@@ -671,7 +689,18 @@ extension WebEngineSession: WKNavigationDelegate {
                 navigationAction.navigationType == .backForward
         }
 
-        let disposition = navigationSchemePolicy.disposition(for: url)
+        let isExtensionResource = scheme == "webkit-extension"
+            && webView.configuration.webExtensionController?.extensionContext(for: url) != nil
+        let disposition: NavigationSchemeDisposition = scheme == "webkit-extension"
+            ? (isExtensionResource ? .allowInWebView : .block)
+            : navigationSchemePolicy.disposition(for: url)
+        if disposition == .allowInWebView,
+           navigationAction.targetFrame?.isMainFrame == true,
+           needsConfigurationChange(for: url),
+           eventSink?.webEngine(self, requestsConfigurationChangeFor: navigationAction.request) == true {
+            decisionHandler(.cancel)
+            return
+        }
         if disposition == .allowInWebView,
            navigationAction.navigationType == .linkActivated,
            navigationAction.modifierFlags.contains(.shift) {

@@ -390,6 +390,8 @@ struct SidebarView: View {
             .help(BrowserLocalization.string("ai_chat_toggle_shortcut"))
             .accessibilityLabel(BrowserLocalization.string("ai_chat_toggle"))
 
+            BrowserExtensionsMenu(model: model)
+
             Spacer()
 
             Button {

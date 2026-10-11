@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Point Demo",
+  "description": "A small WebExtension for checking content scripts, messages, storage and popups in Point.",
+  "version": "1.0.0",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://example.com/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Point Demo", "default_popup": "popup.html"},
+  "options_ui": {"page": "options.html", "open_in_tab": true},
+  "content_scripts": [{
+    "matches": ["https://example.com/*"],
+    "js": ["content.js"],
+    "css": ["content.css"]
+  }]
+}

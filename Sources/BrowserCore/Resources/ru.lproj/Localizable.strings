@@ -487,11 +487,93 @@
 	<string>Разбудить вкладку</string>
 	<key>open_file</key>
 	<string>Открыть файл</string>
+	<key>settings_section_extensions</key>
+	<string>Расширения</string>
+	<key>extensions_choose_folder</key>
+	<string>Выберите папку с файлом manifest.json.</string>
+	<key>extensions_description</key>
+	<string>Установите расширение из Chrome Web Store или папки на вашем Mac. Point сохранит собственную копию.</string>
+	<key>extensions_install_folder</key>
+	<string>Установить из папки…</string>
+	<key>extensions_install_title</key>
+	<string>Установить «%@»?</string>
+	<key>extensions_install</key>
+	<string>Установить</string>
+	<key>extensions_access_title</key>
+	<string>Разрешить доступ для «%@»?</string>
+	<key>extensions_allow</key>
+	<string>Разрешить</string>
+	<key>extensions_permissions_detail</key>
+	<string>Расширение запрашивает следующие возможности и доступ к сайтам. Разрешайте доступ только расширениям, которым доверяете.</string>
+	<key>extensions_no_permissions</key>
+	<string>Доступ к возможностям и сайтам не предоставлен.</string>
+	<key>extensions_permissions</key>
+	<string>Разрешения и сайты</string>
+	<key>extensions_private_disabled</key>
+	<string>Расширения отключены в приватных окнах.</string>
+	<key>extensions_empty</key>
+	<string>Нет включённых расширений</string>
+	<key>extensions_review_access</key>
+	<string>Предоставить запрошенный доступ…</string>
+	<key>extensions_revoke_access</key>
+	<string>Отозвать весь доступ</string>
+	<key>extensions_options</key>
+	<string>Настройки расширения</string>
+	<key>extensions_remove</key>
+	<string>Удалить</string>
+	<key>extensions_remove_title</key>
+	<string>Удалить «%@»?</string>
+	<key>extensions_manage</key>
+	<string>Управление расширениями…</string>
+	<key>extensions_compatibility</key>
+	<string>Совместимость зависит от API WebExtensions, поддерживаемых WebKit. Установка из магазинов, автообновление и native messaging пока недоступны.</string>
+	<key>extensions_reload_hint</key>
+	<string>После изменения расширений или разрешений перезагрузите страницы. Уже выполненные скрипты остаются на странице до её перезагрузки.</string>
+	<key>adblock_section</key>
+	<string>Блокировка рекламы</string>
+	<key>adblock_enabled</key>
+	<string>Блокировать рекламу</string>
+	<key>adblock_detail</key>
+	<string>Блокирует рекламные запросы и скрывает баннеры с помощью базового и русского фильтров AdGuard. После изменения настройки перезагрузите открытые страницы.</string>
+	<key>adblock_failed</key>
+	<string>Не удалось запустить блокировку рекламы. Перезапустите браузер, чтобы повторить попытку.</string>
+	<key>extensions_css_limitation</key>
+	<string>Расширения, меняющие оформление сайтов через CSS, могут работать некорректно.</string>
+	<key>extensions_store_link</key>
+	<string>Ссылка из Chrome Web Store или ID расширения</string>
+	<key>extensions_store_install</key>
+	<string>Установить из Chrome Web Store</string>
+	<key>extensions_store_browse</key>
+	<string>Открыть магазин</string>
+	<key>extensions_store_original</key>
+	<string>Оригинальные пакеты устанавливаются без изменений. Совместимость зависит от WebKit.</string>
+	<key>extensions_store_invalid_link</key>
+	<string>Вставьте ссылку на расширение из Chrome Web Store или его ID из 32 символов.</string>
+	<key>extensions_store_unavailable</key>
+	<string>Магазин не предоставил расширение. Проверьте ссылку и повторите попытку.</string>
+	<key>extensions_store_invalid_package</key>
+	<string>Пакет расширения повреждён, не поддерживается или его подпись не прошла проверку.</string>
+	<key>extensions_store_too_large</key>
+	<string>Расширение превышает допустимый размер пакета.</string>
+	<key>extensions_store_already_installed</key>
+	<string>Это расширение уже установлено из Chrome Web Store.</string>
+	<key>extensions_background_timeout</key>
+	<string>Фоновый процесс расширения не завершил запуск. Проверьте совместимость расширения и повторите попытку.</string>
+	<key>extensions_store_offer</key>
+	<string>Установить это расширение в Point?</string>
+	<key>extensions_store_downloading</key>
+	<string>Загрузка расширения…</string>
+	<key>extensions_store_verifying</key>
+	<string>Проверка пакета и подписи…</string>
+	<key>extensions_store_installing</key>
+	<string>Подготовка установки и разрешений…</string>
+	<key>extensions_store_installed</key>
+	<string>Установлено</string>
+	<key>extensions_store_cancelled</key>
+	<string>Установка отменена</string>
+	<key>extensions_open_side_panel</key>
+	<string>Открыть боковую панель</string>
+	<key>extensions_side_panel_runtime_limit</key>
+	<string>Расширение запрашивает Chrome Debugger или связь с настольным приложением, которые Point не поддерживает. Панель может открыться, но эти функции работать не смогут.</string>
 </dict>
 </plist>
-
-// Ad blocking
-"adblock_section" = "Блокировка рекламы";
-"adblock_enabled" = "Блокировать рекламу";
-"adblock_detail" = "Блокирует рекламные запросы и скрывает баннеры с помощью базового и русского фильтров AdGuard. После изменения настройки перезагрузите открытые страницы.";
-"adblock_failed" = "Не удалось запустить блокировку рекламы. Перезапустите браузер, чтобы повторить попытку.";

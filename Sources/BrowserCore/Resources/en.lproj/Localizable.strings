@@ -487,11 +487,93 @@
 	<string>Wake Tab</string>
 	<key>open_file</key>
 	<string>Open File</string>
+	<key>settings_section_extensions</key>
+	<string>Extensions</string>
+	<key>extensions_choose_folder</key>
+	<string>Choose a folder containing manifest.json.</string>
+	<key>extensions_description</key>
+	<string>Install from Chrome Web Store or a folder on your Mac. Point keeps its own copy.</string>
+	<key>extensions_install_folder</key>
+	<string>Install from folder…</string>
+	<key>extensions_install_title</key>
+	<string>Install “%@”?</string>
+	<key>extensions_install</key>
+	<string>Install</string>
+	<key>extensions_access_title</key>
+	<string>Allow access for “%@”?</string>
+	<key>extensions_allow</key>
+	<string>Allow</string>
+	<key>extensions_permissions_detail</key>
+	<string>This extension requests the following capabilities and website access. Allow only extensions you trust.</string>
+	<key>extensions_no_permissions</key>
+	<string>No capabilities or website access granted.</string>
+	<key>extensions_permissions</key>
+	<string>Permissions and websites</string>
+	<key>extensions_private_disabled</key>
+	<string>Extensions are disabled in private windows.</string>
+	<key>extensions_empty</key>
+	<string>No enabled extensions</string>
+	<key>extensions_review_access</key>
+	<string>Grant requested access…</string>
+	<key>extensions_revoke_access</key>
+	<string>Revoke all access</string>
+	<key>extensions_options</key>
+	<string>Extension settings</string>
+	<key>extensions_remove</key>
+	<string>Remove</string>
+	<key>extensions_remove_title</key>
+	<string>Remove “%@”?</string>
+	<key>extensions_manage</key>
+	<string>Manage extensions…</string>
+	<key>extensions_compatibility</key>
+	<string>Compatibility depends on the WebExtension APIs supported by WebKit. Store installation, automatic updates and native messaging are not available.</string>
+	<key>extensions_reload_hint</key>
+	<string>Reload pages after changing extensions or permissions. Scripts already run on a page remain until it is reloaded.</string>
+	<key>adblock_section</key>
+	<string>Ad blocking</string>
+	<key>adblock_enabled</key>
+	<string>Block ads</string>
+	<key>adblock_detail</key>
+	<string>Blocks advertising requests and hides ad banners using AdGuard Base and Russian filters. Reload open pages after changing this setting.</string>
+	<key>adblock_failed</key>
+	<string>Ad blocking could not start. Restart the browser to try again.</string>
+	<key>extensions_css_limitation</key>
+	<string>Extensions that change website appearance using CSS may not work correctly.</string>
+	<key>extensions_store_link</key>
+	<string>Chrome Web Store link or extension ID</string>
+	<key>extensions_store_install</key>
+	<string>Install from Chrome Web Store</string>
+	<key>extensions_store_browse</key>
+	<string>Open store</string>
+	<key>extensions_store_original</key>
+	<string>Original packages are installed without changes. Compatibility depends on WebKit.</string>
+	<key>extensions_store_invalid_link</key>
+	<string>Paste a Chrome Web Store extension link or its 32-character ID.</string>
+	<key>extensions_store_unavailable</key>
+	<string>The store could not provide this extension. Check the link and try again.</string>
+	<key>extensions_store_invalid_package</key>
+	<string>The extension package is damaged, unsupported, or its signature could not be verified.</string>
+	<key>extensions_store_too_large</key>
+	<string>This extension exceeds the package size limit.</string>
+	<key>extensions_store_already_installed</key>
+	<string>This extension is already installed from Chrome Web Store.</string>
+	<key>extensions_background_timeout</key>
+	<string>The extension background did not finish starting. Check extension compatibility and try again.</string>
+	<key>extensions_store_offer</key>
+	<string>Install this extension in Point?</string>
+	<key>extensions_store_downloading</key>
+	<string>Downloading extension…</string>
+	<key>extensions_store_verifying</key>
+	<string>Verifying package and signature…</string>
+	<key>extensions_store_installing</key>
+	<string>Preparing installation and permissions…</string>
+	<key>extensions_store_installed</key>
+	<string>Installed</string>
+	<key>extensions_store_cancelled</key>
+	<string>Installation cancelled</string>
+	<key>extensions_open_side_panel</key>
+	<string>Open side panel</string>
+	<key>extensions_side_panel_runtime_limit</key>
+	<string>This extension requests Chrome Debugger or native app integration, which Point does not support. Its panel may open, but these features cannot work.</string>
 </dict>
 </plist>
-
-// Ad blocking
-"adblock_section" = "Ad blocking";
-"adblock_enabled" = "Block ads";
-"adblock_detail" = "Blocks advertising requests and hides ad banners using AdGuard Base and Russian filters. Reload open pages after changing this setting.";
-"adblock_failed" = "Ad blocking could not start. Restart the browser to try again.";

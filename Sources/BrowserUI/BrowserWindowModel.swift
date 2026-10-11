@@ -296,6 +296,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public let downloadManager: DownloadManager
     public let passkeyAccessManager: PasskeyAccessManager
     public let faviconRepository: FaviconRepository
+    public var openExtensionWindowRequest: (@MainActor (UUID) -> Void)?
     public var openWindowRequest: (@MainActor (_ isPrivate: Bool) -> Void)?
 
     /// One assistant conversation per browsing window.
@@ -322,6 +323,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     private let repository: any SessionRepository
     private let sitePermissionRepository: any SitePermissionRepository
     private let browsingHistoryRepository: any BrowsingHistoryRepository
+    @ObservationIgnored lazy var extensionManager = BrowserExtensionManager.shared
     @ObservationIgnored private let websiteDataStore: WKWebsiteDataStore
     private var parser: OmniboxParser
     private let lifecyclePolicy = TabLifecyclePolicy()
@@ -562,10 +564,22 @@ public final class BrowserWindowModel: WebEngineEventSink {
         openExternalWebURL(url)
     }
 
-    public func copyActivePageURL() {
-        guard let url = activeTab?.url else { return }
+    var extensionSidePanel: BrowserExtensionSidePanel?
 
-        let pasteboard = NSPasteboard.general
+    var currentPageURL: URL? {
+        guard let tab = activeTab else { return nil }
+        // Read the observable snapshot even with a live engine so SwiftUI reacts to URL changes.
+        let snapshotURL = tab.url
+        return tab.engine?.url ?? snapshotURL
+    }
+
+    var chromeWebStoreExtensionID: String? {
+        guard !isPrivate, let url = currentPageURL else { return nil }
+        return try? ChromeWebStoreInstaller.extensionID(from: url.absoluteString)
+    }
+
+    public func copyActivePageURL(to pasteboard: NSPasteboard = .general) {
+        guard let url = currentPageURL else { return }
         pasteboard.clearContents()
         guard pasteboard.setString(url.absoluteString, forType: .string) else {
             showToast(BrowserLocalization.string("copy_failed"))
@@ -1069,6 +1083,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
         dissolveSplits(containing: ids)
 
         let movingIDs = Set(movingTabs.map(\.id))
+        extensionManager.prepareTransfer(movingIDs, from: self)
         tabs.removeAll { movingIDs.contains($0.id) }
         selectedTabIDs.subtract(movingIDs)
         if selectionAnchorID.map(movingIDs.contains) == true {
@@ -1851,6 +1866,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func presentAIChat() {
+        extensionSidePanel = nil
         guard previewTab == nil else { return }
         AIChatSettings.shared.loadAPIKeysIfNeeded()
         prepareAIChatIfNeeded()
@@ -2066,7 +2082,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
 
     /// Opens a tab on behalf of the assistant, marked with the sparkle badge.
     @discardableResult
-    func openAssistantTab(url: URL, inBackground: Bool) -> BrowserTab {
+    func openAssistantTab(url: URL, inBackground: Bool, isAICreated: Bool = true) -> BrowserTab {
         let tab = BrowserTab(
             snapshot: PersistedTab(
                 id: TabID(),
@@ -2075,7 +2091,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 isPinned: false,
                 spaceID: selectedSpaceID,
                 position: nextPosition(in: nil),
-                isAICreated: true
+                isAICreated: isAICreated
             )
         )
         tabs.append(tab)
@@ -2093,7 +2109,23 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func webEngineDidChange(_ session: WebEngineSession) {
+        defer { if !isPrivate { extensionManager.sync(self) } }
         guard let tab = tab(for: session) else { return }
+        // History API and fragment navigation update WKWebView.url without didCommit.
+        if !session.isLoading,
+           let url = session.url, let previous = tab.url, url != previous,
+           url.scheme == previous.scheme, url.host == previous.host, url.port == previous.port {
+            tab.url = url
+            if let index = tab.pendingNavigationHistoryIndex {
+                _ = tab.navigationHistory.move(to: index, committedURL: url, title: session.title)
+                tab.pendingNavigationHistoryIndex = nil
+            } else {
+                tab.navigationHistory.recordNavigation(url: url, title: session.title)
+            }
+            updateNavigationAvailability(for: tab, session: session)
+            if tab.id == selectedTabID, !isOmniboxPresented { omniboxText = url.absoluteString }
+            persist()
+        }
         tab.title = session.title
         tab.mediaPlayback = session.mediaPlayback
         tab.progress = session.estimatedProgress
@@ -2120,8 +2152,22 @@ public final class BrowserWindowModel: WebEngineEventSink {
         focusHostWindowForPictureInPictureReturn()
     }
 
+    public func completeExtensionWindowRequest(_ id: UUID) {
+        extensionManager.completeWindowRequest(id, model: self)
+    }
+
+    var extensionHostWindow: NSWindow? { hostWindow }
+
+    func extensionMoveTab(_ id: TabID, to index: Int) {
+        let ordered = tabs.sorted { $0.position < $1.position }.filter { $0.id != id }
+        moveTab(id, before: index < ordered.count ? ordered[max(0, index)].id : nil)
+    }
+
     func setHostWindow(_ window: NSWindow?) {
         hostWindow = window
+        guard !isPrivate else { return }
+        if window != nil { extensionManager.register(self) }
+        else { extensionManager.unregister(self) }
     }
 
     private func focusHostWindowForPictureInPictureReturn() {
@@ -2423,7 +2469,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
             tabID: id,
             configuration: configuration,
             websiteDataStore: websiteDataStore,
-            downloadManager: downloadManager
+            downloadManager: downloadManager,
+            webExtensionController: isPrivate ? nil : extensionManager.controller,
+            initialURL: request?.url
         )
         engine.eventSink = self
         newTab.engine = engine
@@ -2458,7 +2506,9 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let engine = WebEngineSession(
             tabID: preview.id,
             websiteDataStore: websiteDataStore,
-            downloadManager: downloadManager
+            downloadManager: downloadManager,
+            webExtensionController: isPrivate ? nil : extensionManager.controller,
+            initialURL: url
         )
         engine.eventSink = self
         preview.engine = engine
@@ -2626,6 +2676,22 @@ public final class BrowserWindowModel: WebEngineEventSink {
         return tab(session.tabID)
     }
 
+    public func webEngine(_ session: WebEngineSession, requestsConfigurationChangeFor request: URLRequest) -> Bool {
+        guard let tab = tab(for: session), let url = request.url else { return false }
+        let engine = WebEngineSession(tabID: tab.id, websiteDataStore: websiteDataStore,
+            downloadManager: downloadManager, webExtensionController: isPrivate ? nil : extensionManager.controller,
+            initialURL: url)
+        engine.eventSink = self
+        session.invalidate()
+        tab.interactionState = nil
+        tab.engine = engine
+        tab.url = url
+        tab.hasLoadedInitialURL = true
+        engine.load(request)
+        if !isPrivate { extensionManager.sync(self) }
+        return true
+    }
+
     private func updateNavigationAvailability(
         for tab: BrowserTab,
         session: WebEngineSession? = nil
@@ -2651,10 +2717,13 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let engine = WebEngineSession(
             tabID: tab.id,
             websiteDataStore: websiteDataStore,
-            downloadManager: downloadManager
+            downloadManager: downloadManager,
+            webExtensionController: isPrivate ? nil : extensionManager.controller,
+            initialURL: tab.url
         )
         engine.eventSink = self
         tab.engine = engine
+        if !isPrivate { extensionManager.sync(self) }
         if let interactionState = tab.interactionState {
             tab.hasLoadedInitialURL = engine.restoreInteractionState(interactionState)
             tab.interactionState = nil
@@ -2663,6 +2732,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     private func activateSelectedTabIfNeeded() {
+        defer { if !isPrivate { extensionManager.sync(self) } }
         guard let tab = activeTab else { return }
         recordTabActivation(tab.id)
         expandFolderPath(containing: tab)
@@ -2775,6 +2845,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func stopLifecycleMonitoring() {
+        if !isPrivate { extensionManager.unregister(self) }
         acceptsMediaPermissionRequests = false
         aiChat.cancelStreaming()
         pressureSequence += 1
@@ -3716,6 +3787,7 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     private func persist() {
+        if !isPrivate { extensionManager.sync(self) }
         guard !isPrivate else { return }
         let snapshot = BrowserSessionSnapshot(
             selectedTabID: selectedTabID,

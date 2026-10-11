@@ -218,3 +218,7 @@ Private browsing is not anonymity from websites, networks, employers, or interne
 ## 12. Further implementation plan
 
 The implementation plan is summarized in [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md). Architectural decisions should be recorded as short ADRs in `docs/adr/`, with context, decision, alternatives, and consequences rather than a code dump.
+
+## WebExtensions
+
+Point integrates the public WebKit WebExtension runtime for regular windows. See [the extensions guide](EXTENSIONS.md) for installation, permission behavior, architecture, validation and current limitations.
