@@ -575,5 +575,9 @@
 	<string>Open side panel</string>
 	<key>extensions_side_panel_runtime_limit</key>
 	<string>This extension requests Chrome Debugger or native app integration, which Point does not support. Its panel may open, but these features cannot work.</string>
+	<key>omnibox_recent_search</key>
+	<string>Recent search</string>
+	<key>omnibox_open_site</key>
+	<string>Open website</string>
 </dict>
 </plist>

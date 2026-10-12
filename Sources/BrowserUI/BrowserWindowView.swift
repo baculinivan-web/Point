@@ -223,14 +223,25 @@ public struct BrowserWindowView: View {
                 Color.black.opacity(0.08)
                     .ignoresSafeArea()
                     .onTapGesture { model.dismissOmnibox() }
-                OmniboxOverlay(model: model)
-                    .frame(
-                        maxWidth: .infinity,
-                        maxHeight: .infinity,
-                        alignment: model.isComposingNewTab ? .center : .top
-                    )
-                    .padding(.top, model.isComposingNewTab ? 0 : 72)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                Group {
+                    if model.isComposingNewTab {
+                        GeometryReader { geometry in
+                            // Anchor the 56-point input row, independently of the results below it.
+                            let topInset = max(0, geometry.size.height / 2 - 28)
+                            OmniboxOverlay(
+                                model: model,
+                                maximumSuggestionsHeight: max(0, geometry.size.height - topInset - 56 - 14)
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, topInset)
+                        }
+                    } else {
+                        OmniboxOverlay(model: model)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 72)
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
 
             if model.isFindPresented {

@@ -5,12 +5,11 @@ import SwiftUI
 
 struct OmniboxOverlay: View {
     @Bindable var model: BrowserWindowModel
+    var maximumSuggestionsHeight: CGFloat? = nil
     @FocusState private var isFocused: Bool
-    @State private var highlightedTabID: TabID?
+    @State private var highlightedSuggestionID: String?
 
-    private var visibleMatchingTabs: [BrowserTab] {
-        Array(model.matchingTabs.prefix(6))
-    }
+    private var suggestions: [OmniboxSuggestion] { model.omniboxSuggestions }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,7 +51,7 @@ struct OmniboxOverlay: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .focused($isFocused)
-                    .onSubmit { activateHighlightedTabOrSubmit() }
+                    .onSubmit { activateHighlightedSuggestionOrSubmit() }
                     .onKeyPress(.downArrow) {
                         moveHighlight(by: 1)
                         return .handled
@@ -82,52 +81,64 @@ struct OmniboxOverlay: View {
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
-            } else if !visibleMatchingTabs.isEmpty {
+            } else if !suggestions.isEmpty {
                 Divider()
-                VStack(spacing: 2) {
-                    ForEach(visibleMatchingTabs) { tab in
-                        Button {
-                            activate(tab)
-                        } label: {
-                            HStack(spacing: 10) {
-                                TabFavicon(tab: tab, size: 22)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(tab.displayTitle).lineLimit(1)
-                                    if let url = tab.url {
-                                        Text(url.absoluteString)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(suggestions) { suggestion in
+                                Button {
+                                    model.activateOmniboxSuggestion(suggestion)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        OmniboxSuggestionIcon(model: model, suggestion: suggestion)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(suggestion.title).lineLimit(1)
+                                            if !suggestion.detail.isEmpty {
+                                                Text(suggestion.detail)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        Spacer()
+                                        Text(label(for: suggestion))
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 46)
+                                    .background {
+                                        if highlightedSuggestionID == suggestion.id {
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .fill(Color.accentColor.opacity(0.14))
+                                                .padding(.horizontal, 6)
+                                        }
                                     }
                                 }
-                                Spacer()
-                                Text(BrowserLocalization.string("open_tab"))
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .contentShape(Rectangle())
-                            .padding(.horizontal, 14)
-                            .frame(height: 46)
-                            .background {
-                                if highlightedTabID == tab.id {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color.accentColor.opacity(0.14))
-                                        .padding(.horizontal, 6)
+                                .buttonStyle(.plain)
+                                .id(suggestion.id)
+                                .onHover { isHovering in
+                                    if isHovering { highlightedSuggestionID = suggestion.id }
                                 }
+                                .accessibilityAddTraits(
+                                    highlightedSuggestionID == suggestion.id ? .isSelected : []
+                                )
                             }
                         }
-                        .buttonStyle(.plain)
-                        .onHover { isHovering in
-                            if isHovering {
-                                highlightedTabID = tab.id
-                            }
+                        .padding(.vertical, 6)
+                    }
+                    .frame(height: min(
+                        CGFloat(suggestions.count) * 48 + 10,
+                        maximumSuggestionsHeight.map { max(0, $0 - 1) } ?? .infinity
+                    ))
+                    .onChange(of: highlightedSuggestionID) {
+                        if let highlightedSuggestionID {
+                            proxy.scrollTo(highlightedSuggestionID)
                         }
-                        .accessibilityAddTraits(
-                            highlightedTabID == tab.id ? .isSelected : []
-                        )
                     }
                 }
-                .padding(.vertical, 6)
             }
         }
         .frame(width: 620)
@@ -136,44 +147,107 @@ struct OmniboxOverlay: View {
         .task {
             await Task.yield()
             isFocused = true
+            await model.refreshOmniboxHistory()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: BrowserWindowModel.omniboxHistoryClearedNotification)) { _ in
+            model.invalidateOmniboxHistory()
+        }
+        .onChange(of: model.omniboxTabSuggestions) {
+            model.refreshOmniboxSuggestions()
         }
         .onChange(of: model.omniboxText) {
-            highlightedTabID = nil
+            highlightedSuggestionID = nil
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(BrowserLocalization.string("address_and_search"))
     }
 
     private func moveHighlight(by offset: Int) {
-        let tabs = visibleMatchingTabs
-        guard !tabs.isEmpty else {
-            highlightedTabID = nil
-            return
-        }
-
-        guard let highlightedTabID,
-              let index = tabs.firstIndex(where: { $0.id == highlightedTabID })
-        else {
-            self.highlightedTabID = offset > 0 ? tabs.first?.id : tabs.last?.id
-            return
-        }
-
-        let nextIndex = (index + offset + tabs.count) % tabs.count
-        self.highlightedTabID = tabs[nextIndex].id
+        highlightedSuggestionID = OmniboxSuggestions.highlightedID(
+            in: suggestions, current: highlightedSuggestionID, offset: offset
+        )
     }
 
-    private func activateHighlightedTabOrSubmit() {
-        guard let highlightedTabID,
-              let tab = visibleMatchingTabs.first(where: { $0.id == highlightedTabID })
-        else {
+    private func activateHighlightedSuggestionOrSubmit() {
+        if let suggestion = suggestions.first(where: { $0.id == highlightedSuggestionID }) {
+            model.activateOmniboxSuggestion(suggestion)
+        } else {
             model.submitOmnibox()
-            return
         }
-        activate(tab)
     }
 
-    private func activate(_ tab: BrowserTab) {
-        model.selectOpenTabFromOmnibox(tab.id)
+    private func label(for suggestion: OmniboxSuggestion) -> String {
+        switch suggestion.kind {
+        case .tab: BrowserLocalization.string("open_tab")
+        case .search: BrowserLocalization.string("omnibox_recent_search")
+        case .page: BrowserLocalization.string("history")
+        case .site: BrowserLocalization.string("omnibox_open_site")
+        }
+    }
+
+}
+
+/// Uses the same origin cache as tabs, with direct site requests rather than a favicon proxy.
+private struct OmniboxSuggestionIcon: View {
+    let model: BrowserWindowModel
+    let suggestion: OmniboxSuggestion
+    @State private var loadedImage: NSImage?
+    @State private var loadedOrigin: String?
+
+    private var pageURL: URL? {
+        switch suggestion.kind {
+        case let .tab(id): model.tabs.first { $0.id == id }?.url
+        case let .page(url), let .site(url): url
+        case .search: nil
+        }
+    }
+
+    private var origin: String? { pageURL.flatMap(FaviconCacheKey.make(for:)) }
+
+    private var matchingTab: BrowserTab? {
+        if case let .tab(id) = suggestion.kind {
+            return model.tabs.first { $0.id == id }
+        }
+        guard let origin else { return nil }
+        return model.tabs.first { $0.url.flatMap(FaviconCacheKey.make(for:)) == origin }
+    }
+
+    var body: some View {
+        Group {
+            if case .search = suggestion.kind {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            } else if let image = matchingTab?.favicon ?? (loadedOrigin == origin ? loadedImage : nil) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                Image(systemName: "globe")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 22, height: 22)
+        .accessibilityHidden(true)
+        .task(id: origin) {
+            loadedImage = nil
+            loadedOrigin = nil
+            guard let pageURL, let origin, matchingTab?.favicon == nil else { return }
+            let repository = model.faviconRepository
+            var image = await repository.cachedImage(for: pageURL)
+            if image == nil {
+                let iconURL = matchingTab?.faviconURL
+                    ?? URL(string: "/favicon.ico", relativeTo: pageURL)?.absoluteURL
+                if let iconURL, ["http", "https"].contains(iconURL.scheme?.lowercased() ?? "") {
+                    image = await repository.image(for: iconURL, pageURL: pageURL)
+                }
+            }
+            guard !Task.isCancelled, let image else { return }
+            loadedImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+            loadedOrigin = origin
+        }
     }
 }
 

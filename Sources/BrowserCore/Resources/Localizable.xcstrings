@@ -1,6 +1,8 @@
 {
   "sourceLanguage": "ru",
   "strings": {
+    "omnibox_recent_search": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Recent search"}}, "ru": {"stringUnit": {"state": "translated", "value": "Недавний запрос"}}}},
+    "omnibox_open_site": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Open website"}}, "ru": {"stringUnit": {"state": "translated", "value": "Открыть сайт"}}}},
     "extensions_store_offer": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Install this extension in Point?"}}, "ru": {"stringUnit": {"state": "translated", "value": "Установить это расширение в Point?"}}}},
     "extensions_store_downloading": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Downloading extension…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Загрузка расширения…"}}}},
     "extensions_store_verifying": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Verifying package and signature…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Проверка пакета и подписи…"}}}},

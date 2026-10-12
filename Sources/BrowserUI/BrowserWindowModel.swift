@@ -267,8 +267,21 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public var isSidebarVisible = true
     public var isOmniboxPresented = false
     public private(set) var isNewTabComposerPresented = false
-    public var omniboxText = ""
+    public var omniboxText = "" {
+        didSet { refreshOmniboxSuggestions() }
+    }
     public var omniboxError: String?
+    public private(set) var omniboxHistory: [BrowsingHistoryEntry] = [] {
+        didSet {
+            omniboxHistoryIndex = OmniboxHistoryIndex(omniboxHistory)
+            refreshOmniboxSuggestions()
+        }
+    }
+    public private(set) var omniboxSuggestions: [OmniboxSuggestion] = []
+    @ObservationIgnored private var omniboxHistoryIndex = OmniboxHistoryIndex()
+    @ObservationIgnored private var omniboxHistoryClearCount = 0
+    @ObservationIgnored private var omniboxHistoryRevision = 0
+    @ObservationIgnored private var pendingSearchHistoryWrites: [UUID: Task<Void, Never>] = [:]
     public var isFindPresented = false
     public var findText = ""
     public private(set) var isPreviewTipDismissed: Bool
@@ -478,6 +491,74 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public var selectedTabCount: Int { selectedTabIDs.count }
+
+    public var omniboxTabSuggestions: [OmniboxSuggestion] {
+        tabs.filter { $0.spaceID == selectedSpaceID && $0.url != nil }
+            .sorted { $0.id == selectedTabID && $1.id != selectedTabID }
+            .map { tab in
+                OmniboxSuggestion(
+                    id: "tab:" + tab.id.rawValue.uuidString,
+                    title: tab.displayTitle,
+                    detail: tab.url?.absoluteString ?? "",
+                    kind: .tab(tab.id)
+                )
+            }
+    }
+
+    public func refreshOmniboxSuggestions() {
+        guard isOmniboxPresented else { return }
+        omniboxSuggestions = OmniboxSuggestions.make(
+            query: omniboxText, tabs: omniboxTabSuggestions, index: omniboxHistoryIndex
+        )
+    }
+
+    public static let omniboxHistoryClearedNotification = Notification.Name("PointBrowsingHistoryCleared")
+
+    public func invalidateOmniboxHistory() {
+        omniboxHistoryRevision += 1
+        omniboxHistory = []
+    }
+
+    public func refreshOmniboxHistory() async {
+        refreshOmniboxSuggestions()
+        guard !isPrivate, omniboxHistoryClearCount == 0 else {
+            omniboxHistory = []
+            return
+        }
+        let revision = omniboxHistoryRevision
+        await finishPendingSearchHistoryWrites()
+        let entries = try? await browsingHistoryRepository.recent(limit: 5_000)
+        guard !Task.isCancelled, revision == omniboxHistoryRevision, omniboxHistoryClearCount == 0 else { return }
+        omniboxHistory = entries ?? []
+    }
+
+    public func activateOmniboxSuggestion(_ suggestion: OmniboxSuggestion) {
+        switch suggestion.kind {
+        case let .tab(id):
+            selectOpenTabFromOmnibox(id)
+        case let .search(query):
+            omniboxText = query
+            submitOmnibox(destination: parser.searchDestination(for: query))
+        case let .page(url), let .site(url):
+            omniboxText = url.absoluteString
+            submitOmnibox()
+        }
+    }
+
+    private func finishPendingSearchHistoryWrites() async {
+        for task in pendingSearchHistoryWrites.values { await task.value }
+    }
+
+    private func recordOmniboxSearch(_ url: URL) {
+        guard !isPrivate else { return }
+        let query = omniboxText.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let repository = browsingHistoryRepository
+        let id = UUID()
+        pendingSearchHistoryWrites[id] = Task { @MainActor [weak self] in
+            _ = try? await repository.recordVisit(url: url, title: query, visitedAt: Date())
+            self?.pendingSearchHistoryWrites.removeValue(forKey: id)
+        }
+    }
 
     public var matchingTabs: [BrowserTab] {
         let query = omniboxText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -695,19 +776,29 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func clearBrowsingHistory() {
+        omniboxHistoryRevision += 1
+        omniboxHistoryClearCount += 1
+        omniboxHistory = []
         browsingHistoryManagementTask?.cancel()
         isLoadingBrowsingHistory = true
         browsingHistoryError = nil
         let repository = browsingHistoryRepository
         browsingHistoryManagementTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                omniboxHistoryClearCount -= 1
+                omniboxHistoryRevision += 1
+            }
             do {
+                await finishPendingSearchHistoryWrites()
                 try await repository.removeAll()
-                guard !Task.isCancelled, let self else { return }
+                NotificationCenter.default.post(name: Self.omniboxHistoryClearedNotification, object: nil)
+                guard !Task.isCancelled else { return }
                 browsingHistory = []
                 browsingHistoryFavicons = [:]
                 isLoadingBrowsingHistory = false
             } catch {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 isLoadingBrowsingHistory = false
                 browsingHistoryError = BrowserLocalization.string(
                     "clear_history_failed",
@@ -754,10 +845,21 @@ public final class BrowserWindowModel: WebEngineEventSink {
         let permissionRepository = sitePermissionRepository
         let faviconRepository = faviconRepository
         isClearingBrowsingData = true
+        if categories.contains(.history) {
+            omniboxHistoryClearCount += 1
+            omniboxHistoryRevision += 1
+            omniboxHistory = []
+        }
         clearBrowsingDataStatus = nil
 
         clearBrowsingDataTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if categories.contains(.history) {
+                    omniboxHistoryClearCount -= 1
+                    omniboxHistoryRevision += 1
+                }
+            }
             do {
                 var websiteDataTypes: Set<String> = []
                 if categories.contains(.cookies) {
@@ -788,7 +890,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
                 }
 
                 if categories.contains(.history) {
+                    omniboxHistoryRevision += 1
+                    await finishPendingSearchHistoryWrites()
                     try await historyRepository.removeAll()
+                    NotificationCenter.default.post(name: Self.omniboxHistoryClearedNotification, object: nil)
+                    omniboxHistory = []
                     browsingHistory = []
                     browsingHistoryFavicons = [:]
                 }
@@ -1668,6 +1774,8 @@ public final class BrowserWindowModel: WebEngineEventSink {
     public func dismissOmnibox() {
         isOmniboxPresented = false
         isNewTabComposerPresented = false
+        invalidateOmniboxHistory()
+        omniboxSuggestions = []
     }
 
     public func selectSearchEngine(_ searchEngine: SearchEngine) {
@@ -1681,7 +1789,11 @@ public final class BrowserWindowModel: WebEngineEventSink {
     }
 
     public func submitOmnibox() {
-        let destination = parser.destination(for: omniboxText)
+        submitOmnibox(destination: parser.destination(for: omniboxText))
+    }
+
+    private func submitOmnibox(destination: OmniboxDestination) {
+        if case let .search(url) = destination { recordOmniboxSearch(url) }
         if isNewTabComposerPresented {
             switch destination {
             case .empty:

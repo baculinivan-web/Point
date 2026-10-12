@@ -40,7 +40,7 @@ public struct OmniboxParser: Sendable {
         }
 
         if input.contains(" ") {
-            return searchURL(for: input)
+            return searchDestination(for: input)
         }
 
         if let explicit = URLComponents(string: input), let scheme = explicit.scheme {
@@ -55,12 +55,12 @@ public struct OmniboxParser: Sendable {
                 )
             }
             guard let url = explicit.url, explicit.host != nil else {
-                return searchURL(for: input)
+                return searchDestination(for: input)
             }
             return .url(url)
         }
 
-        return searchURL(for: input)
+        return searchDestination(for: input)
     }
 
     private func urlWithoutScheme(for input: String) -> URL? {
@@ -117,7 +117,10 @@ public struct OmniboxParser: Sendable {
         }
     }
 
-    private func searchURL(for query: String) -> OmniboxDestination {
+    /// Builds a search even when the query resembles a domain or URL scheme.
+    public func searchDestination(for rawQuery: String) -> OmniboxDestination {
+        let query = normalize(rawQuery)
+        guard !query.isEmpty else { return .empty }
         var components = URLComponents(
             url: searchEndpoint,
             resolvingAgainstBaseURL: false

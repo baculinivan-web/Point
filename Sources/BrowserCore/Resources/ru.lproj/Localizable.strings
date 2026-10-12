@@ -575,5 +575,9 @@
 	<string>Открыть боковую панель</string>
 	<key>extensions_side_panel_runtime_limit</key>
 	<string>Расширение запрашивает Chrome Debugger или связь с настольным приложением, которые Point не поддерживает. Панель может открыться, но эти функции работать не смогут.</string>
+	<key>omnibox_recent_search</key>
+	<string>Недавний запрос</string>
+	<key>omnibox_open_site</key>
+	<string>Открыть сайт</string>
 </dict>
 </plist>
