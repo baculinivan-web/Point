@@ -1,41 +1,31 @@
+# Point
 
+Point is a native browser for macOS 26 and later, built with SwiftUI and WebKit. Version 0.3.6 is a public beta; web compatibility and performance testing are ongoing.
 
-# Point browser
+[Website](https://baculinivan-web.github.io/point-browser-landing/) · [Download the latest release](https://github.com/baculinivan-web/Point/releases/latest)
 
-Point is a calm, native browser for Mac that gets the browser out of the way.
+## Features
 
-The web is the main thing you came to see. Point keeps its controls close when you need them and lets the page take over when you do not. Your tabs stay organized in a quiet sidebar, while the rest of the window remains focused on the content in front of you.
+- Sidebar tabs with pinned pages, nested folders, tab search, and session restoration.
+- Address suggestions from open tabs, browsing history, recent searches, and a bundled site list.
+- Split view, link previews, downloads, and site permission controls.
+- Private windows with separate browsing data. Downloaded files remain on your Mac.
+- Native Mac shortcuts, trackpad gestures, and accessibility support.
+- Built-in ad blocking and WebExtensions support.
 
-## Why Point
+## Ad blocking and extensions
 
-- Focus on the page, not on browser chrome.
-- Find any open tab quickly without digging through crowded menus.
-- Keep important pages close with pinned tabs and nested folders.
-- Move between pages, windows, and work contexts without losing your place.
-- Return to a previous session with your working context intact.
-- Use familiar Mac gestures, shortcuts, and accessibility features.
-- Keep private browsing separate from your everyday browsing.
-- Download files, handle permissions, and use media sites without leaving the flow.
-- Enjoy a native macOS look that stays readable over any website.
+Ad blocking is enabled by default in regular and private tabs. To change it, open Settings → General → Ad blocking and reload your pages. Bundled AdGuard Base and Russian filters block requests and hide banners. Filters do not update automatically, and video ads or ads requiring scriptlet rules may remain. Filter sources, licenses, and update instructions are in [`Sources/BrowserEngine/Resources/AdBlock`](Sources/BrowserEngine/Resources/AdBlock).
 
-## The Point experience
+Install extensions from a Chrome Web Store link or a local folder in Settings → Extensions. Review their permissions before installing. Compatibility depends on WebKit support, and extensions are disabled in private windows. See the [extensions guide](docs/EXTENSIONS.md).
 
-Point opens to your work, not to a dashboard, news feed, or advertising. The sidebar gives you a clear map of what is open, then recedes so the website can use the whole window. Bring it back when you want to switch, search, organize, or open something new.
+## Build and test
 
-Tabs can be pinned, reordered, grouped into folders, restored after closing, and moved between windows. The browser remembers the shape of your session without forcing every page to reload in the background.
+```bash
+make test
+make run
+```
 
-The address field suggests open tabs, recent searches, visited pages, and popular websites as you type. Suggestions use local history and a bundled site list. Site rows show favicons, and the new-tab input stays centered while results appear below it.
+`make run` builds and opens `dist/Point.app`. You can also open `Package.swift` in Xcode. Use `make release` to create `dist/Point.dmg`.
 
-Private windows keep their local browsing data separate and disappear when the window is closed. Files you explicitly download are still saved to your Mac.
-
-## Status
-
-Point 0.3.6 is a public beta. The core browsing experience, sidebar-first tab management, session restoration, private windows, downloads, browsing history, site permissions, link previews, split view, and macOS integration are available. Some advanced web compatibility and performance checks are still being validated on real hardware.
-
-Built-in ad blocking is enabled by default in regular and private tabs. Change it in Settings → General → Ad blocking, then reload open pages. Bundled AdGuard Base and Russian filters block advertising requests and hide banners using WebKit content rules. Filters ship with the app and do not update automatically. Advanced scriptlet rules are excluded, so this does not guarantee removal of video ads or all advertising. Filter sources, licenses, and regeneration details are bundled in `Sources/BrowserEngine/Resources/AdBlock`; maintainers can refresh them using `scripts/update-adblock-filters.sh` and AdGuard's ConverterTool v4.3.0.
-
-WebExtensions can be installed from Chrome Web Store by link or from a local folder in Settings → Extensions. Store packages are verified and installed without modifying their resources. Review permissions before installing; compatibility depends on WebKit support. Extensions are disabled in private windows. See the [extensions guide](docs/EXTENSIONS.md) and the included demo.
-
-See the [technical documentation](docs/TECHNICAL_DOCUMENTATION.md) for implementation details, build instructions, testing, release requirements, and known limitations. The [product vision](docs/PRODUCT_VISION.md) explains the principles behind the experience.
-
-Any contribution is welcome!
+See the [technical documentation](docs/TECHNICAL_DOCUMENTATION.md) for setup, architecture, testing, release requirements, and known limitations, or the [product vision](docs/PRODUCT_VISION.md) for design principles.
