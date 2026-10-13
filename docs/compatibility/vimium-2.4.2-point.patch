@@ -1,0 +1,64 @@
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,8 +1,7 @@
+ {
+-"update_url": "https://clients2.google.com/service/update2/crx",
+-
++  "update_url": "https://clients2.google.com/service/update2/crx",
+   "manifest_version": 3,
+-  "name": "Vimium",
++  "name": "Vimium (Point)",
+   "version": "2.4.2",
+   "description": "The Hacker's Browser. Vimium provides keyboard shortcuts for navigation and control in the spirit of Vim.",
+   "icons": {
+@@ -69,17 +68,6 @@
+       "run_at": "document_start",
+       "all_frames": true,
+       "match_about_blank": true
+-    },
+-    {
+-      "matches": [
+-        "file:///",
+-        "file:///*/"
+-      ],
+-      "css": [
+-        "content_scripts/file_urls.css"
+-      ],
+-      "run_at": "document_start",
+-      "all_frames": true
+     }
+   ],
+   "action": {
+@@ -105,5 +93,6 @@
+         "<all_urls>"
+       ]
+     }
+-  ]
+-}
+\ No newline at end of file
++  ],
++  "version_name": "2.4.2 (Point compatibility)"
++}
+--- a/background_scripts/main.js
++++ b/background_scripts/main.js
+@@ -84,8 +84,18 @@
+ // Re-check whether Vimium is enabled for a frame when the URL changes without a reload.
+ // There's no reliable way to detect when the URL has changed in the content script, so we
+ // have to use the webNavigation API in our background script.
+-chrome.webNavigation.onHistoryStateUpdated.addListener(onURLChange); // history.pushState.
+-chrome.webNavigation.onReferenceFragmentUpdated.addListener(onURLChange); // Hash changed.
++// Point/WebKit does not expose these two webNavigation events. Keep the native
++// events where available; use top-frame tab URL updates on Point instead.
++if (chrome.webNavigation.onHistoryStateUpdated) {
++  chrome.webNavigation.onHistoryStateUpdated.addListener(onURLChange);
++} else {
++  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
++    if (changeInfo.url) onURLChange({ tabId, frameId: 0 });
++  });
++}
++if (chrome.webNavigation.onReferenceFragmentUpdated) {
++  chrome.webNavigation.onReferenceFragmentUpdated.addListener(onURLChange);
++}
+ 
+ if (!globalThis.isUnitTests) {
+   // Cache "content_scripts/vimium.css" in chrome.storage.session for UI components.

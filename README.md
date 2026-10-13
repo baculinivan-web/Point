@@ -1,6 +1,6 @@
 # Point
 
-Point is a native browser for macOS 26 and later, built with SwiftUI and WebKit. Version 0.3.6 is a public beta; web compatibility and performance testing are ongoing.
+Point is a native browser for macOS 26 and later, built with SwiftUI and WebKit. Version 0.3.7 is a public beta; web compatibility and performance testing are ongoing.
 
 [Website](https://baculinivan-web.github.io/point-browser-landing/) · [Download the latest release](https://github.com/baculinivan-web/Point/releases/latest)
 

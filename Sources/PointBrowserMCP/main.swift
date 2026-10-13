@@ -47,29 +47,6 @@ private func connectSocket(at url: URL) -> Int32? {
     return fd
 }
 
-private func findConnection() -> Int32? {
-    for url in candidateSockets() {
-        if let fd = connectSocket(at: url) { return fd }
-    }
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-    process.arguments = ["-b", bundleID]
-    try? process.run()
-    process.waitUntilExit()
-    for _ in 0..<50 {
-        usleep(100_000)
-        for url in candidateSockets() {
-            if let fd = connectSocket(at: url) { return fd }
-        }
-    }
-    return nil
-}
-
-guard let socketFD = findConnection() else {
-    FileHandle.standardError.write(Data("Point Browser MCP is disabled or Point could not be opened. Enable it in Settings → AI Agents.\n".utf8))
-    exit(1)
-}
-
 private func reconnectSocket() -> Int32? {
     for url in candidateSockets() {
         if let fd = connectSocket(at: url) { return fd }
@@ -103,7 +80,7 @@ private func unavailableResponse(for requestData: Data) -> Data? {
         "id": id,
         "error": [
             "code": -32001,
-            "message": "Point Browser restarted or is closed. Open Point and retry; the MCP connection will recover automatically. Browser control must be requested again after a restart."
+            "message": "Point Browser is unavailable. Open Point and enable MCP in Settings → AI Agents, then retry. The connection will recover automatically; browser control must be requested again after a restart."
         ]
     ]
     guard var data = try? JSONSerialization.data(withJSONObject: response) else { return nil }
@@ -121,7 +98,9 @@ private func takeLines(from buffer: inout Data) -> [Data] {
     return lines
 }
 
-var activeSocket: Int32? = socketFD
+// Discovery and retries must never activate the app or change the user's Space.
+// Stay alive even when Point is closed, disabled, or its socket is being replaced.
+var activeSocket: Int32? = reconnectSocket()
 var stdinBuffer = Data()
 var socketBuffer = Data()
 var lastReconnectAttempt = ContinuousClock.now

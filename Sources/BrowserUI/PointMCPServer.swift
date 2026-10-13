@@ -31,7 +31,7 @@ final class PointMCPServer {
 
     private let bridgeFactory: BridgeFactory
     private let stateHandler: StateHandler
-    private var listenerFD: Int32 = -1
+    private var listener: PointMCPSocketListener?
     private var listenerSource: DispatchSourceRead?
     private var clients: [Int32: Client] = [:]
     private let writeQueue = DispatchQueue(label: "dev.browser.mvp.mcp-writes")
@@ -46,9 +46,9 @@ final class PointMCPServer {
         self.stateHandler = stateHandler
     }
 
-    deinit {
-        if listenerFD >= 0 { Darwin.close(listenerFD) }
-        unlink(Self.socketURL.path)
+    isolated deinit {
+        listenerSource?.cancel()
+        for client in clients.values { client.source?.cancel() }
     }
 
     nonisolated static var socketURL: URL {
@@ -61,49 +61,17 @@ final class PointMCPServer {
     }
 
     func start() {
-        guard listenerFD < 0 else { return }
+        guard listener == nil else { return }
         do {
-            let directory = Self.socketURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
+            let listener = try PointMCPSocketListener(
+                socketURL: Self.socketURL,
+                maximumClients: Int32(Self.maximumClients)
             )
-            try? FileManager.default.removeItem(at: Self.socketURL)
-
-            let fd = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
-            guard fd >= 0 else { throw POSIXError(.ENOTSOCK) }
-            listenerFD = fd
-            var noSignal: Int32 = 1
-            setsockopt(
-                fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal,
-                socklen_t(MemoryLayout.size(ofValue: noSignal))
-            )
-
-            var address = sockaddr_un()
-            address.sun_family = sa_family_t(AF_UNIX)
-            let path = Self.socketURL.path
-            let bytes = Array(path.utf8CString)
-            guard bytes.count <= MemoryLayout.size(ofValue: address.sun_path) else {
-                throw POSIXError(.ENAMETOOLONG)
-            }
-            withUnsafeMutablePointer(to: &address.sun_path) { destination in
-                bytes.withUnsafeBytes { source in
-                    _ = memcpy(destination, source.baseAddress!, source.count)
-                }
-            }
-            let bound = withUnsafePointer(to: &address) { pointer in
-                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
-                }
-            }
-            guard bound == 0, Darwin.listen(fd, Int32(Self.maximumClients)) == 0 else {
-                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-            }
-            chmod(path, S_IRUSR | S_IWUSR)
-
-            let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
+            self.listener = listener
+            let source = DispatchSource.makeReadSource(fileDescriptor: listener.fileDescriptor, queue: .main)
             source.setEventHandler { [weak self] in self?.acceptClient() }
-            source.setCancelHandler { Darwin.close(fd) }
+            // Keep ownership until Dispatch has finished using the descriptor.
+            source.setCancelHandler { withExtendedLifetime(listener) {} }
             listenerSource = source
             source.resume()
             publishState()
@@ -117,8 +85,7 @@ final class PointMCPServer {
         for fd in Array(clients.keys) { disconnectClient(fd) }
         listenerSource?.cancel()
         listenerSource = nil
-        listenerFD = -1
-        try? FileManager.default.removeItem(at: Self.socketURL)
+        listener = nil
         stateHandler(.stopped)
     }
 
@@ -127,7 +94,8 @@ final class PointMCPServer {
     }
 
     private func acceptClient() {
-        let accepted = Darwin.accept(listenerFD, nil, nil)
+        guard let listener else { return }
+        let accepted = Darwin.accept(listener.fileDescriptor, nil, nil)
         guard accepted >= 0 else {
             guard errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK else { return }
             let message = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -198,7 +166,7 @@ final class PointMCPServer {
     }
 
     private func publishState() {
-        if listenerFD < 0 {
+        if listener == nil {
             stateHandler(.stopped)
         } else {
             stateHandler(clients.isEmpty ? .listening : .connected)

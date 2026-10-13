@@ -5,6 +5,8 @@ build:
 
 test:
 	swift test
+	swift build --product point-browser-mcp
+	python3 scripts/test-mcp-helper.py "$$(swift build --show-bin-path)/point-browser-mcp"
 
 app:
 	./scripts/build-app.sh

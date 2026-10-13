@@ -1,0 +1,134 @@
+{
+  "model": "gemma3:270m",
+  "hardware": "Apple M1, 8 GB",
+  "options": {
+    "num_ctx": 1024,
+    "num_predict": 80,
+    "temperature": 0,
+    "seed": 42
+  },
+  "cases": [
+    {
+      "state": "cold",
+      "prefix": "как приготовить",
+      "first_ms": 1756,
+      "total_ms": 1892,
+      "load_ms": 1166,
+      "tokens": 7,
+      "tokens_s": 56.0,
+      "done_reason": "stop",
+      "text": "How to cook a chicken\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "как приготовить",
+      "first_ms": 139,
+      "total_ms": 218,
+      "load_ms": 112,
+      "tokens": 7,
+      "tokens_s": 104.4,
+      "done_reason": "stop",
+      "text": "How to make a cake\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "как настроить",
+      "first_ms": 159,
+      "total_ms": 268,
+      "load_ms": 107,
+      "tokens": 9,
+      "tokens_s": 97.2,
+      "done_reason": "stop",
+      "text": "How to set up a home theater\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "погода в",
+      "first_ms": null,
+      "total_ms": 140,
+      "load_ms": 113,
+      "tokens": 1,
+      "tokens_s": null,
+      "done_reason": "stop",
+      "text": ""
+    },
+    {
+      "state": "warm",
+      "prefix": "купить",
+      "first_ms": null,
+      "total_ms": 164,
+      "load_ms": 103,
+      "tokens": 1,
+      "tokens_s": null,
+      "done_reason": "stop",
+      "text": ""
+    },
+    {
+      "state": "warm",
+      "prefix": "YouTube",
+      "first_ms": 128,
+      "total_ms": 158,
+      "load_ms": 103,
+      "tokens": 3,
+      "tokens_s": 145.2,
+      "done_reason": "stop",
+      "text": "YouTube\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "how to cook",
+      "first_ms": 138,
+      "total_ms": 195,
+      "load_ms": 108,
+      "tokens": 5,
+      "tokens_s": 101.6,
+      "done_reason": "stop",
+      "text": "How to cook\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "best laptop for",
+      "first_ms": 135,
+      "total_ms": 370,
+      "load_ms": 109,
+      "tokens": 18,
+      "tokens_s": 88.5,
+      "done_reason": "stop",
+      "text": "best laptop for gaming\nbest laptop for video editing\nbest laptop for photo editing\n"
+    },
+    {
+      "state": "warm",
+      "prefix": "ютуб",
+      "first_ms": 158,
+      "total_ms": 616,
+      "load_ms": 129,
+      "tokens": 29,
+      "tokens_s": 73.8,
+      "done_reason": "stop",
+      "text": "Ютуб — это веб-сайт, который предлагает широкий спектр контента, включая видео, фотографии, статьи и многое другое.\n"
+    }
+  ],
+  "ollama_ps": {
+    "models": [
+      {
+        "name": "gemma3:270m",
+        "model": "gemma3:270m",
+        "size": 502604320,
+        "digest": "e7d36fb2c3b3293cfe56d55889867a064b3a2b22e98335f2e6e8a387e081d6be",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma3",
+          "families": [
+            "gemma3"
+          ],
+          "parameter_size": "268.10M",
+          "quantization_level": "Q8_0"
+        },
+        "expires_at": "2026-10-12T22:56:53.363152+03:00",
+        "size_vram": 502604320,
+        "context_length": 1024
+      }
+    ]
+  }
+}

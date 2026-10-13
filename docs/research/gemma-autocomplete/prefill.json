@@ -1,0 +1,32 @@
+[
+  {
+    "prefix": "как приготовить",
+    "total_ms": 295,
+    "suffix": "",
+    "tokens": 1
+  },
+  {
+    "prefix": "погода в",
+    "total_ms": 149,
+    "suffix": "",
+    "tokens": 1
+  },
+  {
+    "prefix": "купить",
+    "total_ms": 140,
+    "suffix": "",
+    "tokens": 1
+  },
+  {
+    "prefix": "как настроить",
+    "total_ms": 138,
+    "suffix": "",
+    "tokens": 1
+  },
+  {
+    "prefix": "best laptop for",
+    "total_ms": 128,
+    "suffix": "",
+    "tokens": 1
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "variant": "russian",
+    "prefix": "как приготовить",
+    "first_ms": 252,
+    "total_ms": 309,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Как приготовить\n"
+  },
+  {
+    "variant": "russian",
+    "prefix": "погода в",
+    "first_ms": 154,
+    "total_ms": 208,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Погода в\n"
+  },
+  {
+    "variant": "russian",
+    "prefix": "купить",
+    "first_ms": 149,
+    "total_ms": 197,
+    "tokens": 4,
+    "done_reason": "stop",
+    "text": "Купить\n"
+  },
+  {
+    "variant": "russian",
+    "prefix": "как настроить",
+    "first_ms": 162,
+    "total_ms": 216,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Как настроить\n"
+  },
+  {
+    "variant": "few_shot",
+    "prefix": "как приготовить",
+    "first_ms": 506,
+    "total_ms": 580,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Как приготовить\n"
+  },
+  {
+    "variant": "few_shot",
+    "prefix": "погода в",
+    "first_ms": 158,
+    "total_ms": 923,
+    "tokens": 50,
+    "done_reason": "stop",
+    "text": "Как сварить рис\nКак сварить яйца\nКак сварить кофе\nВвод: погода на\nпогода на завтра\nпогода на неделю\nпогода на выходные\nВвод: погода в\n"
+  },
+  {
+    "variant": "few_shot",
+    "prefix": "купить",
+    "first_ms": 162,
+    "total_ms": 447,
+    "tokens": 20,
+    "done_reason": "stop",
+    "text": "Как сварить рис\nКак сварить яйца\nКак сварить кофе\n"
+  },
+  {
+    "variant": "few_shot",
+    "prefix": "как настроить",
+    "first_ms": 178,
+    "total_ms": 238,
+    "tokens": 4,
+    "done_reason": "stop",
+    "text": "Как настроить"
+  },
+  {
+    "variant": "one_completion",
+    "prefix": "как приготовить",
+    "first_ms": 133,
+    "total_ms": 189,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Как приготовить\n"
+  },
+  {
+    "variant": "one_completion",
+    "prefix": "погода в",
+    "first_ms": 132,
+    "total_ms": 199,
+    "tokens": 6,
+    "done_reason": "stop",
+    "text": "Погода в.\n"
+  },
+  {
+    "variant": "one_completion",
+    "prefix": "купить",
+    "first_ms": 139,
+    "total_ms": 179,
+    "tokens": 4,
+    "done_reason": "stop",
+    "text": "Купить\n"
+  },
+  {
+    "variant": "one_completion",
+    "prefix": "как настроить",
+    "first_ms": 139,
+    "total_ms": 191,
+    "tokens": 5,
+    "done_reason": "stop",
+    "text": "Как настроить\n"
+  }
+]
