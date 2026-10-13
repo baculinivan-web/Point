@@ -11,6 +11,10 @@ public final class WebContainerView: NSView {
     private var interactionShieldWidthConstraint: NSLayoutConstraint?
     private var blockedLeadingWidth: CGFloat = 0
     private var swipeMonitor: Any?
+    private var pointerMonitor: Any?
+    /// Whether WebKit's own mouse-moved tracking area currently reports the
+    /// pointer as inside the web view.
+    private var isPointerInsideWebViewTracking = false
     private var onSwipeBack: (@MainActor () -> Bool)?
     private var onSwipeForward: (@MainActor () -> Bool)?
 
@@ -49,6 +53,8 @@ public final class WebContainerView: NSView {
 
         attachedWebView?.removeFromSuperview()
         attachedWebView = webView
+        // The new web view's tracking area starts out unentered.
+        isPointerInsideWebViewTracking = false
         webView.removeFromSuperview()
         // The web view must be laid out with autoresizing, not Auto Layout
         // constraints: WebKit's element-fullscreen controller snapshots and
@@ -127,8 +133,10 @@ public final class WebContainerView: NSView {
         super.viewDidMoveToWindow()
         if window == nil {
             removeSwipeMonitor()
+            removePointerMonitor()
         } else {
             installSwipeMonitorIfNeeded()
+            installPointerMonitorIfNeeded()
         }
     }
 
@@ -169,6 +177,74 @@ public final class WebContainerView: NSView {
         guard let swipeMonitor else { return }
         NSEvent.removeMonitor(swipeMonitor)
         self.swipeMonitor = nil
+    }
+
+    /// The page runs underneath the window's transparent titlebar
+    /// (`fullSizeContentView`). AppKit lets clicks through that strip but
+    /// treats it as covering the views below for mouse tracking, so WKWebView
+    /// gets `mouseExited` as soon as the pointer enters it and stops receiving
+    /// `mouseMoved`. Hover state on the page then freezes — top-of-page
+    /// navigation bars never highlight, and the stale state persists into
+    /// menus they open. While WebKit's tracking says the pointer is outside but
+    /// it is actually over the page, hand the moves to the owner of WebKit's
+    /// tracking area, exactly as AppKit would have. WKWebView itself does not
+    /// handle `mouseMoved:`; its tracking-area owner does, and re-checks that
+    /// the web view is topmost under the pointer before acting on it.
+    @MainActor
+    private func installPointerMonitorIfNeeded() {
+        guard pointerMonitor == nil, let window else { return }
+        // Without this the window only generates moves inside tracking areas,
+        // and none are active under the titlebar.
+        window.acceptsMouseMovedEvents = true
+        pointerMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved, .mouseEntered, .mouseExited]
+        ) { [weak self] event in
+            self?.handlePointerEvent(event)
+            return event
+        }
+    }
+
+    @MainActor
+    private func removePointerMonitor() {
+        guard let pointerMonitor else { return }
+        NSEvent.removeMonitor(pointerMonitor)
+        self.pointerMonitor = nil
+        isPointerInsideWebViewTracking = false
+    }
+
+    @MainActor
+    private func handlePointerEvent(_ event: NSEvent) {
+        guard event.window === window, let webView = attachedWebView else { return }
+
+        let moveTrackingArea = webView.trackingAreas.first {
+            $0.options.contains(.mouseMoved)
+        }
+
+        switch event.type {
+        case .mouseEntered, .mouseExited:
+            guard let area = event.trackingArea, area === moveTrackingArea else { return }
+            isPointerInsideWebViewTracking = event.type == .mouseEntered
+        case .mouseMoved:
+            // Inside its tracking area WebKit already receives these moves.
+            guard !isPointerInsideWebViewTracking,
+                  webView.fullscreenState == .notInFullscreen,
+                  let owner = moveTrackingArea?.owner,
+                  isPointerOverWebView(event.locationInWindow, webView: webView)
+            else { return }
+            (owner as AnyObject).mouseMoved?(with: event)
+        default:
+            break
+        }
+    }
+
+    /// True only when nothing else (sidebar, overlays) sits above the page at
+    /// this point, so forwarded moves never reach the page through them.
+    @MainActor
+    private func isPointerOverWebView(_ locationInWindow: NSPoint, webView: WKWebView) -> Bool {
+        guard let frameView = window?.contentView?.superview,
+              let hitView = frameView.hitTest(frameView.convert(locationInWindow, from: nil))
+        else { return false }
+        return hitView === webView || hitView.isDescendant(of: webView)
     }
 
     @MainActor
