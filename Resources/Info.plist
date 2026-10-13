@@ -48,9 +48,9 @@
         </dict>
     </array>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.5</string>
+    <string>0.3.6</string>
 	<key>CFBundleVersion</key>
-	<string>43</string>
+	<string>44</string>
 	<!--
 	 Release source configuration. Keep the asset name stable for every beta
 	 release; replace the notes URL with the GitHub Pages format when Pages is
