@@ -67,8 +67,10 @@ struct OmniboxOverlay: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SidebarControlStyle(showsHover: false))
                     .accessibilityLabel(BrowserLocalization.string("clear"))
                 }
             }
@@ -95,7 +97,7 @@ struct OmniboxOverlay: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(suggestion.title).lineLimit(1)
                                             if !suggestion.detail.isEmpty {
-                                                Text(suggestion.detail)
+                                                Text(detail(for: suggestion))
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
                                                     .lineLimit(1)
@@ -104,7 +106,7 @@ struct OmniboxOverlay: View {
                                         Spacer()
                                         Text(label(for: suggestion))
                                             .font(.caption)
-                                            .foregroundStyle(.tertiary)
+                                            .foregroundStyle(.secondary)
                                     }
                                     .contentShape(Rectangle())
                                     .padding(.horizontal, 14)
@@ -176,6 +178,18 @@ struct OmniboxOverlay: View {
         }
     }
 
+    private func detail(for suggestion: OmniboxSuggestion) -> String {
+        guard case let .tab(id) = suggestion.kind,
+              let tab = model.tabs.first(where: { $0.id == id }) else {
+            return suggestion.detail
+        }
+        let space = model.spaces.first(where: { $0.id == tab.spaceID })?.name
+        let folder = tab.folderID.map { model.folderPath($0) }
+        return [space, folder, suggestion.detail.isEmpty ? nil : suggestion.detail]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
     private func label(for suggestion: OmniboxSuggestion) -> String {
         switch suggestion.kind {
         case .tab: BrowserLocalization.string("open_tab")
@@ -219,10 +233,7 @@ private struct OmniboxSuggestionIcon: View {
                     .font(.system(size: 18))
                     .foregroundStyle(.secondary)
             } else if let image = matchingTab?.favicon ?? (loadedOrigin == origin ? loadedImage : nil) {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
+                FaviconArtwork(image: image)
             } else {
                 Image(systemName: "globe")
                     .font(.system(size: 18))

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.9 — Tab Switching and Interface Polish
+
+- Added a Ctrl+Tab switcher for recently used tabs in the current space, including pinned tabs and tabs inside collapsed folders. Ctrl+Shift+Tab reverses the selection, releasing Ctrl opens the selected tab, and Escape cancels.
+- Enlarged tab close targets and sidebar controls while keeping close buttons free of hover backgrounds.
+- Added tab removal animations and clearer hover and press feedback, respecting Reduce Motion.
+- Made folder expansion and collapse complete in 180 ms regardless of the number of items.
+- Reduced the size and emphasis of sleeping-tab indicators.
+- Improved dark favicon readability and suggestion labels, and added space and folder context to open-tab suggestions.
+- Added regression coverage for tab-switcher recency, cancellation, reverse cycling, closed candidates, and space and folder handling.
+- Updated the bundle version to `0.3.9` (`47`).
+
 ## 0.3.2 — Sidebar and Downloads
 
 - Reduced the top sidebar inset in full-screen mode.

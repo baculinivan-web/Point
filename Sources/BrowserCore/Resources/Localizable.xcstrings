@@ -1,6 +1,8 @@
 {
   "sourceLanguage": "ru",
   "strings": {
+    "tab_switcher_title": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Switch Tabs"}}, "ru": {"stringUnit": {"state": "translated", "value": "Переключение вкладок"}}}},
+    "tab_switcher_hint": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Tab / ⇧Tab to choose · Release Ctrl to open · Esc to cancel"}}, "ru": {"stringUnit": {"state": "translated", "value": "Tab / ⇧Tab — выбор · Отпустите Ctrl — открыть · Esc — отмена"}}}},
     "omnibox_recent_search": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Recent search"}}, "ru": {"stringUnit": {"state": "translated", "value": "Недавний запрос"}}}},
     "omnibox_open_site": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Open website"}}, "ru": {"stringUnit": {"state": "translated", "value": "Открыть сайт"}}}},
     "extensions_store_offer": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Install this extension in Point?"}}, "ru": {"stringUnit": {"state": "translated", "value": "Установить это расширение в Point?"}}}},

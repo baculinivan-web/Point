@@ -370,6 +370,15 @@ public struct BrowserWindowView: View {
                 hostWindow: $hostWindow
             )
         )
+        .overlay {
+            TabSwitcherOverlay(
+                model: model,
+                isEnabled: !isOnboardingPresented && !model.isOmniboxPresented
+                    && model.presentedSettingsSection == nil
+                    && model.mediaPermissionPrompt == nil
+                    && !isUpdateDetailsPresented
+            )
+        }
         .focusedSceneValue(\.browserWindowModel, model)
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.22),

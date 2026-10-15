@@ -171,7 +171,9 @@ struct BrowserExtensionsMenu: View {
             Divider()
             Button(BrowserLocalization.string("extensions_manage")) { model.presentedSettingsSection = .extensions }
         } label: {
-            Image(systemName: "puzzlepiece.extension").frame(width: 24, height: 24)
+            Image(systemName: "puzzlepiece.extension")
+                .frame(width: 28, height: 32)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)

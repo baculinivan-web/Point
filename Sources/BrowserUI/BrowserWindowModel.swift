@@ -2887,6 +2887,15 @@ public final class BrowserWindowModel: WebEngineEventSink {
         }
     }
 
+    /// Snapshot this order when opening the switcher; previewing must not alter recency.
+    var tabSwitcherIDs: [TabID] {
+        let current = tabs.filter { $0.spaceID == selectedSpaceID }
+        let available = Set(current.map(\.id))
+        let recent = tabActivationHistory.filter { available.contains($0) }
+        let seen = Set(recent)
+        return recent + current.filter { !seen.contains($0.id) }.map(\.id)
+    }
+
     private func mostRecentlyActiveTab(in spaceID: TabSpaceID) -> BrowserTab? {
         tabActivationHistory.lazy
             .compactMap(tab)

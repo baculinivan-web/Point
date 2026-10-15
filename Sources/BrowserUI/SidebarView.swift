@@ -181,6 +181,10 @@ struct SidebarView: View {
                 }
             }
             .frame(maxHeight: .infinity)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.18),
+                value: model.tabs.map(\.id)
+            )
             .offset(x: -spaceSwipeTranslation)
             .opacity(spacePageOpacity)
             .clipped()
@@ -331,12 +335,13 @@ struct SidebarView: View {
     }
 
     private var navigationHeader: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 2) {
             Button {
                 model.toggleSidebarMode()
             } label: {
                 Image(systemName: "sidebar.left")
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .help(model.sidebarMode == .autoHide
                 ? BrowserLocalization.string("pin_sidebar_shortcut")
@@ -350,7 +355,8 @@ struct SidebarView: View {
                 model.dispatch(.goBack(id))
             } label: {
                 Image(systemName: "chevron.left")
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .disabled(!(model.activeTab?.canGoBack ?? false))
             .help(BrowserLocalization.string("back"))
@@ -360,7 +366,8 @@ struct SidebarView: View {
                 model.dispatch(.goForward(id))
             } label: {
                 Image(systemName: "chevron.right")
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .disabled(!(model.activeTab?.canGoForward ?? false))
             .help(BrowserLocalization.string("forward"))
@@ -374,7 +381,8 @@ struct SidebarView: View {
                 }
             } label: {
                 Image(systemName: model.activeTab?.isLoading == true ? "xmark" : "arrow.clockwise")
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .disabled(model.activeTab?.url == nil)
             .help(model.activeTab?.isLoading == true
@@ -385,7 +393,8 @@ struct SidebarView: View {
                 model.toggleAIChat()
             } label: {
                 Image(systemName: "sparkles.rectangle.stack")
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .help(BrowserLocalization.string("ai_chat_toggle_shortcut"))
             .accessibilityLabel(BrowserLocalization.string("ai_chat_toggle"))
@@ -402,7 +411,8 @@ struct SidebarView: View {
                         ? "arrow.down.circle.fill"
                         : "arrow.down.circle"
                 )
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 32)
+                    .contentShape(Rectangle())
             }
             .help(BrowserLocalization.string("downloads_shortcut"))
             .accessibilityLabel(BrowserLocalization.string("downloads"))
@@ -420,7 +430,7 @@ struct SidebarView: View {
                 .frame(width: 380)
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(SidebarControlStyle())
     }
 
     private var sidebarReorderGesture: some Gesture {
@@ -641,10 +651,10 @@ private struct SpaceSwitcher: View {
                         .transition(.scale(scale: 0.65).combined(with: .opacity))
                 }
             }
-            .frame(width: 20, height: 24)
+            .frame(width: 30, height: 32)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SidebarControlStyle())
         .animation(
             reduceMotion ? nil : .snappy(duration: 0.24, extraBounce: 0.16),
             value: model.bookmarkSaveAnimation?.id
@@ -1463,11 +1473,11 @@ private struct PinnedTabCard: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2.weight(.semibold))
-                        .frame(width: 18, height: 18)
-                        .background(.thinMaterial, in: Circle())
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .padding(5)
+                .buttonStyle(SidebarControlStyle(showsHover: false))
+                .padding(2)
                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
             .accessibilityLabel(BrowserLocalization.string(
                 "close_named_tab",
@@ -1475,6 +1485,7 @@ private struct PinnedTabCard: View {
             ))
             }
         }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHovering)
         .onHover { isHovering = $0 }
         .opacity(reorderState.draggedTabIDs.contains(tab.id) ? 0 : 1)
@@ -1595,13 +1606,19 @@ private struct TabRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        Button {
-            model.selectTab(
-                tab.id,
-                extendingSelection: NSEvent.modifierFlags.contains(.shift)
-            )
-        } label: { rowLabel }
-        .buttonStyle(.plain)
+        HStack(spacing: 0) {
+            Button {
+                model.selectTab(
+                    tab.id,
+                    extendingSelection: NSEvent.modifierFlags.contains(.shift)
+                )
+            } label: { rowLabel }
+            .buttonStyle(SidebarControlStyle(showsHover: false))
+            trailingControl
+                .padding(.trailing, showsCloseButton ? 3 : 0)
+        }
+        .background { selectionBackground }
+        .overlay { agentControlBorder }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovering)
         .onHover { isHovering = $0 }
         .opacity(reorderState.draggedTabIDs.contains(tab.id) ? 0 : 1)
@@ -1625,13 +1642,10 @@ private struct TabRow: View {
             if tab.lifecycleState == .evicted {
                 EvictedTabIndicator()
             }
-            trailingControl
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 36)
         .contentShape(Rectangle())
-        .background { selectionBackground }
-        .overlay { agentControlBorder }
     }
 
     /// Marks the tab the assistant is working in. It usually runs in the
@@ -1672,21 +1686,25 @@ private struct TabRow: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SidebarControlStyle(showsHover: false))
+            .help(closeAccessibilityLabel)
             .accessibilityLabel(closeAccessibilityLabel)
         }
     }
 
     @ViewBuilder
     private var selectionBackground: some View {
-        if model.selectedTabIDs.contains(tab.id) {
+        if model.selectedTabIDs.contains(tab.id) || isHovering {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(
                     model.selectedTabID == tab.id
                         ? Color.primary.opacity(0.11)
-                        : Color.accentColor.opacity(0.13)
+                        : (model.selectedTabIDs.contains(tab.id)
+                            ? Color.accentColor.opacity(0.13)
+                            : Color.primary.opacity(0.055))
                 )
         }
     }
@@ -1851,7 +1869,6 @@ private struct FolderRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsChildren = false
     @State private var visibleChildCount = 0
-    @State private var childAnimationTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -2041,9 +2058,6 @@ private struct FolderRow: View {
             guard folder.isExpanded, showsChildren else { return }
             visibleChildCount = count
         }
-        .onDisappear {
-            childAnimationTask?.cancel()
-        }
     }
 
     private func beginRenaming() {
@@ -2067,44 +2081,12 @@ private struct FolderRow: View {
     }
 
     private func animateChildren(expanding: Bool) {
-        childAnimationTask?.cancel()
-        if reduceMotion {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             showsChildren = expanding
             visibleChildCount = expanding ? childCount : 0
-            return
-        }
-
-        let total = childCount
-        if expanding {
-            showsChildren = true
-            visibleChildCount = 0
-            guard total > 0 else { return }
-            childAnimationTask = Task { @MainActor in
-                for count in 1...total {
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
-                        visibleChildCount = count
-                    }
-                    try? await Task.sleep(for: .milliseconds(38))
-                }
-            }
-        } else {
-            visibleChildCount = min(visibleChildCount, total)
-            childAnimationTask = Task { @MainActor in
-                for count in stride(from: visibleChildCount, to: 0, by: -1) {
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        visibleChildCount = count - 1
-                    }
-                    try? await Task.sleep(for: .milliseconds(30))
-                }
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.12)) {
-                    showsChildren = false
-                }
-            }
         }
     }
+
 }
 
 struct FolderSymbolOption: Identifiable {
@@ -2483,10 +2465,7 @@ struct TabFavicon: View {
                     .font(.system(size: size * 0.5, weight: .medium))
                     .foregroundStyle(.orange)
             } else if let favicon = tab.favicon {
-                Image(nsImage: favicon)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
+                FaviconArtwork(image: favicon)
                     .padding(size * 0.14)
             } else {
                 Image(systemName: "globe")
@@ -2513,8 +2492,8 @@ struct TabFavicon: View {
 private struct EvictedTabIndicator: View {
     var body: some View {
         Image(systemName: "moon.fill")
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(.secondary)
+            .font(.system(size: 8, weight: .medium))
+            .foregroundStyle(.tertiary)
             .frame(width: 16, height: 16)
             .help(BrowserLocalization.string("tab_unloaded_help"))
             .accessibilityLabel(BrowserLocalization.string("tab_unloaded"))
