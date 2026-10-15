@@ -322,6 +322,74 @@ struct BrowserExtensionTests {
         await eraseData(manager)
     }
 
+    @Test func repeatedPermissionRequestsReuseGrantsAndRememberRefusals() async throws {
+        let root = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var promptCount = 0
+        var nestedRequest: (() -> Void)?
+        var approve = true
+        let manager = BrowserExtensionManager(root: root.appendingPathComponent("store"),
+            controller: BrowserExtensionManager.makeController(configuration: .init(identifier: UUID())),
+            approvalHandler: { _, _, _ in
+                promptCount += 1
+                let nested = nestedRequest
+                nestedRequest = nil
+                nested?()
+                return approve
+            })
+        await manager.restore()
+        await manager.install(from: try fixture(in: root))
+        let id = try #require(manager.installed.first?.id)
+        let context = try #require(manager.context(for: id))
+        promptCount = 0
+        let permission = WKWebExtension.Permission(rawValue: "notifications")
+        nestedRequest = {
+            manager.webExtensionController(manager.controller, promptForPermissions: [permission], in: nil, for: context) { grants, _ in
+                #expect(grants.isEmpty)
+            }
+        }
+        for _ in 0..<3 {
+            manager.webExtensionController(manager.controller, promptForPermissions: [permission], in: nil, for: context) { grants, expiration in
+                #expect(grants == [permission])
+                #expect(expiration == .distantFuture)
+            }
+        }
+        #expect(promptCount == 1)
+        let url = URL(string: "https://example.org/exact-page")!
+        for _ in 0..<3 {
+            manager.webExtensionController(manager.controller, promptForPermissionToAccess: [url], in: nil, for: context) { grants, _ in
+                #expect(grants == [url])
+            }
+        }
+        #expect(promptCount == 2)
+        approve = false
+        let denied = WKWebExtension.Permission(rawValue: "bookmarks")
+        let pattern = try WKWebExtension.MatchPattern(string: "https://denied.example/*")
+        let deniedURL = URL(string: "https://denied-url.example/page")!
+        for _ in 0..<3 {
+            manager.webExtensionController(manager.controller, promptForPermissions: [denied], in: nil, for: context) { grants, _ in #expect(grants.isEmpty) }
+            manager.webExtensionController(manager.controller, promptForPermissionMatchPatterns: [pattern], in: nil, for: context) { grants, _ in #expect(grants.isEmpty) }
+            manager.webExtensionController(manager.controller, promptForPermissionToAccess: [deniedURL], in: nil, for: context) { grants, _ in #expect(grants.isEmpty) }
+        }
+        #expect(promptCount == 5)
+        try manager.controller.unload(context)
+        let restored = BrowserExtensionManager(root: root.appendingPathComponent("store"),
+            controller: BrowserExtensionManager.makeController(configuration: .init(identifier: UUID())),
+            approvalHandler: { _, _, _ in promptCount += 1; return true })
+        await restored.restore()
+        let newContext = try #require(restored.context(for: id))
+        restored.webExtensionController(restored.controller, promptForPermissions: [denied], in: nil, for: newContext) { grants, _ in #expect(grants.isEmpty) }
+        restored.webExtensionController(restored.controller, promptForPermissionMatchPatterns: [pattern], in: nil, for: newContext) { grants, _ in #expect(grants.isEmpty) }
+        restored.webExtensionController(restored.controller, promptForPermissionToAccess: [deniedURL], in: nil, for: newContext) { grants, _ in #expect(grants.isEmpty) }
+        #expect(promptCount == 5)
+        restored.reviewAccess(id: id)
+        restored.webExtensionController(restored.controller, promptForPermissions: [denied], in: nil, for: newContext) { grants, _ in #expect(grants == [denied]) }
+        #expect(promptCount == 7)
+        await restored.setEnabled(false, id: id)
+        await eraseData(manager)
+        await eraseData(restored)
+    }
+
     @Test func sameDocumentNavigationUpdatesCopiedAddressAndStoreDetection() async throws {
         let root = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

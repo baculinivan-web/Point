@@ -849,6 +849,28 @@ extension WebEngineSession: WKNavigationDelegate {
 }
 
 extension WebEngineSession: WKUIDelegate {
+    /// WKWebView's default UI client reports an empty window rect. Canvas apps
+    /// such as Google Docs use outerWidth/outerHeight to detect browser zoom,
+    /// so they need the host geometry just as they receive it in Safari.
+    @objc(_webView:getWindowFrameWithCompletionHandler:)
+    public func webView(
+        _ webView: WKWebView,
+        getWindowFrameWithCompletionHandler completionHandler: @escaping (CGRect) -> Void
+    ) {
+        if let window = webView.window {
+            var frame = window.frame
+            // WebKit uses a top-left screen origin; AppKit uses bottom-left.
+            if let screen = NSScreen.screens.first { frame.origin.y = screen.frame.maxY - frame.maxY }
+            completionHandler(frame)
+        } else {
+            // Background tabs can load before SwiftUI attaches them to a window.
+            let size = webView.bounds.isEmpty
+                ? (NSScreen.main?.visibleFrame.size ?? CGSize(width: 800, height: 600))
+                : webView.bounds.size
+            completionHandler(CGRect(origin: .zero, size: size))
+        }
+    }
+
     /// WebKit calls this private delegate selector when the system PiP window's
     /// Return to Tab button is pressed, before it dismisses the video window.
     @objc(_webViewFullscreenMayReturnToInline:)

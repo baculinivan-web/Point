@@ -35,6 +35,8 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
         weak var model: BrowserWindowModel?
         init(_ model: BrowserWindowModel) { self.model = model }
     }
+    @ObservationIgnored private var runtimeURLGrants: [UUID: Set<URL>] = [:]
+    @ObservationIgnored private var isPromptingForAccess = false
     @ObservationIgnored private var hasRestored = false
     @ObservationIgnored private var activePopup: WKWebExtension.Action?
     @ObservationIgnored private(set) var popupPanel: NSPanel?
@@ -276,6 +278,7 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
                     closePopup(for: context)
                     try controller.unload(context)
                     contexts[id] = nil
+                    runtimeURLGrants[id] = nil
                 }
             } catch { try? store.write(installed); throw error }
             installed = records
@@ -301,6 +304,7 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
             } catch { try? store.write(installed); throw error }
             installed = remaining
             contexts[id] = nil
+            runtimeURLGrants[id] = nil
             errors[id] = nil
             try FileManager.default.removeItem(at: store.resources(for: id))
             Task {
@@ -323,6 +327,7 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
         do {
             try store.write(records)
             installed = records
+            runtimeURLGrants[id] = nil
             if let context = contexts[id] {
                 closePopup(for: context)
                 applyGrants(records[index], to: context)
@@ -336,7 +341,11 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
         let permissions = context.webExtension.requestedPermissions.map(\.rawValue)
         let sites = context.webExtension.allRequestedMatchPatterns.map(\.string)
         guard approve(name: context.webExtension.displayName ?? "", requests: permissions + sites) else { return }
-        _ = saveGrants(permissions: permissions, sites: sites, for: context)
+        if saveGrants(permissions: permissions, sites: sites, for: context) {
+            saveDeniedRequests([], for: context, replacing: true)
+            context.deniedPermissions = [:]
+            context.deniedPermissionMatchPatterns = [:]
+        }
     }
 
     private func saveGrants(permissions: [String] = [], sites: [String] = [], for context: WKWebExtensionContext) -> Bool {
@@ -585,20 +594,58 @@ final class BrowserExtensionManager: NSObject, WKWebExtensionControllerDelegate,
         window.sync()
         completionHandler(window.adapters.first { $0.id == tab.id }, nil)
     }
+    /// NSAlert runs a nested event loop; background workers may request access again
+    /// while it is open. Remember refusals and never stack another permission alert.
+    private func approveAccess(_ requests: [String], for context: WKWebExtensionContext) -> Bool {
+        guard let record = installed.first(where: { contexts[$0.id] === context }),
+              record.isEnabled, context.isLoaded, canModify else { return false }
+        if requests.isEmpty { return true }
+        guard !isPromptingForAccess,
+              Set(record.deniedRequests ?? []).isDisjoint(with: requests) else { return false }
+        isPromptingForAccess = true
+        defer { isPromptingForAccess = false }
+        let allowed = approve(name: record.name, requests: requests.map { String($0.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)[1]) })
+        if !allowed { saveDeniedRequests(requests, for: context) }
+        return allowed
+    }
+
+    private func saveDeniedRequests(_ requests: [String], for context: WKWebExtensionContext, replacing: Bool = false) {
+        guard let index = installed.firstIndex(where: { contexts[$0.id] === context }) else { return }
+        var records = installed
+        records[index].deniedRequests = replacing ? requests : Array(Set((records[index].deniedRequests ?? []) + requests)).sorted()
+        do { try store.write(records); installed = records }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for context: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
-        let values = permissions.map(\.rawValue)
-        let allowed = approve(name: context.webExtension.displayName ?? "", requests: values) && saveGrants(permissions: values, for: context)
-        completionHandler(allowed ? permissions : [], nil)
+        let existing = permissions.filter { context.hasPermission($0, in: tab) }
+        let requested = permissions.subtracting(existing)
+        let values = requested.map(\.rawValue)
+        let allowed = approveAccess(values.map { "permission:" + $0 }, for: context)
+            && (requested.isEmpty || saveGrants(permissions: values, for: context))
+        completionHandler(allowed ? permissions : existing, .distantFuture)
     }
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for context: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
-        // URL requests are granted only for this runtime; persistent grants use match patterns.
-        let allowed = approve(name: context.webExtension.displayName ?? "", requests: urls.map(\.absoluteString)) && context.isLoaded
-        completionHandler(allowed ? urls : [], Date().addingTimeInterval(3600))
+        guard let id = installed.first(where: { contexts[$0.id] === context })?.id else {
+            completionHandler([], nil); return
+        }
+        let existing = urls.filter { context.hasAccess(to: $0, in: tab) || runtimeURLGrants[id, default: []].contains($0) }
+        let requested = urls.subtracting(existing)
+        let allowed = approveAccess(requested.map { "url:" + $0.absoluteString }, for: context)
+        if allowed {
+            // Exact URL access lasts for this context's lifetime. Persistent host
+            // access must still be approved separately through match patterns.
+            runtimeURLGrants[id, default: []].formUnion(requested)
+        }
+        completionHandler(allowed ? urls : existing, .distantFuture)
     }
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns patterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for context: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
-        let values = patterns.map(\.string)
-        let allowed = approve(name: context.webExtension.displayName ?? "", requests: values) && saveGrants(sites: values, for: context)
-        completionHandler(allowed ? patterns : [], nil)
+        let existing = patterns.filter { [.grantedExplicitly, .grantedImplicitly].contains(context.permissionStatus(for: $0, in: tab)) }
+        let requested = patterns.subtracting(existing)
+        let values = requested.map(\.string)
+        let allowed = approveAccess(values.map { "site:" + $0 }, for: context)
+            && (requested.isEmpty || saveGrants(sites: values, for: context))
+        completionHandler(allowed ? patterns : existing, .distantFuture)
     }
     func webExtensionController(_ controller: WKWebExtensionController, didUpdate action: WKWebExtension.Action, forExtensionContext context: WKWebExtensionContext) { actionRevision += 1 }
     func webExtensionController(_ controller: WKWebExtensionController, presentActionPopup action: WKWebExtension.Action, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {

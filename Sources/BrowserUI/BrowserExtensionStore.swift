@@ -8,6 +8,8 @@ struct InstalledBrowserExtension: Codable, Identifiable, Equatable {
     var permissions: [String]
     var sites: [String]
     var chromeWebStoreID: String? = nil
+    // Optional for compatibility with installations saved before denial persistence.
+    var deniedRequests: [String]? = nil
 }
 
 /// Resources are copied into Point; grants and identity survive moving the original folder.
