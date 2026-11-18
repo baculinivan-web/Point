@@ -222,3 +222,9 @@ The implementation plan is summarized in [IMPLEMENTATION_PLAN.md](./IMPLEMENTATI
 ## WebExtensions
 
 Point integrates the public WebKit WebExtension runtime for regular windows. See [the extensions guide](EXTENSIONS.md) for installation, permission behavior, architecture, validation and current limitations.
+
+### Installer downloads (0.3.10)
+
+Point asks for a destination using the system save panel and proposes an unused filename. Existing files are not overwritten. HTTP(S) GET downloads saved as `.dmg`, `.pkg`, `.zip`, or `.xip` are transferred by an ephemeral URLSession in the browser process with cookies from the originating WebKit store. This avoids the hard quarantine flag observed with WKDownload installers. Completed files retain Internet quarantine through the public URL resource API; Gatekeeper and App Sandbox remain enabled. The destination file is created only after transfer completion. These transfers support cancellation and fresh retries, but not resuming partial downloads. Other downloads, including POST and blob requests, continue to use WKDownload.
+
+The final debug build was exercised through the save panel against a loopback server serving the complete official GitHub Copilot for Xcode image. File size and SHA-256 matched; quarantine remained present, Gatekeeper accepted the image and application, and Copilot launched under AppTranslocation without removing quarantine. This is a control test of the transfer path, not a claim that all authenticated sites or redirects are covered.

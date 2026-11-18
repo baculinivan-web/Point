@@ -1,3 +1,4 @@
+import AppKit
 import BrowserCore
 import Foundation
 import Observation
@@ -5,10 +6,12 @@ import WebKit
 
 @MainActor
 @Observable
-public final class DownloadManager: NSObject, WKDownloadDelegate {
+public final class DownloadManager: NSObject, WKDownloadDelegate, NSOpenSavePanelDelegate {
     public private(set) var items: [DownloadItem] = []
 
     private let historyRepository: (any DownloadHistoryRepository)?
+    @ObservationIgnored private var native: [UUID: InstallerDownload] = [:]
+    @ObservationIgnored private var pendingNative: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var active: [ObjectIdentifier: ActiveDownload] = [:]
     @ObservationIgnored private var historyPersistenceTask: Task<Void, Never>?
     @ObservationIgnored private var didRestoreHistory = false
@@ -19,7 +22,7 @@ public final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     public var activeDownloadCount: Int {
-        active.count
+        active.count + native.count + pendingNative.count
     }
 
     public func flushHistory() async {
@@ -106,6 +109,16 @@ public final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     public func cancel(_ id: UUID) {
+        if let pending = pendingNative.removeValue(forKey: id) {
+            pending.cancel()
+            update(id) { $0.state = .cancelled; $0.completedAt = Date() }
+            persistHistory()
+            return
+        }
+        if let transfer = native[id] {
+            transfer.cancel()
+            return
+        }
         guard let record = active.values.first(where: { $0.id == id }) else { return }
         record.download.cancel { [weak self] resumeData in
             guard let self else { return }
@@ -153,32 +166,100 @@ public final class DownloadManager: NSObject, WKDownloadDelegate {
             item.state = .awaitingDestination
         }
 
-        guard let downloadsDirectory = FileManager.default.urls(
-            for: .downloadsDirectory,
-            in: .userDomainMask
-        ).first else {
-            update(record.id) { item in
-                item.state = .failed(
-                    BrowserLocalization.string("downloads_directory_unavailable")
-                )
-                item.completedAt = Date()
+        // Obtain explicit user consent through the system save panel. The
+        // user-selected.executable entitlement applies to this selected URL.
+        let panel = NSSavePanel()
+        let downloadsDirectory = FileManager.default.urls(
+            for: .downloadsDirectory, in: .userDomainMask
+        ).first
+        panel.directoryURL = downloadsDirectory
+        if let downloadsDirectory {
+            panel.nameFieldStringValue = DownloadDestinationResolver.availableURL(
+                in: downloadsDirectory,
+                suggestedFilename: safeFilename,
+                fileExists: { FileManager.default.fileExists(atPath: $0.path) }
+            ).lastPathComponent
+        } else {
+            panel.nameFieldStringValue = safeFilename
+        }
+        panel.delegate = self
+        panel.canCreateDirectories = true
+        panel.begin { [weak self] response in
+            guard let self else {
+                completionHandler(nil)
+                return
             }
-            completionHandler(nil)
-            finish(download)
-            persistHistory()
-            return
+            guard response == .OK, let destination = panel.url else {
+                self.update(record.id) { item in
+                    item.state = .cancelled
+                    item.completedAt = Date()
+                }
+                completionHandler(nil)
+                self.finish(download)
+                self.persistHistory()
+                return
+            }
+            self.update(record.id) { item in
+                item.destinationURL = destination
+                item.state = .downloading
+            }
+            let request = download.originalRequest
+            let installerExtensions: Set<String> = ["dmg", "pkg", "zip", "xip"]
+            if let request, let source = request.url,
+               ["https", "http"].contains(source.scheme?.lowercased() ?? ""),
+               (request.httpMethod ?? "GET") == "GET",
+               installerExtensions.contains(destination.pathExtension.lowercased()) {
+                let webView = download.webView
+                // Detach before cancellation so WebKit cannot overwrite the new state.
+                self.finish(download)
+                completionHandler(nil)
+                self.startInstaller(record.id, request: request,
+                                    destination: destination, webView: webView)
+            } else {
+                completionHandler(destination)
+            }
         }
+    }
 
-        let destination = DownloadDestinationResolver.availableURL(
-            in: downloadsDirectory,
-            suggestedFilename: safeFilename,
-            fileExists: { FileManager.default.fileExists(atPath: $0.path) }
-        )
-        update(record.id) { item in
-            item.destinationURL = destination
-            item.state = .downloading
+    private func startInstaller(_ id: UUID, request: URLRequest,
+                                destination: URL, webView: WKWebView?) {
+        pendingNative[id] = Task { @MainActor [weak self] in
+            let cookies = await webView?.configuration.websiteDataStore.httpCookieStore.allCookies() ?? []
+            guard !Task.isCancelled, let self, let source = request.url else { return }
+            self.pendingNative[id] = nil
+            let transfer = InstallerDownload(destination: destination, source: source) { [weak self] fraction in
+                Task { @MainActor [weak self] in
+                    self?.update(id) { $0.fractionCompleted = fraction }
+                }
+            } completion: { [weak self] result in
+                Task { @MainActor [weak self] in
+                    guard let self, self.native.removeValue(forKey: id) != nil else { return }
+                    self.update(id) { item in
+                        switch result {
+                        case .success:
+                            item.state = .finished
+                            item.fractionCompleted = 1
+                        case let .failure(error):
+                            item.state = (error as? URLError)?.code == .cancelled
+                                ? .cancelled : .failed(error.localizedDescription)
+                        }
+                        item.resumeData = nil
+                        item.completedAt = Date()
+                    }
+                    self.persistHistory()
+                }
+            }
+            self.native[id] = transfer
+            transfer.start(request: request, cookies: cookies)
         }
-        completionHandler(destination)
+    }
+
+    public func panel(_ sender: Any, validate url: URL) throws {
+        // WKDownload requires a destination that does not already exist.
+        // Keep the panel open so the user can consent to a different filename.
+        if FileManager.default.fileExists(atPath: url.path) {
+            throw CocoaError(.fileWriteFileExists)
+        }
     }
 
     public func download(
